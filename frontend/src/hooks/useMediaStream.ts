@@ -23,6 +23,9 @@ export interface MediaState {
   muted: boolean;
   brightness: number;
   night_light: boolean;
+  caffeine_on: boolean;
+  caffeine_custom: boolean;
+  caffeine_duration: number;
   bluetooth_on: boolean;
   warp_on: boolean;
   sys: SystemStats | null;

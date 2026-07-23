@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// Caffeine schema directory (GNOME Shell extension)
+var caffeineSD = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
+
 // CommandMap routes web deck actions directly to Linux CLI utilities.
 var commandMap = map[string][]string{
 	"playpause":      {"playerctl", "play-pause"},
@@ -35,6 +38,10 @@ var commandMap = map[string][]string{
 	"erpLogin": {"erp", "login"},
 	"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
 	"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
+	"caffeineOff": {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
+	"caffeineOn":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+	"caffeine30":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+	"caffeine60":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
 }
 
 type SystemStats struct {
@@ -58,9 +65,12 @@ type MediaState struct {
 	Volume     float64 `json:"volume"`
 	Muted      bool    `json:"muted"`
 	Brightness float64 `json:"brightness"`
-	NightLight  bool `json:"night_light"`
-	BluetoothOn bool `json:"bluetooth_on"`
-	WarpOn      bool `json:"warp_on"`
+	NightLight        bool `json:"night_light"`
+	CaffeineOn        bool `json:"caffeine_on"`
+	CaffeineCustom    bool `json:"caffeine_custom"`
+	CaffeineDuration  int  `json:"caffeine_duration"`
+	BluetoothOn       bool `json:"bluetooth_on"`
+	WarpOn       bool `json:"warp_on"`
 	Sys        *SystemStats `json:"sys"`
 }
 
@@ -556,6 +566,13 @@ func fetchMPRISState() MediaState {
 	nightStr, _ := runCmd("gsettings", "get", "org.gnome.settings-daemon.plugins.color", "night-light-enabled")
 	nightLight := nightStr == "true"
 
+	caffeineOnStr, _ := runCmd("gsettings", "--schemadir", caffeineSD, "get", "org.gnome.shell.extensions.caffeine", "cli-toggle")
+	caffeineOn := caffeineOnStr == "true"
+	caffeineCustomStr, _ := runCmd("gsettings", "--schemadir", caffeineSD, "get", "org.gnome.shell.extensions.caffeine", "use-custom-duration")
+	caffeineCustom := caffeineCustomStr == "true"
+	caffeineDurStr, _ := runCmd("gsettings", "--schemadir", caffeineSD, "get", "org.gnome.shell.extensions.caffeine", "duration-timer")
+	caffeineDur, _ := strconv.Atoi(strings.TrimSpace(caffeineDurStr))
+
 	btOut, _ := runCmd("rfkill", "list", "bluetooth")
 	btOn := strings.Contains(btOut, "Soft blocked: no")
 
@@ -572,8 +589,11 @@ func fetchMPRISState() MediaState {
 		Volume:      volume,
 		Muted:       muted,
 		Brightness:  brightness,
-		NightLight:  nightLight,
-		BluetoothOn: btOn,
+		NightLight:       nightLight,
+		CaffeineOn:       caffeineOn,
+		CaffeineCustom:   caffeineCustom,
+		CaffeineDuration: caffeineDur,
+		BluetoothOn:      btOn,
 		WarpOn:      warpOn,
 		Sys:         fetchSystemStats(),
 	}
