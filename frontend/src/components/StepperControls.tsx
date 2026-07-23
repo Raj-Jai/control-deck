@@ -47,6 +47,19 @@ export default function StepperControls({ state }: StepperControlsProps) {
     setSinkLoading(false);
   };
 
+  const isBT = (s: SinkInfo) => /bluez/i.test(s.name);
+  const btSink = sinks.find(isBT);
+  const speakerSink = sinks.find(s => !isBT(s) && !/hdmi/i.test(s.description));
+  const activeSink = sinks.find(s => s.default);
+  const hasSinks = !!(btSink && speakerSink && activeSink);
+  const activeIsBT = hasSinks && activeSink!.id === btSink!.id;
+
+  const toggleSink = () => {
+    if (!hasSinks) return;
+    const target = activeIsBT ? speakerSink! : btSink!;
+    handleSinkSelect(target.id);
+  };
+
   const showVol = draggingVol.current
     ? localVol
     : (vol >= 0 ? Math.round(vol * 100) : localVol);
@@ -98,6 +111,15 @@ export default function StepperControls({ state }: StepperControlsProps) {
           <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
             {showVol}%
           </span>
+          {hasSinks && (
+            <button
+              onClick={toggleSink}
+              disabled={sinkLoading}
+              className="icon-btn w-9 h-9 text-base flex-shrink-0"
+            >
+              {activeIsBT ? <Speaker size={16} /> : <Headphones size={16} />}
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,56 +170,7 @@ export default function StepperControls({ state }: StepperControlsProps) {
         </div>
       </div>
 
-      {/* Audio Output — toggle between BT headset and internal speakers */}
-      {(() => {
-        const isBT = (s: SinkInfo) => /bluez/i.test(s.name);
-        const btSink = sinks.find(isBT);
-        const speakerSink = sinks.find(s => !isBT(s) && !/hdmi/i.test(s.description));
-        const activeSink = sinks.find(s => s.default);
-        if (!btSink || !speakerSink || !activeSink) return null;
 
-        const target = activeSink.id === btSink.id ? speakerSink : btSink;
-        const activeIsBT = activeSink.id === btSink.id;
-
-        return (
-          <div className="deck-card col-span-1 sm:col-span-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim mb-2">
-              Audio Output
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => !activeIsBT && handleSinkSelect(btSink.id)}
-                disabled={sinkLoading || activeIsBT}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-                  border transition-all duration-100 flex-1 justify-center
-                  ${activeIsBT
-                    ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                    : 'bg-deck-surface2 border-white/5 text-deck-text/60 hover:bg-deck-accent/10 hover:border-deck-accent/20'
-                  }
-                  disabled:opacity-60 disabled:pointer-events-none`}
-              >
-                <Headphones size={13} />
-                Headphones
-              </button>
-
-              <button
-                onClick={() => activeIsBT && handleSinkSelect(speakerSink.id)}
-                disabled={sinkLoading || !activeIsBT}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-                  border transition-all duration-100 flex-1 justify-center
-                  ${!activeIsBT
-                    ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                    : 'bg-deck-surface2 border-white/5 text-deck-text/60 hover:bg-deck-accent/10 hover:border-deck-accent/20'
-                  }
-                  disabled:opacity-60 disabled:pointer-events-none`}
-              >
-                <Speaker size={13} />
-                Speakers
-              </button>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
