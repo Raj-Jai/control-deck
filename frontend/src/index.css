@@ -20,6 +20,7 @@
     @apply w-full h-1.5 appearance-none cursor-pointer rounded-full;
     background: #334155;
     outline: none;
+    touch-action: none;
   }
 
   input[type='range']::-webkit-slider-thumb {

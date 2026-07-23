@@ -21,10 +21,10 @@ function formatTime(seconds: number): string {
 }
 
 export default function NowPlayingCard({ state }: NowPlayingCardProps) {
-  const timelineRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragValue, setDragValue] = useState(0);
-  const pendingRef = useRef(false);
+  const dragging = useRef(false);
+  const pending = useRef(false);
+  const dragVal = useRef(0);
+  const [renderTick, setRenderTick] = useState(0);
   const artLoadedRef = useRef(false);
   const [artError, setArtError] = useState(false);
 
@@ -34,34 +34,19 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
   const len = state?.length ?? 0;
   const artUrl = state?.art_url ?? null;
 
-  // Native input event for reliable touch drag tracking
+  // Force re-render on SSE position change when not dragging
   useEffect(() => {
-    const el = timelineRef.current;
-    if (!el) return;
-    const handler = () => {
-      setIsDragging(true);
-      setDragValue(Number(el.value));
-    };
-    el.addEventListener('input', handler);
-    return () => el.removeEventListener('input', handler);
-  }, []);
-
-  // Update slider DOM from SSE when not interacting
-  useEffect(() => {
-    if (len <= 0) return;
-    if (!isDragging && !pendingRef.current && timelineRef.current) {
-      timelineRef.current.value = String(Math.floor(pos));
-      timelineRef.current.max = String(Math.floor(len));
+    if (!dragging.current && !pending.current) {
+      setRenderTick((t) => t + 1);
     }
-  }, [pos, len]);
+  }, [pos]);
 
-  // When SSE confirms the seeked position, release drag state
+  // Release pending when SSE confirms
   useEffect(() => {
-    if (pendingRef.current && state) {
-      const sse = Math.floor(state.position);
-      if (Math.abs(sse - dragValue) <= 2) {
-        pendingRef.current = false;
-        setIsDragging(false);
+    if (pending.current && state) {
+      if (Math.abs(Math.floor(state.position) - dragVal.current) <= 2) {
+        pending.current = false;
+        setRenderTick((t) => t + 1);
       }
     }
   });
@@ -118,23 +103,30 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
       {/* Timeline */}
       <div>
         <input
-          ref={timelineRef}
           type="range"
           min={0}
           max={len > 0 ? Math.floor(len) : 100}
-          defaultValue={Math.floor(pos)}
+          value={pending.current || dragging.current ? dragVal.current : Math.floor(pos)}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            dragVal.current = v;
+            dragging.current = true;
+            setRenderTick((t) => t + 1);
+          }}
           onMouseUp={() => {
-            if (isDragging) {
-              setIsDragging(false);
-              pendingRef.current = true;
-              seekTo(dragValue);
+            if (dragging.current) {
+              dragging.current = false;
+              pending.current = true;
+              seekTo(dragVal.current);
+              setRenderTick((t) => t + 1);
             }
           }}
           onTouchEnd={() => {
-            if (isDragging) {
-              setIsDragging(false);
-              pendingRef.current = true;
-              seekTo(dragValue);
+            if (dragging.current) {
+              dragging.current = false;
+              pending.current = true;
+              seekTo(dragVal.current);
+              setRenderTick((t) => t + 1);
             }
           }}
           className="w-full"
