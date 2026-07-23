@@ -7,11 +7,13 @@ interface StepperControlsProps {
   state: MediaState | null;
 }
 
+const THROTTLE_MS = 80;
+
 export default function StepperControls({ state }: StepperControlsProps) {
   const draggingVol = useRef(false);
   const draggingBri = useRef(false);
-  const pendingVol = useRef(false);
-  const pendingBri = useRef(false);
+  const lastVolSend = useRef(0);
+  const lastBriSend = useRef(0);
   const [localVol, setLocalVol] = useState(100);
   const [localBri, setLocalBri] = useState(100);
 
@@ -20,25 +22,15 @@ export default function StepperControls({ state }: StepperControlsProps) {
   const bri = state?.brightness ?? -1;
   const nightOn = state?.night_light ?? false;
 
+  // Sync display from SSE when not dragging
   useEffect(() => {
-    if (pendingVol.current && vol >= 0) {
-      if (Math.abs(Math.round(vol * 100) - localVol) <= 2) {
-        pendingVol.current = false;
-        draggingVol.current = false;
-      }
-    }
-    if (pendingBri.current && bri >= 0) {
-      if (Math.abs(Math.round(bri) - localBri) <= 2) {
-        pendingBri.current = false;
-        draggingBri.current = false;
-      }
-    }
+    if (!draggingVol.current && !draggingBri.current) return;
   });
 
-  const showVol = pendingVol.current || draggingVol.current
+  const showVol = draggingVol.current
     ? localVol
     : (vol >= 0 ? Math.round(vol * 100) : localVol);
-  const showBri = pendingBri.current || draggingBri.current
+  const showBri = draggingBri.current
     ? localBri
     : (bri >= 0 ? Math.round(bri) : localBri);
 
@@ -65,22 +57,21 @@ export default function StepperControls({ state }: StepperControlsProps) {
             value={showVol}
             onChange={(e) => {
               const v = Number(e.target.value);
-              draggingVol.current = true;
               setLocalVol(v);
+              draggingVol.current = true;
+              const now = Date.now();
+              if (now - lastVolSend.current >= THROTTLE_MS) {
+                lastVolSend.current = now;
+                setVolume(v / 100);
+              }
             }}
             onMouseUp={() => {
-              if (draggingVol.current) {
-                draggingVol.current = false;
-                pendingVol.current = true;
-                setVolume(localVol / 100);
-              }
+              draggingVol.current = false;
+              setVolume(localVol / 100);
             }}
             onTouchEnd={() => {
-              if (draggingVol.current) {
-                draggingVol.current = false;
-                pendingVol.current = true;
-                setVolume(localVol / 100);
-              }
+              draggingVol.current = false;
+              setVolume(localVol / 100);
             }}
             className="flex-1"
           />
@@ -113,22 +104,21 @@ export default function StepperControls({ state }: StepperControlsProps) {
             value={showBri}
             onChange={(e) => {
               const v = Number(e.target.value);
-              draggingBri.current = true;
               setLocalBri(v);
+              draggingBri.current = true;
+              const now = Date.now();
+              if (now - lastBriSend.current >= THROTTLE_MS) {
+                lastBriSend.current = now;
+                setBrightness(v);
+              }
             }}
             onMouseUp={() => {
-              if (draggingBri.current) {
-                draggingBri.current = false;
-                pendingBri.current = true;
-                setBrightness(localBri);
-              }
+              draggingBri.current = false;
+              setBrightness(localBri);
             }}
             onTouchEnd={() => {
-              if (draggingBri.current) {
-                draggingBri.current = false;
-                pendingBri.current = true;
-                setBrightness(localBri);
-              }
+              draggingBri.current = false;
+              setBrightness(localBri);
             }}
             className="flex-1"
           />

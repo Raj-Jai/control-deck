@@ -22,8 +22,8 @@ function formatTime(seconds: number): string {
 
 export default function NowPlayingCard({ state }: NowPlayingCardProps) {
   const dragging = useRef(false);
-  const pending = useRef(false);
   const dragVal = useRef(0);
+  const lastSeek = useRef(0);
   const [renderTick, setRenderTick] = useState(0);
   const artLoadedRef = useRef(false);
   const [artError, setArtError] = useState(false);
@@ -34,22 +34,12 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
   const len = state?.length ?? 0;
   const artUrl = state?.art_url ?? null;
 
-  // Force re-render on SSE position change when not dragging
+  // Re-render when SSE updates position (only when not dragging)
   useEffect(() => {
-    if (!dragging.current && !pending.current) {
+    if (!dragging.current) {
       setRenderTick((t) => t + 1);
     }
   }, [pos]);
-
-  // Release pending when SSE confirms
-  useEffect(() => {
-    if (pending.current && state) {
-      if (Math.abs(Math.floor(state.position) - dragVal.current) <= 2) {
-        pending.current = false;
-        setRenderTick((t) => t + 1);
-      }
-    }
-  });
 
   const displayTitle = isOffline ? 'No Track' : state.title;
   const displayArtist = isOffline ? 'Idle / Disconnected' : state.artist ?? 'Unknown Artist';
@@ -106,17 +96,21 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
           type="range"
           min={0}
           max={len > 0 ? Math.floor(len) : 100}
-          value={pending.current || dragging.current ? dragVal.current : Math.floor(pos)}
+          value={dragging.current ? dragVal.current : Math.floor(pos)}
           onChange={(e) => {
             const v = Number(e.target.value);
             dragVal.current = v;
             dragging.current = true;
             setRenderTick((t) => t + 1);
+            const now = Date.now();
+            if (now - lastSeek.current >= 100) {
+              lastSeek.current = now;
+              seekTo(v);
+            }
           }}
           onMouseUp={() => {
             if (dragging.current) {
               dragging.current = false;
-              pending.current = true;
               seekTo(dragVal.current);
               setRenderTick((t) => t + 1);
             }
@@ -124,7 +118,6 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
           onTouchEnd={() => {
             if (dragging.current) {
               dragging.current = false;
-              pending.current = true;
               seekTo(dragVal.current);
               setRenderTick((t) => t + 1);
             }
