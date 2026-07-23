@@ -21,6 +21,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function NowPlayingCard({ state }: NowPlayingCardProps) {
+  const timelineRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState(0);
   const pendingRef = useRef(false);
@@ -32,6 +33,27 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
   const pos = state?.position ?? 0;
   const len = state?.length ?? 0;
   const artUrl = state?.art_url ?? null;
+
+  // Native input event for reliable touch drag tracking
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    const handler = () => {
+      setIsDragging(true);
+      setDragValue(Number(el.value));
+    };
+    el.addEventListener('input', handler);
+    return () => el.removeEventListener('input', handler);
+  }, []);
+
+  // Update slider DOM from SSE when not interacting
+  useEffect(() => {
+    if (len <= 0) return;
+    if (!isDragging && !pendingRef.current && timelineRef.current) {
+      timelineRef.current.value = String(Math.floor(pos));
+      timelineRef.current.max = String(Math.floor(len));
+    }
+  }, [pos, len]);
 
   // When SSE confirms the seeked position, release drag state
   useEffect(() => {
@@ -96,14 +118,11 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
       {/* Timeline */}
       <div>
         <input
+          ref={timelineRef}
           type="range"
           min={0}
           max={len > 0 ? Math.floor(len) : 100}
-          value={pendingRef.current || isDragging ? dragValue : Math.floor(pos)}
-          onChange={(e) => {
-            setIsDragging(true);
-            setDragValue(Number(e.target.value));
-          }}
+          defaultValue={Math.floor(pos)}
           onMouseUp={() => {
             if (isDragging) {
               setIsDragging(false);

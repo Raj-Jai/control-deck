@@ -8,6 +8,8 @@ interface StepperControlsProps {
 }
 
 export default function StepperControls({ state }: StepperControlsProps) {
+  const volRef = useRef<HTMLInputElement>(null);
+  const briRef = useRef<HTMLInputElement>(null);
   const isDraggingVol = useRef(false);
   const isDraggingBri = useRef(false);
   const pendingVol = useRef(false);
@@ -20,7 +22,45 @@ export default function StepperControls({ state }: StepperControlsProps) {
   const bri = state?.brightness ?? -1;
   const nightOn = state?.night_light ?? false;
 
-  // When SSE confirms pending volume/brightness, release drag state
+  // Native input event fires reliably on touch drag
+  useEffect(() => {
+    const el = volRef.current;
+    if (!el) return;
+    const handler = () => {
+      isDraggingVol.current = true;
+      setLocalVol(Number(el.value));
+    };
+    el.addEventListener('input', handler);
+    return () => el.removeEventListener('input', handler);
+  }, []);
+
+  useEffect(() => {
+    const el = briRef.current;
+    if (!el) return;
+    const handler = () => {
+      isDraggingBri.current = true;
+      setLocalBri(Number(el.value));
+    };
+    el.addEventListener('input', handler);
+    return () => el.removeEventListener('input', handler);
+  }, []);
+
+  // Update slider DOM from SSE when not interacting
+  useEffect(() => {
+    if (vol >= 0 && !isDraggingVol.current && !pendingVol.current && volRef.current) {
+      volRef.current.value = String(Math.round(vol * 100));
+      setLocalVol(Math.round(vol * 100));
+    }
+  }, [vol]);
+
+  useEffect(() => {
+    if (bri >= 0 && !isDraggingBri.current && !pendingBri.current && briRef.current) {
+      briRef.current.value = String(Math.round(bri));
+      setLocalBri(Math.round(bri));
+    }
+  }, [bri]);
+
+  // Release drag when SSE confirms pending value
   useEffect(() => {
     if (pendingVol.current && vol >= 0) {
       if (Math.abs(Math.round(vol * 100) - localVol) <= 2) {
@@ -39,6 +79,22 @@ export default function StepperControls({ state }: StepperControlsProps) {
   const showVol = pendingVol.current || isDraggingVol.current ? localVol : (vol >= 0 ? Math.round(vol * 100) : localVol);
   const showBri = pendingBri.current || isDraggingBri.current ? localBri : (bri >= 0 ? Math.round(bri) : localBri);
 
+  const commitVol = () => {
+    if (isDraggingVol.current) {
+      isDraggingVol.current = false;
+      pendingVol.current = true;
+      setVolume(localVol / 100);
+    }
+  };
+
+  const commitBri = () => {
+    if (isDraggingBri.current) {
+      isDraggingBri.current = false;
+      pendingBri.current = true;
+      setBrightness(localBri);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {/* Volume */}
@@ -56,28 +112,13 @@ export default function StepperControls({ state }: StepperControlsProps) {
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
           <input
+            ref={volRef}
             type="range"
             min={0}
             max={100}
-            value={showVol}
-            onChange={(e) => {
-              isDraggingVol.current = true;
-              setLocalVol(Number(e.target.value));
-            }}
-            onMouseUp={() => {
-              if (isDraggingVol.current) {
-                isDraggingVol.current = false;
-                pendingVol.current = true;
-                setVolume(localVol / 100);
-              }
-            }}
-            onTouchEnd={() => {
-              if (isDraggingVol.current) {
-                isDraggingVol.current = false;
-                pendingVol.current = true;
-                setVolume(localVol / 100);
-              }
-            }}
+            defaultValue={showVol}
+            onMouseUp={commitVol}
+            onTouchEnd={commitVol}
             className="flex-1"
           />
           <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
@@ -95,7 +136,7 @@ export default function StepperControls({ state }: StepperControlsProps) {
           <button
             className={`icon-btn w-9 h-9 text-base flex-shrink-0 ${
               nightOn
-                ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent shadow-[0_0_12px_rgba(6,182,212,0.25)]'
+                ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-text-accent shadow-[0_0_12px_rgba(6,182,212,0.25)]'
                 : 'text-deck-text'
             }`}
             onClick={() => triggerCommand(nightOn ? 'nightOff' : 'nightOn')}
@@ -103,28 +144,13 @@ export default function StepperControls({ state }: StepperControlsProps) {
             <Moon size={16} />
           </button>
           <input
+            ref={briRef}
             type="range"
             min={0}
             max={100}
-            value={showBri}
-            onChange={(e) => {
-              isDraggingBri.current = true;
-              setLocalBri(Number(e.target.value));
-            }}
-            onMouseUp={() => {
-              if (isDraggingBri.current) {
-                isDraggingBri.current = false;
-                pendingBri.current = true;
-                setBrightness(localBri);
-              }
-            }}
-            onTouchEnd={() => {
-              if (isDraggingBri.current) {
-                isDraggingBri.current = false;
-                pendingBri.current = true;
-                setBrightness(localBri);
-              }
-            }}
+            defaultValue={showBri}
+            onMouseUp={commitBri}
+            onTouchEnd={commitBri}
             className="flex-1"
           />
           <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
