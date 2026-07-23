@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
-import { Moon, Volume2, VolumeX } from 'lucide-react';
+import { Moon, Volume2, VolumeX, Speaker, Headphones } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
-import { triggerCommand, setVolume, setBrightness } from '../services/apiService';
+import { triggerCommand, setVolume, setBrightness, fetchSinks, setDefaultSink } from '../services/apiService';
+import type { SinkInfo } from '../services/apiService';
 
 interface StepperControlsProps {
   state: MediaState | null;
@@ -16,6 +17,8 @@ export default function StepperControls({ state }: StepperControlsProps) {
   const lastBriSend = useRef(0);
   const [localVol, setLocalVol] = useState(100);
   const [localBri, setLocalBri] = useState(100);
+  const [sinks, setSinks] = useState<SinkInfo[]>([]);
+  const [sinkLoading, setSinkLoading] = useState(false);
 
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
@@ -26,6 +29,23 @@ export default function StepperControls({ state }: StepperControlsProps) {
   useEffect(() => {
     if (!draggingVol.current && !draggingBri.current) return;
   });
+
+  const loadSinks = () => fetchSinks().then(setSinks).catch(() => {});
+
+  useEffect(() => {
+    loadSinks();
+    const interval = setInterval(loadSinks, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSinkSelect = async (id: number) => {
+    setSinkLoading(true);
+    try {
+      await setDefaultSink(id);
+      await loadSinks();
+    } catch {}
+    setSinkLoading(false);
+  };
 
   const showVol = draggingVol.current
     ? localVol
@@ -127,6 +147,57 @@ export default function StepperControls({ state }: StepperControlsProps) {
           </span>
         </div>
       </div>
+
+      {/* Audio Output — toggle between BT headset and internal speakers */}
+      {(() => {
+        const isBT = (s: SinkInfo) => /bluez/i.test(s.name);
+        const btSink = sinks.find(isBT);
+        const speakerSink = sinks.find(s => !isBT(s) && !/hdmi/i.test(s.description));
+        const activeSink = sinks.find(s => s.default);
+        if (!btSink || !speakerSink || !activeSink) return null;
+
+        const target = activeSink.id === btSink.id ? speakerSink : btSink;
+        const activeIsBT = activeSink.id === btSink.id;
+
+        return (
+          <div className="deck-card col-span-1 sm:col-span-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim mb-2">
+              Audio Output
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => !activeIsBT && handleSinkSelect(btSink.id)}
+                disabled={sinkLoading || activeIsBT}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                  border transition-all duration-100 flex-1 justify-center
+                  ${activeIsBT
+                    ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                    : 'bg-deck-surface2 border-white/5 text-deck-text/60 hover:bg-deck-accent/10 hover:border-deck-accent/20'
+                  }
+                  disabled:opacity-60 disabled:pointer-events-none`}
+              >
+                <Headphones size={13} />
+                Headphones
+              </button>
+
+              <button
+                onClick={() => activeIsBT && handleSinkSelect(speakerSink.id)}
+                disabled={sinkLoading || !activeIsBT}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                  border transition-all duration-100 flex-1 justify-center
+                  ${!activeIsBT
+                    ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                    : 'bg-deck-surface2 border-white/5 text-deck-text/60 hover:bg-deck-accent/10 hover:border-deck-accent/20'
+                  }
+                  disabled:opacity-60 disabled:pointer-events-none`}
+              >
+                <Speaker size={13} />
+                Speakers
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

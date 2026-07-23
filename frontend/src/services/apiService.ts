@@ -49,3 +49,44 @@ export async function setBrightness(brightness: number): Promise<void> {
     console.error('Set brightness failed:', err);
   }
 }
+
+export async function pullHostClipboard(): Promise<string> {
+  const res = await fetch('/api/clipboard/pull');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.text;
+}
+
+export async function pushHostClipboard(text: string): Promise<void> {
+  const res = await fetch('/api/clipboard/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+}
+
+export interface SinkInfo {
+  id: number;
+  name: string;
+  description: string;
+  default: boolean;
+}
+
+export async function fetchSinks(): Promise<SinkInfo[]> {
+  const res = await fetch('/api/audio/sinks');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+export async function setDefaultSink(id: number): Promise<void> {
+  const res = await fetch('/api/audio/set-sink', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+}

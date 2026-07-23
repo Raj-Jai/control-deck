@@ -96,6 +96,10 @@ func main() {
 	http.HandleFunc("/api/set-volume", handleSetVolume)
 	http.HandleFunc("/api/set-brightness", handleSetBrightness)
 	http.HandleFunc("/media-stream", handleSSE)
+	http.HandleFunc("/api/clipboard/pull", handleClipboardPull)
+	http.HandleFunc("/api/clipboard/push", handleClipboardPush)
+	http.HandleFunc("/api/audio/sinks", handleGetSinks)
+	http.HandleFunc("/api/audio/set-sink", handleSetSink)
 
 	// Background ticker to broadcast MPRIS state to connected web decks
 	go startMediaBroadcaster()

@@ -3,6 +3,7 @@ import NowPlayingCard from './components/NowPlayingCard';
 import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
 import SystemStatsCard from './components/SystemStatsCard';
+import ClipboardCard from './components/ClipboardCard';
 
 export default function App() {
   const { state, loading, error } = useMediaStream();
@@ -32,6 +33,7 @@ export default function App() {
           {/* Right column */}
           <div className="flex flex-col gap-3">
             <ToggleGrid state={state} />
+            <ClipboardCard />
             <SystemStatsCard state={state} />
           </div>
         </div>
