@@ -103,6 +103,16 @@ func main() {
 
 	port := ":8080"
 	log.Printf("Control Deck running on http://localhost%s\n", port)
+
+	// TLS server for PWA (Chrome requires HTTPS for display: standalone)
+	go func() {
+		httpsPort := ":8443"
+		log.Printf("HTTPS on https://localhost%s (accept self-signed cert once)", httpsPort)
+		if err := http.ListenAndServeTLS(httpsPort, "server.crt", "server.key", nil); err != nil {
+			log.Printf("TLS server: %v", err)
+		}
+	}()
+
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
