@@ -17,6 +17,7 @@ import (
 
 // Caffeine schema directory (GNOME Shell extension)
 var caffeineSD = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
+var dashPIN = "0616"
 
 // CommandMap routes web deck actions directly to Linux CLI utilities.
 var commandMap = map[string][]string{
@@ -101,6 +102,7 @@ func main() {
 	http.Handle("/", http.FileServer(http.Dir(".")))
 
 	// API Routes
+	http.HandleFunc("/api/auth", handleAuth)
 	http.HandleFunc("/api/command", handleCommand)
 	http.HandleFunc("/seek", handleSeek)
 	http.HandleFunc("/api/set-volume", handleSetVolume)
@@ -130,6 +132,22 @@ func main() {
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+func handleAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		PIN string `json:"pin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": req.PIN == dashPIN})
 }
 
 // Executed when buttons are pressed on the Web Deck
