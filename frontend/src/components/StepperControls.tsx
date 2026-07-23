@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Moon, Volume2, VolumeX } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
 import { triggerCommand, setVolume, setBrightness } from '../services/apiService';
@@ -10,6 +10,8 @@ interface StepperControlsProps {
 export default function StepperControls({ state }: StepperControlsProps) {
   const isDraggingVol = useRef(false);
   const isDraggingBri = useRef(false);
+  const pendingVol = useRef(false);
+  const pendingBri = useRef(false);
   const [localVol, setLocalVol] = useState(100);
   const [localBri, setLocalBri] = useState(100);
 
@@ -18,28 +20,24 @@ export default function StepperControls({ state }: StepperControlsProps) {
   const bri = state?.brightness ?? -1;
   const nightOn = state?.night_light ?? false;
 
-  const displayVol = vol >= 0 && !isDraggingVol.current ? Math.round(vol * 100) : localVol;
-  const displayBri = bri >= 0 && !isDraggingBri.current ? Math.round(bri) : localBri;
+  // When SSE confirms pending volume/brightness, release drag state
+  useEffect(() => {
+    if (pendingVol.current && vol >= 0) {
+      if (Math.abs(Math.round(vol * 100) - localVol) <= 2) {
+        pendingVol.current = false;
+        isDraggingVol.current = false;
+      }
+    }
+    if (pendingBri.current && bri >= 0) {
+      if (Math.abs(Math.round(bri) - localBri) <= 2) {
+        pendingBri.current = false;
+        isDraggingBri.current = false;
+      }
+    }
+  });
 
-  const handleVolChange = useCallback((value: number) => {
-    isDraggingVol.current = true;
-    setLocalVol(value);
-  }, []);
-
-  const handleVolCommit = useCallback((value: number) => {
-    isDraggingVol.current = false;
-    setVolume(value / 100);
-  }, []);
-
-  const handleBriChange = useCallback((value: number) => {
-    isDraggingBri.current = true;
-    setLocalBri(value);
-  }, []);
-
-  const handleBriCommit = useCallback((value: number) => {
-    isDraggingBri.current = false;
-    setBrightness(value);
-  }, []);
+  const showVol = pendingVol.current || isDraggingVol.current ? localVol : (vol >= 0 ? Math.round(vol * 100) : localVol);
+  const showBri = pendingBri.current || isDraggingBri.current ? localBri : (bri >= 0 ? Math.round(bri) : localBri);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -61,14 +59,29 @@ export default function StepperControls({ state }: StepperControlsProps) {
             type="range"
             min={0}
             max={100}
-            value={displayVol}
-            onChange={(e) => handleVolChange(Number(e.target.value))}
-            onMouseUp={() => handleVolCommit(displayVol)}
-            onTouchEnd={() => handleVolCommit(displayVol)}
+            value={showVol}
+            onChange={(e) => {
+              isDraggingVol.current = true;
+              setLocalVol(Number(e.target.value));
+            }}
+            onMouseUp={() => {
+              if (isDraggingVol.current) {
+                isDraggingVol.current = false;
+                pendingVol.current = true;
+                setVolume(localVol / 100);
+              }
+            }}
+            onTouchEnd={() => {
+              if (isDraggingVol.current) {
+                isDraggingVol.current = false;
+                pendingVol.current = true;
+                setVolume(localVol / 100);
+              }
+            }}
             className="flex-1"
           />
           <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
-            {displayVol}%
+            {showVol}%
           </span>
         </div>
       </div>
@@ -93,14 +106,29 @@ export default function StepperControls({ state }: StepperControlsProps) {
             type="range"
             min={0}
             max={100}
-            value={displayBri}
-            onChange={(e) => handleBriChange(Number(e.target.value))}
-            onMouseUp={() => handleBriCommit(displayBri)}
-            onTouchEnd={() => handleBriCommit(displayBri)}
+            value={showBri}
+            onChange={(e) => {
+              isDraggingBri.current = true;
+              setLocalBri(Number(e.target.value));
+            }}
+            onMouseUp={() => {
+              if (isDraggingBri.current) {
+                isDraggingBri.current = false;
+                pendingBri.current = true;
+                setBrightness(localBri);
+              }
+            }}
+            onTouchEnd={() => {
+              if (isDraggingBri.current) {
+                isDraggingBri.current = false;
+                pendingBri.current = true;
+                setBrightness(localBri);
+              }
+            }}
             className="flex-1"
           />
           <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
-            {displayBri}%
+            {showBri}%
           </span>
         </div>
       </div>

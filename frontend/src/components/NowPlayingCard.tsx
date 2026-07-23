@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Music,
   SkipBack,
@@ -23,6 +23,7 @@ function formatTime(seconds: number): string {
 export default function NowPlayingCard({ state }: NowPlayingCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragValue, setDragValue] = useState(0);
+  const pendingRef = useRef(false);
   const artLoadedRef = useRef(false);
   const [artError, setArtError] = useState(false);
 
@@ -32,18 +33,24 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
   const len = state?.length ?? 0;
   const artUrl = state?.art_url ?? null;
 
+  // When SSE confirms the seeked position, release drag state
+  useEffect(() => {
+    if (pendingRef.current && state) {
+      const sse = Math.floor(state.position);
+      if (Math.abs(sse - dragValue) <= 2) {
+        pendingRef.current = false;
+        setIsDragging(false);
+      }
+    }
+  });
+
   const displayTitle = isOffline ? 'No Track' : state.title;
   const displayArtist = isOffline ? 'Idle / Disconnected' : state.artist ?? 'Unknown Artist';
-
-  const handleSeek = useCallback((val: number) => {
-    seekTo(val);
-  }, []);
 
   return (
     <div className="deck-card flex flex-col gap-3.5">
       {/* Art + Info row */}
       <div className="flex items-center gap-3">
-        {/* Album art */}
         <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0 bg-deck-surface2">
           {artUrl && !artError ? (
             <img
@@ -60,7 +67,6 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
           )}
         </div>
 
-        {/* Track info */}
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold truncate">{displayTitle}</h2>
           <p className="text-xs text-deck-dim truncate mt-0.5">{displayArtist}</p>
@@ -93,7 +99,7 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
           type="range"
           min={0}
           max={len > 0 ? Math.floor(len) : 100}
-          value={isDragging ? dragValue : Math.floor(pos)}
+          value={pendingRef.current || isDragging ? dragValue : Math.floor(pos)}
           onChange={(e) => {
             setIsDragging(true);
             setDragValue(Number(e.target.value));
@@ -101,13 +107,15 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
           onMouseUp={() => {
             if (isDragging) {
               setIsDragging(false);
-              handleSeek(dragValue);
+              pendingRef.current = true;
+              seekTo(dragValue);
             }
           }}
           onTouchEnd={() => {
             if (isDragging) {
               setIsDragging(false);
-              handleSeek(dragValue);
+              pendingRef.current = true;
+              seekTo(dragValue);
             }
           }}
           className="w-full"
