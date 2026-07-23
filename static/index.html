@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1">
 <meta name="theme-color" content="#0f172a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <title>Control Deck</title>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -26,12 +24,11 @@ html,body{
   height:100%;width:100%;
   background:var(--bg);
   color:var(--text);
-  font-family:'Inter','Segoe UI','Roboto',system-ui,-apple-system,sans-serif;
+  font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased;
   overflow:hidden;
   touch-action:manipulation;
   user-select:none;
-  -webkit-user-select:none;
 }
 body{display:flex;align-items:center;justify-content:center;padding:12px}
 #app{
@@ -49,7 +46,7 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
 
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
 
-/* ── Section A: Now Playing & Timeline ── */
+/* Now Playing Section */
 #now-playing-card{display:flex;flex-direction:column;gap:14px}
 #now-playing-main{display:flex;align-items:center;gap:18px}
 #album-art-wrap{
@@ -60,10 +57,9 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
   position:relative;
 }
 #album-art{width:100%;height:100%;object-fit:cover;display:block}
-#album-art.fallback{display:none}
 .fallback-icon{font-size:32px;color:var(--text-dim);line-height:1}
 #track-info{flex:1;min-width:0}
-#track-title{font-size:1.2rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+#track-title{font-size:1.2rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #track-artist{font-size:0.9rem;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #status-badge{
   display:inline-flex;align-items:center;gap:6px;
@@ -85,9 +81,8 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
   font-size:1.2rem;
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:all 0.12s ease;
-  -webkit-tap-highlight-color:transparent;
 }
-.media-btn:active{transform:scale(0.9);background:var(--accent);border-color:var(--accent)}
+.media-btn:active{transform:scale(0.9);background:var(--accent)}
 
 /* Timeline Bar Styling */
 #timeline-container{display:flex;flex-direction:column;gap:6px;width:100%}
@@ -102,7 +97,7 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
   box-shadow:0 0 10px rgba(6,182,212,0.5);
 }
 
-/* ── Section B: Steppers ── */
+/* Steppers Section */
 .stepper-card{
   display:flex;flex-direction:column;align-items:center;gap:10px;
   padding:18px 12px;border-radius:var(--radius-sm);
@@ -115,19 +110,17 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
   border:1px solid rgba(255,255,255,0.08);background:var(--surface2);
   color:var(--text);font-size:0.95rem;font-weight:600;
   cursor:pointer;transition:all 0.1s ease;text-align:center;
-  -webkit-tap-highlight-color:transparent;
 }
-.stepper-btn:active{transform:scale(0.93);background:var(--accent);border-color:var(--accent);color:#fff}
+.stepper-btn:active{transform:scale(0.93);background:var(--accent);color:#fff}
 .stepper-btn.mute{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.2);color:var(--red)}
-.stepper-btn.mute:active{background:var(--red);color:#fff;border-color:var(--red)}
+.stepper-btn.mute:active{background:var(--red);color:#fff}
 
-/* ── Section C: Toggles ── */
+/* Toggles Section */
 .toggle-card{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:10px;padding:22px 12px;border-radius:var(--radius);
   background:var(--surface);border:1px solid rgba(255,255,255,0.04);
-  cursor:pointer;transition:all 0.15s ease;-webkit-tap-highlight-color:transparent;
-  position:relative;overflow:hidden;
+  cursor:pointer;transition:all 0.15s ease;position:relative;overflow:hidden;
 }
 .toggle-card .icon{font-size:1.8rem;line-height:1}
 .toggle-card .label{font-size:0.82rem;font-weight:600;color:var(--text-dim);text-align:center}
@@ -141,32 +134,18 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
 .ripple{position:absolute;border-radius:50%;background:rgba(6,182,212,0.25);transform:scale(0);animation:rippleAnim 0.5s ease-out;pointer-events:none}
 @keyframes rippleAnim{to{transform:scale(4);opacity:0}}
 
-#kde-frame-container {position:absolute;width:0;height:0;border:0;visibility:hidden;overflow:hidden;pointer-events:none}
-
-@media(max-width:720px){
-  .grid-3{grid-template-columns:1fr 1fr}
-  #now-playing-main{flex-wrap:wrap}
-  #media-actions{margin-left:auto}
-}
+@media(max-width:720px){.grid-3{grid-template-columns:1fr 1fr}}
 @media(max-width:480px){
-  .grid-3{grid-template-columns:1fr 1fr}
-  #now-playing-main{gap:12px}
   #album-art-wrap{width:64px;height:64px}
-  .fallback-icon{font-size:26px}
-  #track-title{font-size:1.05rem}
   .stepper-btn{max-width:80px;padding:8px 0;font-size:0.85rem}
 }
 </style>
 </head>
 <body>
 
-<div id="kde-frame-container">
-  <iframe id="kde-runner" name="kde-runner" style="display:none;"></iframe>
-</div>
-
 <div id="app">
 
-  <!-- ── Now Playing & Timeline Card ── -->
+  <!-- Now Playing Card -->
   <div class="card" id="now-playing-card">
     <div id="now-playing-main">
       <div id="album-art-wrap">
@@ -176,7 +155,7 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
       <div id="track-info">
         <div id="track-title">No Track</div>
         <div id="track-artist">Waiting for playback...</div>
-        <div id="status-badge" class="idle"><span class="status-dot"></span> Disconnected</div>
+        <div id="status-badge" class="idle"><span class="status-dot"></span> Offline</div>
       </div>
       <div id="media-actions">
         <button class="media-btn" data-cmd="previous" title="Previous">&#x23EE;</button>
@@ -185,7 +164,6 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
       </div>
     </div>
 
-    <!-- Timeline Slider -->
     <div id="timeline-container">
       <input type="range" id="timeline-slider" min="0" max="100" value="0">
       <div class="timeline-time-wrap">
@@ -195,7 +173,7 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
     </div>
   </div>
 
-  <!-- ── Steppers Grid ── -->
+  <!-- Steppers Grid -->
   <div class="grid-3">
     <div class="stepper-card">
       <div class="stepper-label">Volume</div>
@@ -219,12 +197,8 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
     </div>
   </div>
 
-  <!-- ── Toggles Grid ── -->
+  <!-- Toggles Grid -->
   <div class="grid-3">
-    <div class="toggle-card" data-cmd="caffeine">
-      <span class="icon">&#x2615;</span>
-      <span class="label">Caffeine<br>Keep Awake</span>
-    </div>
     <div class="toggle-card" data-cmd="bluetooth">
       <span class="icon">&#x1F5B2;</span>
       <span class="label">Bluetooth<br>Toggle</span>
@@ -233,7 +207,7 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
       <span class="icon">&#x1F512;</span>
       <span class="label">Lock<br>Desktop</span>
     </div>
-    <div class="toggle-card" id="erp-btn">
+    <div class="toggle-card" data-cmd="erpLogin">
       <span class="icon">&#x1F393;</span>
       <span class="label">ERP<br>Login</span>
     </div>
@@ -246,32 +220,12 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
 </div>
 
 <script>
-const CONFIG = {
-  deviceId: '6101788931424e7096ed6ff08e9a1cd6',
-  commands: {
-    previous:       'cd270337-b3b3-4cad-ba76-b09dd204c63b',
-    playpause:      '3f7258b7-41b1-4515-a70b-445416eac41c',
-    next:           '58b4829d-6107-4ead-9c6e-c6eb6d6d6d79',
-    volUp:          '87943c88-4505-4d90-b67e-e999940e3af2',
-    volDown:        '92c0072a-711d-49a8-9302-3531d8618ed5',
-    mute:           'f31f8711-695f-4dd5-8e3c-e6a9ca70d157',
-    brightnessUp:   '8142fe27-4f11-47f8-9987-a650044c3687',
-    brightnessDown: 'bec3cbfc-1f7a-4877-a9bf-3282329fc268',
-    caffeine:       '774d4822-6643-4bfa-a132-85b006c0aa4a',
-    bluetooth:      '0c9b834e-96cc-46ac-b6b5-af1b395090ed',
-    lock:           'lock',
-    erpLogin:       '34edfbd5-fa81-4578-8040-9ef5c59df35b',
-    warpOn:         '814a1288-485b-4b4a-8f74-8c99ad49af0d',
-    warpOff:        '08262f4e-d247-4767-862d-a2fd28d8d468',
-  }
-};
-
-function triggerKdeCommand(commandKey) {
-  const cmdId = CONFIG.commands[commandKey];
-  if (!cmdId) return;
-  const uri = `kdeconnect://runcommand/${CONFIG.deviceId}/${cmdId}`;
-  const runner = document.getElementById('kde-runner');
-  if (runner) runner.src = uri;
+function triggerCommand(cmdKey) {
+  fetch('/api/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command: cmdKey })
+  }).catch(err => console.error('Command failed:', err));
 }
 
 function createRipple(e, el) {
@@ -300,6 +254,8 @@ const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
 
 let isUserDraggingSlider = false;
+let currentArtUrl = null;
+let artLoaded = false;
 
 function formatTime(seconds) {
   if (isNaN(seconds) || seconds <= 0) return '0:00';
@@ -308,15 +264,37 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+function updateArtDisplay(url) {
+  if (!url) {
+    currentArtUrl = null;
+    artLoaded = false;
+    albumArt.style.display = 'none';
+    fallbackIcon.style.display = 'block';
+    return;
+  }
+  if (url !== currentArtUrl) {
+    currentArtUrl = url;
+    artLoaded = false;
+    albumArt.src = url;
+    albumArt.style.display = 'block';
+    fallbackIcon.style.display = 'none';
+  } else if (artLoaded) {
+    albumArt.style.display = 'block';
+    fallbackIcon.style.display = 'none';
+  }
+}
+
 function renderMediaState(data) {
   if (!data || !data.title) {
     albumArt.src = '';
     albumArt.style.display = 'none';
     fallbackIcon.style.display = 'block';
+    currentArtUrl = null;
+    artLoaded = false;
     trackTitle.textContent = 'No Track';
     trackArtist.textContent = 'Idle / Disconnected';
     statusBadge.className = 'idle';
-    statusBadge.innerHTML = '<span class="status-dot"></span> Disconnected';
+    statusBadge.innerHTML = '<span class="status-dot"></span> Offline';
     timeCurrent.textContent = '0:00';
     timeTotal.textContent = '0:00';
     timelineSlider.value = 0;
@@ -328,54 +306,46 @@ function renderMediaState(data) {
   statusBadge.className = '';
   statusBadge.innerHTML = `<span class="status-dot"></span> ${data.status || 'Playing'}`;
 
-  // Album Art handling
-  if (data.art_url) {
-    if (albumArt.getAttribute('data-raw-src') !== data.art_url) {
-      albumArt.setAttribute('data-raw-src', data.art_url);
-      albumArt.src = data.art_url;
-    }
-    albumArt.style.display = 'block';
-    fallbackIcon.style.display = 'none';
-  } else {
-    albumArt.src = '';
-    albumArt.style.display = 'none';
-    fallbackIcon.style.display = 'block';
-  }
+  updateArtDisplay(data.art_url);
 
-  // Timeline position & track duration updates
-  if (!isUserDraggingSlider && data.length > 0) {
-    timelineSlider.max = Math.floor(data.length);
+  if (!isUserDraggingSlider) {
     timelineSlider.value = Math.floor(data.position);
     timeCurrent.textContent = formatTime(data.position);
-    timeTotal.textContent = formatTime(data.length);
+    if (data.length > 0) {
+      timelineSlider.max = Math.floor(data.length);
+      timeTotal.textContent = formatTime(data.length);
+    } else {
+      timeTotal.textContent = '--:--';
+    }
   }
 }
 
-// Fallback if album art image URL fails to resolve/load
+albumArt.addEventListener('load', () => {
+  artLoaded = true;
+  albumArt.style.display = 'block';
+  fallbackIcon.style.display = 'none';
+});
+
 albumArt.addEventListener('error', () => {
+  artLoaded = false;
   albumArt.style.display = 'none';
   fallbackIcon.style.display = 'block';
 });
 
-// SSE Stream Connection
+// Stream SSE updates from backend
 function initMediaStream() {
   const evtSource = new EventSource('/media-stream');
-
-  evtSource.onmessage = function(e) {
+  evtSource.onmessage = (e) => {
     try {
-      const data = JSON.parse(e.data);
-      renderMediaState(data);
+      renderMediaState(JSON.parse(e.data));
     } catch (err) {
-      console.error("Failed to parse SSE media state:", err);
+      console.error(err);
     }
   };
-
-  evtSource.onerror = function() {
-    renderMediaState(null);
-  };
+  evtSource.onerror = () => renderMediaState(null);
 }
 
-// Handle Seeking on Timeline
+// Timeline seeking handlers
 timelineSlider.addEventListener('input', () => {
   isUserDraggingSlider = true;
   timeCurrent.textContent = formatTime(timelineSlider.value);
@@ -387,37 +357,26 @@ timelineSlider.addEventListener('change', () => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ position: targetSeconds })
-  }).then(() => {
-    isUserDraggingSlider = false;
-  }).catch(() => {
+  }).finally(() => {
     isUserDraggingSlider = false;
   });
 });
 
-// Controls & Buttons Event Listeners
+// Event Listeners for Buttons
 document.querySelectorAll('.media-btn, .stepper-btn').forEach(btn => {
   btn.addEventListener('click', e => {
     createRipple(e, btn);
-    triggerKdeCommand(btn.dataset.cmd);
+    triggerCommand(btn.dataset.cmd);
   });
 });
 
 document.querySelectorAll('.toggle-card[data-cmd]').forEach(card => {
   card.addEventListener('click', e => {
     createRipple(e, card);
-    triggerKdeCommand(card.dataset.cmd);
+    triggerCommand(card.dataset.cmd);
     card.classList.toggle('on');
   });
 });
-
-// ERP & WARP Special Handlers
-const erpBtn = document.getElementById('erp-btn');
-if (erpBtn) {
-  erpBtn.addEventListener('click', e => {
-    createRipple(e, erpBtn);
-    triggerKdeCommand('erpLogin');
-  });
-}
 
 let isWarpActive = false;
 const warpBtn = document.getElementById('warp-btn');
@@ -426,12 +385,12 @@ if (warpBtn) {
   warpBtn.addEventListener('click', e => {
     createRipple(e, warpBtn);
     if (isWarpActive) {
-      triggerKdeCommand('warpOff');
+      triggerCommand('warpOff');
       warpBtn.classList.remove('on');
       warpLabel.innerHTML = 'WARP<br>OFF';
       isWarpActive = false;
     } else {
-      triggerKdeCommand('warpOn');
+      triggerCommand('warpOn');
       warpBtn.classList.add('on');
       warpLabel.innerHTML = 'WARP<br>ON';
       isWarpActive = true;
@@ -439,7 +398,6 @@ if (warpBtn) {
   });
 }
 
-// Start SSE stream
 initMediaStream();
 </script>
 </body>

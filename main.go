@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,177 +9,278 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// CommandMap routes web deck actions directly to Linux CLI utilities.
+var commandMap = map[string][]string{
+	"playpause":      {"playerctl", "play-pause"},
+	"next":           {"playerctl", "next"},
+	"previous":       {"playerctl", "previous"},
+	"volUp":          {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"},
+	"volDown":        {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"},
+	"mute":           {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"},
+	"brightnessUp":   {"brightnessctl", "set", "+10%"},
+	"brightnessDown": {"brightnessctl", "set", "10%-"},
+	"lock":           {"loginctl", "lock-session"},
+	"bluetooth":      {"rfkill", "toggle", "bluetooth"},
+	"warpOn":         {"warp-cli", "connect"},
+	"warpOff":        {"warp-cli", "disconnect"},
+	// Add your script paths here if needed
+	"erpLogin": {"erp", "login"},
+}
 
 type MediaState struct {
 	Title    string  `json:"title"`
 	Artist   string  `json:"artist"`
-	Status   string  `json:"status"`   // Playing, Paused, Stopped
-	Position float64 `json:"position"` // in seconds
-	Length   float64 `json:"length"`   // in seconds
-	ArtUrl   string  `json:"art_url"`  // URL or proxy route to album art
+	Status   string  `json:"status"`
+	ArtURL   string  `json:"art_url"`
+	Position float64 `json:"position"`
+	Length   float64 `json:"length"`
 }
 
-type SeekPayload struct {
+type CommandRequest struct {
+	Command string `json:"command"`
+}
+
+type SeekRequest struct {
 	Position float64 `json:"position"`
 }
 
-func getMPRISState() MediaState {
-	// Use individual queries or properly escaped JSON format
-	format := `{"title": "{{title}}", "artist": "{{artist}}", "status": "{{status}}", "position": {{position}}, "length": {{mpris:length}}, "artUrl": "{{mpris:artUrl}}"}`
-	cmd := exec.Command("playerctl", "metadata", "--format", format)
-	out, err := cmd.Output()
-	if err != nil {
-		return MediaState{}
-	}
+var (
+	clients      = make(map[chan string]bool)
+	clientsMu    sync.Mutex
+	artCachePath string
+	artCacheData string
+)
 
-	var raw struct {
-		Title    string  `json:"title"`
-		Artist   string  `json:"artist"`
-		Status   string  `json:"status"`
-		Position float64 `json:"position"`
-		Length   float64 `json:"length"`
-		ArtUrl   string  `json:"artUrl"`
-	}
+func main() {
+	// Serve frontend assets
+	http.Handle("/", http.FileServer(http.Dir(".")))
 
-	if err := json.Unmarshal(out, &raw); err != nil {
-		// Fallback: If JSON unmarshaling fails due to unescaped quotes in track titles
-		return getMPRISStateFallback()
-	}
+	// API Routes
+	http.HandleFunc("/api/command", handleCommand)
+	http.HandleFunc("/seek", handleSeek)
+	http.HandleFunc("/media-stream", handleSSE)
 
-	art := strings.TrimSpace(raw.ArtUrl)
+	// Background ticker to broadcast MPRIS state to connected web decks
+	go startMediaBroadcaster()
 
-	if strings.HasPrefix(art, "file://") {
-		rawPath := strings.TrimPrefix(art, "file://")
-		if decodedPath, err := url.QueryUnescape(rawPath); err == nil {
-			art = "/art?path=" + url.QueryEscape(decodedPath)
-		} else {
-			art = "/art?path=" + url.QueryEscape(rawPath)
-		}
-	}
-
-	return MediaState{
-		Title:    raw.Title,
-		Artist:   raw.Artist,
-		Status:   raw.Status,
-		Position: raw.Position / 1000000.0,
-		Length:   raw.Length / 1000000.0,
-		ArtUrl:   art,
+	port := ":8080"
+	log.Printf("Control Deck running on http://localhost%s\n", port)
+	if err := http.ListenAndServe(port, nil); err != nil {
+		log.Fatalf("Server failed: %v", err)
 	}
 }
 
-// Robust fallback in case titles contain unescaped JSON characters
-func getMPRISStateFallback() MediaState {
-	artCmd := exec.Command("playerctl", "metadata", "mpris:artUrl")
-	artOut, _ := artCmd.Output()
-	art := strings.TrimSpace(string(artOut))
-
-	if strings.HasPrefix(art, "file://") {
-		rawPath := strings.TrimPrefix(art, "file://")
-		if decodedPath, err := url.QueryUnescape(rawPath); err == nil {
-			art = "/art?path=" + url.QueryEscape(decodedPath)
-		} else {
-			art = "/art?path=" + url.QueryEscape(rawPath)
-		}
-	}
-
-	titleCmd := exec.Command("playerctl", "metadata", "title")
-	titleOut, _ := titleCmd.Output()
-
-	artistCmd := exec.Command("playerctl", "metadata", "artist")
-	artistOut, _ := artistCmd.Output()
-
-	statusCmd := exec.Command("playerctl", "status")
-	statusOut, _ := statusCmd.Output()
-
-	return MediaState{
-		Title:  strings.TrimSpace(string(titleOut)),
-		Artist: strings.TrimSpace(string(artistOut)),
-		Status: strings.TrimSpace(string(statusOut)),
-		ArtUrl: art,
-	}
-}
-
-// Serve local album art files, detecting image types dynamically
-func artHandler(w http.ResponseWriter, r *http.Request) {
-	filePath := r.URL.Query().Get("path")
-	if filePath == "" {
-		http.Error(w, "Missing path parameter", http.StatusBadRequest)
-		return
-	}
-
-	cleanPath := filepath.Clean(filePath)
-	data, err := os.ReadFile(cleanPath)
-	if err != nil {
-		http.Error(w, "Art file not found", http.StatusNotFound)
-		return
-	}
-
-	// Detect MIME type dynamically using content sniff (handles extensionless files like Chrome's /tmp/.com.google.Chrome.*)
-	contentType := http.DetectContentType(data)
-	w.Header().Set("Content-Type", contentType)
-	w.Write(data)
-}
-
-func mediaStreamHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
-		return
-	}
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ticker.C:
-			state := getMPRISState()
-			data, _ := json.Marshal(state)
-			fmt.Fprintf(w, "data: %s\n\n", data)
-			flusher.Flush()
-		}
-	}
-}
-
-func seekHandler(w http.ResponseWriter, r *http.Request) {
+// Executed when buttons are pressed on the Web Deck
+func handleCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var payload SeekPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	var req CommandRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	posStr := strconv.FormatFloat(payload.Position, 'f', 2, 64)
-	_ = exec.Command("playerctl", "position", posStr).Run()
+	args, exists := commandMap[req.Command]
+	if !exists {
+		http.Error(w, "Unknown command", http.StatusBadRequest)
+		return
+	}
 
-	w.WriteHeader(http.StatusOK)
+	// Fire command in background thread for low-latency response
+	go func(cmdArgs []string) {
+		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error executing %v: %v | Output: %s", cmdArgs, err, string(out))
+		}
+	}(args)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
 }
 
-func main() {
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/", fs)
-	http.HandleFunc("/media-stream", mediaStreamHandler)
-	http.HandleFunc("/seek", seekHandler)
-	http.HandleFunc("/art", artHandler)
+// Handles timeline seeking via playerctl
+func handleSeek(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-	log.Println("Control Deck server running on http://0.0.0.0:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Server launch failed: %v", err)
+	var req SeekRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	go func(pos float64) {
+		cmd := exec.Command("playerctl", "position", fmt.Sprintf("%f", pos))
+		if err := cmd.Run(); err != nil {
+			log.Printf("Error seeking to %f: %v", pos, err)
+		}
+	}(req.Position)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// Server-Sent Events (SSE) endpoint for real-time track updates
+func handleSSE(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	messageChan := make(chan string)
+
+	clientsMu.Lock()
+	clients[messageChan] = true
+	clientsMu.Unlock()
+
+	defer func() {
+		clientsMu.Lock()
+		delete(clients, messageChan)
+		clientsMu.Unlock()
+		close(messageChan)
+	}()
+
+	notify := r.Context().Done()
+	for {
+		select {
+		case <-notify:
+			return
+		case msg := <-messageChan:
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		}
+	}
+}
+
+// Polls MPRIS state via playerctl and broadcasts to SSE clients
+func startMediaBroadcaster() {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		clientsMu.Lock()
+		clientCount := len(clients)
+		clientsMu.Unlock()
+
+		if clientCount == 0 {
+			continue
+		}
+
+		state := fetchMPRISState()
+		data, err := json.Marshal(state)
+		if err != nil {
+			continue
+		}
+
+		msg := string(data)
+		clientsMu.Lock()
+		for ch := range clients {
+			select {
+			case ch <- msg:
+			default:
+			}
+		}
+		clientsMu.Unlock()
+	}
+}
+
+func resolveArtURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		return rawURL
+	}
+
+	if strings.HasPrefix(rawURL, "file://") {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			log.Printf("Failed to parse art URL %s: %v", rawURL, err)
+			return ""
+		}
+		filePath := parsed.Path
+
+		if filePath == artCachePath {
+			return artCacheData
+		}
+
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Printf("Failed to read art file %s: %v", filePath, err)
+			artCachePath = filePath
+			artCacheData = ""
+			return ""
+		}
+
+		mimeType := http.DetectContentType(data)
+		if !strings.HasPrefix(mimeType, "image/") {
+			log.Printf("Art file %s has non-image MIME type: %s", filePath, mimeType)
+			artCachePath = filePath
+			artCacheData = ""
+			return ""
+		}
+
+		encoded := base64.StdEncoding.EncodeToString(data)
+		dataURI := "data:" + mimeType + ";base64," + encoded
+		artCachePath = filePath
+		artCacheData = dataURI
+		return dataURI
+	}
+
+	log.Printf("Unknown art URL scheme: %s", rawURL)
+	return ""
+}
+
+func runPlayerctl(args ...string) (string, error) {
+	out, err := exec.Command("playerctl", args...).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func fetchMPRISState() MediaState {
+	title, _ := runPlayerctl("metadata", "xesam:title")
+	artist, _ := runPlayerctl("metadata", "xesam:artist")
+	status, _ := runPlayerctl("status")
+
+	lenStr, lenErr := runPlayerctl("metadata", "mpris:length")
+	var length float64
+	if lenErr == nil {
+		if l, e := strconv.ParseFloat(lenStr, 64); e == nil {
+			length = l / 1000000.0
+		}
+	}
+
+	posStr, posErr := runPlayerctl("position")
+	var posSeconds float64
+	if posErr == nil {
+		posSeconds, _ = strconv.ParseFloat(posStr, 64)
+	}
+
+	artStr, _ := runPlayerctl("metadata", "mpris:artUrl")
+
+	return MediaState{
+		Title:    title,
+		Artist:   artist,
+		Status:   status,
+		ArtURL:   resolveArtURL(artStr),
+		Position: posSeconds,
+		Length:   length,
 	}
 }
