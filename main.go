@@ -26,11 +26,26 @@ var commandMap = map[string][]string{
 	"brightnessUp":   {"brightnessctl", "set", "+10%"},
 	"brightnessDown": {"brightnessctl", "set", "10%-"},
 	"lock":           {"loginctl", "lock-session"},
-	"bluetooth":      {"rfkill", "toggle", "bluetooth"},
+	"bluetoothOn":    {"rfkill", "unblock", "bluetooth"},
+	"bluetoothOff":   {"rfkill", "block", "bluetooth"},
+	"btConnect":      {"bluetoothctl", "connect", "88:D0:39:7D:66:CC"},
 	"warpOn":         {"warp-cli", "connect"},
 	"warpOff":        {"warp-cli", "disconnect"},
 	// Add your script paths here if needed
 	"erpLogin": {"erp", "login"},
+	"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
+	"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
+}
+
+type SystemStats struct {
+	CPU      float64 `json:"cpu"`
+	RAM      float64 `json:"ram"`
+	Battery  float64 `json:"battery"`
+	Charging bool    `json:"charging"`
+	Temp     float64 `json:"temp"`
+	SSID     string  `json:"ssid"`
+	IP       string  `json:"ip"`
+	PingOK   bool    `json:"ping_ok"`
 }
 
 type MediaState struct {
@@ -40,6 +55,13 @@ type MediaState struct {
 	ArtURL   string  `json:"art_url"`
 	Position float64 `json:"position"`
 	Length   float64 `json:"length"`
+	Volume     float64 `json:"volume"`
+	Muted      bool    `json:"muted"`
+	Brightness float64 `json:"brightness"`
+	NightLight  bool `json:"night_light"`
+	BluetoothOn bool `json:"bluetooth_on"`
+	WarpOn      bool `json:"warp_on"`
+	Sys        *SystemStats `json:"sys"`
 }
 
 type CommandRequest struct {
@@ -55,6 +77,13 @@ var (
 	clientsMu    sync.Mutex
 	artCachePath string
 	artCacheData string
+
+	cpuPrevIdle  uint64
+	cpuPrevTotal uint64
+	cpuReady     bool
+
+	pingOK bool
+	pingMu sync.RWMutex
 )
 
 func main() {
@@ -64,10 +93,13 @@ func main() {
 	// API Routes
 	http.HandleFunc("/api/command", handleCommand)
 	http.HandleFunc("/seek", handleSeek)
+	http.HandleFunc("/api/set-volume", handleSetVolume)
+	http.HandleFunc("/api/set-brightness", handleSetBrightness)
 	http.HandleFunc("/media-stream", handleSSE)
 
 	// Background ticker to broadcast MPRIS state to connected web decks
 	go startMediaBroadcaster()
+	go startPingChecker()
 
 	port := ":8080"
 	log.Printf("Control Deck running on http://localhost%s\n", port)
@@ -129,6 +161,67 @@ func handleSeek(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func handleSetVolume(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Volume float64 `json:"volume"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	go func(v float64) {
+		cmd := exec.Command("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", fmt.Sprintf("%f", v))
+		if err := cmd.Run(); err != nil {
+			log.Printf("Error setting volume: %v", err)
+		}
+	}(req.Volume)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func handleSetBrightness(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Brightness float64 `json:"brightness"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	go func(v float64) {
+		cmd := exec.Command("brightnessctl", "set", fmt.Sprintf("%d%%", int(v)))
+		if err := cmd.Run(); err != nil {
+			log.Printf("Error setting brightness: %v", err)
+		}
+	}(req.Brightness)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func parseVolume(out string) (vol float64, muted bool) {
+	out = strings.TrimSpace(out)
+	if !strings.HasPrefix(out, "Volume: ") {
+		return 0, false
+	}
+	rest := strings.TrimPrefix(out, "Volume: ")
+	if strings.HasSuffix(rest, " [MUTED]") {
+		muted = true
+		rest = strings.TrimSuffix(rest, " [MUTED]")
+	}
+	vol, err := strconv.ParseFloat(rest, 64)
+	if err != nil {
+		return 0, false
+	}
+	return vol, muted
 }
 
 // Server-Sent Events (SSE) endpoint for real-time track updates
@@ -246,12 +339,165 @@ func resolveArtURL(rawURL string) string {
 	return ""
 }
 
-func runPlayerctl(args ...string) (string, error) {
-	out, err := exec.Command("playerctl", args...).Output()
+func runCmd(cmd string, args ...string) (string, error) {
+	out, err := exec.Command(cmd, args...).Output()
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func runPlayerctl(args ...string) (string, error) {
+	return runCmd("playerctl", args...)
+}
+
+func startPingChecker() {
+	for {
+		err := exec.Command("ping", "-c", "1", "-W", "2", "8.8.8.8").Run()
+		pingMu.Lock()
+		pingOK = err == nil
+		pingMu.Unlock()
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func getCPUPercent() float64 {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return -1
+	}
+	lines := strings.Split(string(data), "\n")
+	if len(lines) == 0 {
+		return -1
+	}
+	fields := strings.Fields(lines[0])
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return -1
+	}
+	var idle, total uint64
+	for i, f := range fields[1:] {
+		v, _ := strconv.ParseUint(f, 10, 64)
+		total += v
+		if i == 3 {
+			idle = v
+		}
+	}
+	if !cpuReady {
+		cpuPrevIdle = idle
+		cpuPrevTotal = total
+		cpuReady = true
+		return 50
+	}
+	deltaIdle := idle - cpuPrevIdle
+	deltaTotal := total - cpuPrevTotal
+	cpuPrevIdle = idle
+	cpuPrevTotal = total
+	if deltaTotal == 0 {
+		return 0
+	}
+	return float64(deltaTotal-deltaIdle) / float64(deltaTotal) * 100
+}
+
+func getRAMPercent() float64 {
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return -1
+	}
+	var total, available float64
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "MemTotal:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				total, _ = strconv.ParseFloat(fields[1], 64)
+			}
+		}
+		if strings.HasPrefix(line, "MemAvailable:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				available, _ = strconv.ParseFloat(fields[1], 64)
+			}
+		}
+	}
+	if total == 0 {
+		return -1
+	}
+	return (total - available) / total * 100
+}
+
+func getBattery() (percent float64, charging bool) {
+	ents, err := os.ReadDir("/sys/class/power_supply")
+	if err != nil {
+		return -1, false
+	}
+	for _, e := range ents {
+		if !strings.HasPrefix(e.Name(), "BAT") {
+			continue
+		}
+		base := "/sys/class/power_supply/" + e.Name()
+		capStr, err := os.ReadFile(base + "/capacity")
+		if err != nil {
+			continue
+		}
+		percent, _ = strconv.ParseFloat(strings.TrimSpace(string(capStr)), 64)
+		statusStr, err := os.ReadFile(base + "/status")
+		if err == nil {
+			charging = strings.TrimSpace(string(statusStr)) == "Charging"
+		}
+		return percent, charging
+	}
+	return -1, false
+}
+
+func getTemp() float64 {
+	zones := []string{"thermal_zone0", "thermal_zone1"}
+	for _, z := range zones {
+		data, err := os.ReadFile("/sys/class/thermal/" + z + "/temp")
+		if err != nil {
+			continue
+		}
+		millideg, _ := strconv.ParseFloat(strings.TrimSpace(string(data)), 64)
+		return millideg / 1000.0
+	}
+	return -1
+}
+
+func getSSID() string {
+	s, _ := runCmd("iwgetid", "-r")
+	return s
+}
+
+func getIP() string {
+	data, err := runCmd("hostname", "-I")
+	if err != nil || data == "" {
+		return ""
+	}
+	return strings.Fields(data)[0]
+}
+
+func fetchSystemStats() *SystemStats {
+	cpu := getCPUPercent()
+	ram := getRAMPercent()
+	bat, charging := getBattery()
+	temp := getTemp()
+	ssid := getSSID()
+	ip := getIP()
+	pingMu.RLock()
+	pOK := pingOK
+	pingMu.RUnlock()
+
+	if cpu < 0 && ram < 0 && bat < 0 && temp < 0 && ssid == "" && ip == "" {
+		return nil
+	}
+	return &SystemStats{
+		CPU:      cpu,
+		RAM:      ram,
+		Battery:  bat,
+		Charging: charging,
+		Temp:     temp,
+		SSID:     ssid,
+		IP:       ip,
+		PingOK:   pOK,
+	}
 }
 
 func fetchMPRISState() MediaState {
@@ -275,12 +521,46 @@ func fetchMPRISState() MediaState {
 
 	artStr, _ := runPlayerctl("metadata", "mpris:artUrl")
 
+	volOut, volErr := runCmd("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
+	var volume float64 = -1
+	var muted bool
+	if volErr == nil {
+		volume, muted = parseVolume(volOut)
+	}
+
+	brightness := -1.0
+	getOut, getErr := runCmd("brightnessctl", "get")
+	maxOut, maxErr := runCmd("brightnessctl", "max")
+	if getErr == nil && maxErr == nil {
+		cur, e1 := strconv.ParseFloat(getOut, 64)
+		max, e2 := strconv.ParseFloat(maxOut, 64)
+		if e1 == nil && e2 == nil && max > 0 {
+			brightness = (cur / max) * 100
+		}
+	}
+
+	nightStr, _ := runCmd("gsettings", "get", "org.gnome.settings-daemon.plugins.color", "night-light-enabled")
+	nightLight := nightStr == "true"
+
+	btOut, _ := runCmd("rfkill", "list", "bluetooth")
+	btOn := strings.Contains(btOut, "Soft blocked: no")
+
+	warpOut, _ := runCmd("warp-cli", "status")
+	warpOn := strings.Contains(warpOut, "Connected")
+
 	return MediaState{
-		Title:    title,
-		Artist:   artist,
-		Status:   status,
-		ArtURL:   resolveArtURL(artStr),
-		Position: posSeconds,
-		Length:   length,
+		Title:       title,
+		Artist:      artist,
+		Status:      status,
+		ArtURL:      resolveArtURL(artStr),
+		Position:    posSeconds,
+		Length:      length,
+		Volume:      volume,
+		Muted:       muted,
+		Brightness:  brightness,
+		NightLight:  nightLight,
+		BluetoothOn: btOn,
+		WarpOn:      warpOn,
+		Sys:         fetchSystemStats(),
 	}
 }

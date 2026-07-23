@@ -45,6 +45,7 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
 }
 
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
 /* Now Playing Section */
 #now-playing-card{display:flex;flex-direction:column;gap:14px}
@@ -115,6 +116,16 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
 .stepper-btn.mute{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.2);color:var(--red)}
 .stepper-btn.mute:active{background:var(--red);color:#fff}
 
+/* Volume Slider */
+.volume-row{display:flex;align-items:center;gap:10px;width:100%}
+#volume-slider,#brightness-slider{flex:1;height:6px;-webkit-appearance:none;appearance:none;background:var(--surface2);border-radius:6px;outline:none;cursor:pointer}
+#volume-slider::-webkit-slider-thumb,#brightness-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px rgba(6,182,212,0.4)}
+#volume-pct,#brightness-pct{font-size:0.9rem;font-weight:700;color:var(--text);min-width:40px;text-align:right}
+.vol-mute-btn{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.08);background:var(--surface2);color:var(--text);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.1s ease}
+.vol-mute-btn:active{transform:scale(0.9);background:var(--accent)}
+.vol-mute-btn.muted{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.2);color:var(--red)}
+#night-btn.on{background:rgba(6,182,212,0.15);border-color:rgba(6,182,212,0.3);color:var(--accent);box-shadow:0 0 12px rgba(6,182,212,0.25)}
+
 /* Toggles Section */
 .toggle-card{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -130,11 +141,38 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
   box-shadow:0 0 20px rgba(6,182,212,0.15),inset 0 0 40px rgba(6,182,212,0.05);
 }
 .toggle-card.on .label{color:var(--accent)}
+.bt-connect{
+  position:absolute;bottom:4px;right:4px;
+  width:28px;height:28px;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.08);
+  background:var(--surface2);color:var(--text-dim);
+  font-size:0.75rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.1s ease;z-index:2;
+}
+.bt-connect:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bt-connect:active{transform:scale(0.85)}
+
+/* System Stats */
+#sys-card{display:flex;flex-direction:column;gap:10px}
+.sys-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
+.sys-item{text-align:center}
+.sys-label{font-size:0.7rem;text-transform:uppercase;color:var(--text-dim);font-weight:600;margin-bottom:4px}
+.sys-bar-bg{height:4px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.sys-bar{height:100%;border-radius:4px;transition:width 0.3s ease}
+.sys-bar.cpu{background:var(--accent)}
+.sys-bar.ram{background:#8b5cf6}
+.sys-bar.bat{background:#10b981}
+.sys-bar.temp{background:#f59e0b}
+.sys-value{font-size:0.85rem;font-weight:700;margin-top:4px;color:var(--text)}
+.sys-network{margin-top:6px;font-size:0.78rem;color:var(--text-dim);text-align:center;display:flex;justify-content:center;gap:14px}
+.sys-network .ping-ok{color:#10b981}
+.sys-network .ping-fail{color:#ef4444}
 
 .ripple{position:absolute;border-radius:50%;background:rgba(6,182,212,0.25);transform:scale(0);animation:rippleAnim 0.5s ease-out;pointer-events:none}
 @keyframes rippleAnim{to{transform:scale(4);opacity:0}}
 
-@media(max-width:720px){.grid-3{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){.grid-3{grid-template-columns:1fr 1fr}.grid-2{grid-template-columns:1fr}}
 @media(max-width:480px){
   #album-art-wrap{width:64px;height:64px}
   .stepper-btn{max-width:80px;padding:8px 0;font-size:0.85rem}
@@ -173,35 +211,32 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
     </div>
   </div>
 
-  <!-- Steppers Grid -->
-  <div class="grid-3">
-    <div class="stepper-card">
+  <!-- Controls Grid -->
+  <div class="grid-2">
+    <div class="stepper-card" id="volume-card">
       <div class="stepper-label">Volume</div>
-      <div class="stepper-row">
-        <button class="stepper-btn" data-cmd="volDown">&#x1F509; -5%</button>
-        <button class="stepper-btn" data-cmd="volUp">&#x1F50A; +5%</button>
-      </div>
-    </div>
-    <div class="stepper-card">
-      <div class="stepper-label">Audio</div>
-      <div class="stepper-row">
-        <button class="stepper-btn mute" data-cmd="mute">&#x1F507; Mute</button>
+      <div class="volume-row">
+        <button class="vol-mute-btn" id="vol-mute-btn">&#x1F50A;</button>
+        <input type="range" id="volume-slider" min="0" max="100" value="100">
+        <span id="volume-pct">100%</span>
       </div>
     </div>
     <div class="stepper-card">
       <div class="stepper-label">Brightness</div>
-      <div class="stepper-row">
-        <button class="stepper-btn" data-cmd="brightnessDown">&#x1F505; -10%</button>
-        <button class="stepper-btn" data-cmd="brightnessUp">&#x1F506; +10%</button>
+      <div class="volume-row">
+        <button class="vol-mute-btn" id="night-btn">&#x1F319;</button>
+        <input type="range" id="brightness-slider" min="0" max="100" value="100">
+        <span id="brightness-pct">100%</span>
       </div>
     </div>
   </div>
 
   <!-- Toggles Grid -->
   <div class="grid-3">
-    <div class="toggle-card" data-cmd="bluetooth">
+    <div class="toggle-card" id="bt-btn">
       <span class="icon">&#x1F5B2;</span>
-      <span class="label">Bluetooth<br>Toggle</span>
+      <span class="label" id="bt-label">Bluetooth<br>OFF</span>
+      <button class="bt-connect" id="bt-connect-btn" title="Connect headphone">&#x1F50A;</button>
     </div>
     <div class="toggle-card" data-cmd="lock">
       <span class="icon">&#x1F512;</span>
@@ -215,6 +250,33 @@ body{display:flex;align-items:center;justify-content:center;padding:12px}
       <span class="icon">&#x1F6E1;</span>
       <span class="label" id="warp-label">WARP<br>OFF</span>
     </div>
+  </div>
+
+  <!-- System Stats Card -->
+  <div class="card" id="sys-card">
+    <div class="sys-grid">
+      <div class="sys-item">
+        <div class="sys-label">CPU</div>
+        <div class="sys-bar-bg"><div class="sys-bar cpu" id="cpu-bar" style="width:0%"></div></div>
+        <div class="sys-value" id="cpu-val">--</div>
+      </div>
+      <div class="sys-item">
+        <div class="sys-label">RAM</div>
+        <div class="sys-bar-bg"><div class="sys-bar ram" id="ram-bar" style="width:0%"></div></div>
+        <div class="sys-value" id="ram-val">--</div>
+      </div>
+      <div class="sys-item">
+        <div class="sys-label">BAT</div>
+        <div class="sys-bar-bg"><div class="sys-bar bat" id="bat-bar" style="width:0%"></div></div>
+        <div class="sys-value" id="bat-val">--</div>
+      </div>
+      <div class="sys-item">
+        <div class="sys-label">TEMP</div>
+        <div class="sys-bar-bg"><div class="sys-bar temp" id="temp-bar" style="width:0%"></div></div>
+        <div class="sys-value" id="temp-val">--</div>
+      </div>
+    </div>
+    <div class="sys-network" id="sys-network">Network: --</div>
   </div>
 
 </div>
@@ -318,6 +380,53 @@ function renderMediaState(data) {
       timeTotal.textContent = '--:--';
     }
   }
+
+  if (data.volume >= 0) {
+    const pct = Math.round(data.volume * 100);
+    if (!isUserDraggingVolume) {
+      volumeSlider.value = Math.min(pct, 100);
+      volumePct.textContent = Math.min(pct, 100) + '%';
+    }
+    volMuteBtn.classList.toggle('muted', data.muted);
+    volMuteBtn.innerHTML = data.muted ? '&#x1F507;' : '&#x1F50A;';
+  }
+
+  if (data.brightness >= 0) {
+    const val = Math.round(data.brightness);
+    if (!isUserDraggingBrightness) {
+      brightnessSlider.value = Math.min(val, 100);
+      brightnessPct.textContent = Math.min(val, 100) + '%';
+    }
+  }
+
+  nightBtn.classList.toggle('on', data.night_light);
+
+  btBtn.classList.toggle('on', data.bluetooth_on);
+  btLabel.innerHTML = data.bluetooth_on ? 'Bluetooth<br>ON' : 'Bluetooth<br>OFF';
+
+  warpBtn.classList.toggle('on', data.warp_on);
+  warpLabel.innerHTML = data.warp_on ? 'WARP<br>ON' : 'WARP<br>OFF';
+
+  if (data.sys) {
+    const s = data.sys;
+    setBar('cpu', s.cpu, s.cpu >= 0 ? Math.round(s.cpu) + '%' : '--');
+    setBar('ram', s.ram, s.ram >= 0 ? Math.round(s.ram) + '%' : '--');
+    setBar('bat', s.battery, s.battery >= 0 ? Math.round(s.battery) + '%' + (s.charging ? ' \u26A1' : '') : '--');
+    const tempStr = s.temp >= 0 ? Math.round(s.temp) + '\u00B0C' : '--';
+    setBar('temp', s.temp >= 0 ? Math.min(100, s.temp) : 0, tempStr);
+
+    const pingHTML = s.ping_ok ? '<span class="ping-ok">\u2713</span>' : '<span class="ping-fail">\u2717</span>';
+    const parts = [];
+    if (s.ssid) parts.push('\u{1F3E0}' + s.ssid);
+    if (s.ip) parts.push(s.ip);
+    parts.push('Ping ' + pingHTML);
+    document.getElementById('sys-network').textContent = parts.join(' \u00B7 ');
+  }
+}
+
+function setBar(id, pct, label) {
+  document.getElementById(id + '-bar').style.width = Math.max(0, Math.min(100, pct)) + '%';
+  document.getElementById(id + '-val').textContent = label;
 }
 
 albumArt.addEventListener('load', () => {
@@ -362,6 +471,54 @@ timelineSlider.addEventListener('change', () => {
   });
 });
 
+// Volume slider
+const volumeSlider = document.getElementById('volume-slider');
+const volumePct = document.getElementById('volume-pct');
+const volMuteBtn = document.getElementById('vol-mute-btn');
+let isUserDraggingVolume = false;
+
+volumeSlider.addEventListener('input', () => {
+  isUserDraggingVolume = true;
+  volumePct.textContent = volumeSlider.value + '%';
+});
+
+volumeSlider.addEventListener('change', () => {
+  const vol = parseInt(volumeSlider.value) / 100;
+  fetch('/api/set-volume', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volume: vol })
+  }).finally(() => {
+    isUserDraggingVolume = false;
+  });
+});
+
+volMuteBtn.addEventListener('click', e => {
+  createRipple(e, volMuteBtn);
+  triggerCommand('mute');
+});
+
+// Brightness slider
+const brightnessSlider = document.getElementById('brightness-slider');
+const brightnessPct = document.getElementById('brightness-pct');
+let isUserDraggingBrightness = false;
+
+brightnessSlider.addEventListener('input', () => {
+  isUserDraggingBrightness = true;
+  brightnessPct.textContent = brightnessSlider.value + '%';
+});
+
+brightnessSlider.addEventListener('change', () => {
+  const val = parseInt(brightnessSlider.value);
+  fetch('/api/set-brightness', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brightness: val })
+  }).finally(() => {
+    isUserDraggingBrightness = false;
+  });
+});
+
 // Event Listeners for Buttons
 document.querySelectorAll('.media-btn, .stepper-btn').forEach(btn => {
   btn.addEventListener('click', e => {
@@ -378,23 +535,41 @@ document.querySelectorAll('.toggle-card[data-cmd]').forEach(card => {
   });
 });
 
-let isWarpActive = false;
 const warpBtn = document.getElementById('warp-btn');
 const warpLabel = document.getElementById('warp-label');
 if (warpBtn) {
   warpBtn.addEventListener('click', e => {
     createRipple(e, warpBtn);
-    if (isWarpActive) {
-      triggerCommand('warpOff');
-      warpBtn.classList.remove('on');
-      warpLabel.innerHTML = 'WARP<br>OFF';
-      isWarpActive = false;
-    } else {
-      triggerCommand('warpOn');
-      warpBtn.classList.add('on');
-      warpLabel.innerHTML = 'WARP<br>ON';
-      isWarpActive = true;
-    }
+    triggerCommand(warpBtn.classList.contains('on') ? 'warpOff' : 'warpOn');
+  });
+}
+
+// Night Light toggle (SSE-driven, no local state)
+const nightBtn = document.getElementById('night-btn');
+if (nightBtn) {
+  nightBtn.addEventListener('click', e => {
+    createRipple(e, nightBtn);
+    triggerCommand(nightBtn.classList.contains('on') ? 'nightOff' : 'nightOn');
+  });
+}
+
+// Bluetooth toggle (SSE-driven, no local state)
+const btBtn = document.getElementById('bt-btn');
+const btLabel = document.getElementById('bt-label');
+if (btBtn) {
+  btBtn.addEventListener('click', e => {
+    if (e.target.closest('.bt-connect')) return;
+    createRipple(e, btBtn);
+    triggerCommand(btBtn.classList.contains('on') ? 'bluetoothOff' : 'bluetoothOn');
+  });
+}
+
+// Bluetooth connect button
+const btConnectBtn = document.getElementById('bt-connect-btn');
+if (btConnectBtn) {
+  btConnectBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    triggerCommand('btConnect');
   });
 }
 
