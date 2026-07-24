@@ -99,12 +99,16 @@ SyncedAudioPlayer (Web Audio API):
 | `glib2` / `glib2-tools` | `gsettings` — night light and Caffeine extension (GNOME) |
 
 **GNOME Shell extension (required for instant window detection):**
-- Install from source:
-  ```sh
-  mkdir -p ~/.local/share/gnome-shell/extensions
-  cp -r window-focus-dbus@jairaj.dev ~/.local/share/gnome-shell/extensions/
-  ```
-  Requires a GNOME Shell restart (Alt+F2, `r`) or logout/login.
+
+Install from [window-focus-dbus](https://github.com/Raj-Jai/window-focus-dbus):
+```sh
+git clone https://github.com/Raj-Jai/window-focus-dbus.git
+mkdir -p ~/.local/share/gnome-shell/extensions
+cp -r window-focus-dbus/window-focus-dbus@jairaj.dev ~/.local/share/gnome-shell/extensions/
+gnome-extensions enable window-focus-dbus@jairaj.dev
+```
+
+Requires a GNOME Shell restart (Alt+F2, `r`) or logout/login.
 
 ### Build
 
