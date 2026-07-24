@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import {
   Music,
   SkipBack,
@@ -24,7 +24,6 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const dragging = useRef(false);
   const dragVal = useRef(0);
   const lastSeek = useRef(0);
-  const [renderTick, setRenderTick] = useState(0);
   const [artError, setArtError] = useState(false);
 
   const isOffline = !player;
@@ -35,11 +34,13 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const artUrl = player?.art_url ?? null;
   const playerId = player?.id;
 
-  useEffect(() => {
-    if (!dragging.current) {
-      setRenderTick((t) => t + 1);
+  const seekWithThrottle = (v: number) => {
+    const now = Date.now();
+    if (now - lastSeek.current >= 100) {
+      lastSeek.current = now;
+      seekTo(v, playerId);
     }
-  }, [pos]);
+  };
 
   const displayTitle = isOffline ? 'No Track' : (player.title || 'Idle');
   const displayArtist = isOffline ? 'Idle / Disconnected' : (player.artist || '');
@@ -99,25 +100,18 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
             const v = Number(e.target.value);
             dragVal.current = v;
             dragging.current = true;
-            setRenderTick((t) => t + 1);
-            const now = Date.now();
-            if (now - lastSeek.current >= 100) {
-              lastSeek.current = now;
-              seekTo(v, playerId);
-            }
+            seekWithThrottle(v);
           }}
           onMouseUp={() => {
             if (dragging.current) {
               dragging.current = false;
               seekTo(dragVal.current, playerId);
-              setRenderTick((t) => t + 1);
             }
           }}
           onTouchEnd={() => {
             if (dragging.current) {
               dragging.current = false;
               seekTo(dragVal.current, playerId);
-              setRenderTick((t) => t + 1);
             }
           }}
           className="w-full"
