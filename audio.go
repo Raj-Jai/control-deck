@@ -170,22 +170,19 @@ func fetchAppStreams() []AppStream {
 		} else if strings.HasPrefix(line, "\tMute: ") {
 			current.Muted = strings.TrimSpace(strings.TrimPrefix(line, "\tMute: ")) == "yes"
 		} else if strings.HasPrefix(line, "\tVolume: ") {
-			parts := strings.Fields(line)
-			for i, p := range parts {
-				if p == "front-left:" || p == "front-right:" {
-					if i+1 < len(parts) {
-						v := strings.TrimSuffix(parts[i+1], "/")
-						v = strings.TrimSpace(v)
-						if pct, err := strconv.Atoi(strings.TrimSuffix(v, "%")); err == nil {
-							current.Volume = pct
-						}
+			for _, token := range strings.Fields(line) {
+				if strings.HasSuffix(token, "%") {
+					pct := strings.TrimSuffix(token, "%")
+					if v, err := strconv.Atoi(pct); err == nil {
+						current.Volume = v
 					}
+					break
 				}
 			}
-		} else if strings.HasPrefix(line, "\t\tapplication.name") {
+		} else if strings.Contains(line, "application.name") {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
-				current.App = strings.TrimSpace(parts[1])
+				current.App = strings.Trim(strings.TrimSpace(parts[1]), `" `)
 			}
 		}
 	}
