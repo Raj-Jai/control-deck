@@ -41,12 +41,32 @@ type uinputUserDev struct {
 }
 
 var keyMap = map[string]uint16{
-	"f":    33,
-	"c":    46,
-	"F11":  87,
-	"tab":  15,
-	"esc":  1,
+	"f":     33,
+	"c":     46,
+	"F11":   87,
+	"F5":    63,
+	"F9":    66,
+	"F10":   67,
+	"tab":   15,
+	"esc":   1,
 	"enter": 28,
+	"up":    103,
+	"down":  108,
+	"left":  105,
+	"right": 106,
+	"v":     47,
+	"space": 57,
+}
+
+var ctrlKeys = map[string]uint16{
+	"ctrl_c": 46,
+	"ctrl_d": 32,
+	"ctrl_z": 44,
+	"ctrl_l": 38,
+	"ctrl_a": 30,
+	"ctrl_e": 18,
+	"ctrl_w": 17,
+	"ctrl_u": 22,
 }
 
 func ioctl(fd, op uintptr, data unsafe.Pointer) error {
@@ -65,13 +85,15 @@ func writeEvent(fd uintptr, eType, code uint16, value int32) error {
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: sendkey <key> [player]")
-		fmt.Fprintln(os.Stderr, "keys: f, c, F11, tab, esc, enter")
+		fmt.Fprintln(os.Stderr, "keys: f, c, F11, F5, F9, F10, tab, esc, enter, up, down, left, right, space")
+		fmt.Fprintln(os.Stderr, "ctrl combos: ctrl_c, ctrl_d, ctrl_z, ctrl_l, ctrl_a, ctrl_e, ctrl_w, ctrl_u")
 		os.Exit(1)
 	}
 
 	keyName := os.Args[1]
 	keyCode, ok := keyMap[keyName]
-	if !ok {
+	ctrlCode, isCtrl := ctrlKeys[keyName]
+	if !ok && !isCtrl {
 		fmt.Fprintf(os.Stderr, "unknown key: %s\n", keyName)
 		os.Exit(1)
 	}
@@ -134,13 +156,21 @@ func main() {
 
 	time.Sleep(100 * time.Millisecond)
 
-	writeEvent(uintptr(fd), evKey, keyCode, 1)
-	writeEvent(uintptr(fd), evSyn, synReport, 0)
+	if isCtrl {
+		writeEvent(uintptr(fd), evKey, 29, 1) // KEY_LEFTCTRL down
+		writeEvent(uintptr(fd), evKey, ctrlCode, 1)
+		writeEvent(uintptr(fd), evSyn, synReport, 0)
+		time.Sleep(50 * time.Millisecond)
+		writeEvent(uintptr(fd), evKey, ctrlCode, 0)
+		writeEvent(uintptr(fd), evKey, 29, 0) // KEY_LEFTCTRL up
+		writeEvent(uintptr(fd), evSyn, synReport, 0)
+	} else {
+		writeEvent(uintptr(fd), evKey, keyCode, 1)
+		writeEvent(uintptr(fd), evSyn, synReport, 0)
+		time.Sleep(50 * time.Millisecond)
+		writeEvent(uintptr(fd), evKey, keyCode, 0)
+		writeEvent(uintptr(fd), evSyn, synReport, 0)
+	}
 
-	time.Sleep(50 * time.Millisecond)
-
-	writeEvent(uintptr(fd), evKey, keyCode, 0)
-	writeEvent(uintptr(fd), evSyn, synReport, 0)
-
-	fmt.Fprintf(os.Stderr, "sent key %s (%d)\n", keyName, keyCode)
+	fmt.Fprintf(os.Stderr, "sent key %s\n", keyName)
 }

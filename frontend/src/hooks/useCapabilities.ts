@@ -15,7 +15,7 @@ const defaultCaps = {
   battery: false,
 };
 
-type Capabilities = typeof defaultCaps;
+export type Capabilities = typeof defaultCaps;
 
 let cached: Capabilities | null = null;
 let pending: Promise<Capabilities> | null = null;

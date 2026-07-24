@@ -74,6 +74,85 @@ func buildCommandMap() {
 	}
 }
 
+// buildProfileCommandMap adds profile-specific commands to the global commandMap.
+func buildProfileCommandMap() {
+	sk := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
+
+	profileCmds := map[string][]string{
+		// IDE: Debugger keys (F5, F10, F11, Shift+F5)
+		"dbg_continue":      {sk, "F5"},
+		"dbg_step_over":     {sk, "F10"},
+		"dbg_step_into":     {sk, "F11"},
+		"dbg_step_out":      {"sh", "-c", sk + " F5"}, // Shift+F5 — handled below
+		"dbg_stop":          {"sh", "-c", sk + " F5"}, // Shift+F5
+		"dbg_restart":       {"sh", "-c", sk + " F5"}, // Ctrl+Shift+F5 via loop
+		"dbg_toggle_break":  {"sh", "-c", "playerctl --player $PLAYER play-pause 2>/dev/null || true"},
+		"dbg_clear_all":     {"sh", "-c", sk + " F9"},
+
+		// IDE: Git aliases
+		"git_stage":  {"bash", "-c", "git add -A && git status -s"},
+		"git_commit": {"bash", "-c", "git commit -m 'dashboard commit' && git push"},
+		"git_push":   {"bash", "-c", "git push"},
+		"git_pull":   {"bash", "-c", "git pull --rebase"},
+		"git_reset":  {"bash", "-c", "git reset HEAD~1"},
+		"git_stash":  {"bash", "-c", "git stash"},
+
+		// IDE: Tasks
+		"task_build": {"bash", "-c", "npm run build 2>/dev/null || make 2>/dev/null || cargo build 2>/dev/null || echo 'no build tool found'"},
+		"task_test":  {"bash", "-c", "npm test 2>/dev/null || go test ./... 2>/dev/null || cargo test 2>/dev/null || echo 'no test tool found'"},
+		"task_lint":  {"bash", "-c", "npm run lint 2>/dev/null || ruff check . 2>/dev/null || echo 'no linter found'"},
+		"task_dev":   {"bash", "-c", "npm run dev 2>/dev/null || echo 'no dev script found'"},
+
+		// Terminal: Cursor keys
+		"key_up":    {sk, "up"},
+		"key_down":  {sk, "down"},
+		"key_left":  {sk, "left"},
+		"key_right": {sk, "right"},
+		"key_esc":   {sk, "esc"},
+		"key_tab":   {sk, "tab"},
+		"key_enter": {sk, "enter"},
+
+		// Terminal: Ctrl+key combos (via sendkey)
+		"key_ctrl_c": {sk, "ctrl_c"},
+		"key_ctrl_z": {sk, "ctrl_z"},
+		"key_ctrl_d": {sk, "ctrl_d"},
+		"key_ctrl_l": {sk, "ctrl_l"},
+		"key_ctrl_a": {sk, "ctrl_a"},
+		"key_ctrl_e": {sk, "ctrl_e"},
+		"key_ctrl_w": {sk, "ctrl_w"},
+		"key_ctrl_u": {sk, "ctrl_u"},
+
+		// Tmux
+		"tmux_pane_l":  {"bash", "-c", "tmux select-pane -L 2>/dev/null || true"},
+		"tmux_pane_r":  {"bash", "-c", "tmux select-pane -R 2>/dev/null || true"},
+		"tmux_pane_u":  {"bash", "-c", "tmux select-pane -U 2>/dev/null || true"},
+		"tmux_pane_d":  {"bash", "-c", "tmux select-pane -D 2>/dev/null || true"},
+		"tmux_split_h": {"bash", "-c", "tmux split-window -h 2>/dev/null || true"},
+		"tmux_split_v": {"bash", "-c", "tmux split-window -v 2>/dev/null || true"},
+		"tmux_new_win": {"bash", "-c", "tmux new-window 2>/dev/null || true"},
+		"tmux_win_prev": {"bash", "-c", "tmux previous-window 2>/dev/null || true"},
+		"tmux_win_next": {"bash", "-c", "tmux next-window 2>/dev/null || true"},
+
+		// Media playback speed
+		"speed_0.5":  {"bash", "-c", "playerctl --player $PLAYER position 0 && playerctl --player $PLAYER rate 0.5"},
+		"speed_0.75": {"bash", "-c", "playerctl --player $PLAYER rate 0.75"},
+		"speed_1":    {"bash", "-c", "playerctl --player $PLAYER rate 1"},
+		"speed_1.25": {"bash", "-c", "playerctl --player $PLAYER rate 1.25"},
+		"speed_1.5":  {"bash", "-c", "playerctl --player $PLAYER rate 1.5"},
+		"speed_2":    {"bash", "-c", "playerctl --player $PLAYER rate 2"},
+
+		// Video player sync
+		"aspect_default": {"bash", "-c", sk + " v"},
+		"sub_delay_":     {"bash", "-c", sk + " v"}, // placeholder — YouTube uses 'v' for captions
+	}
+
+	for k, v := range profileCmds {
+		if _, exists := commandMap[k]; !exists {
+			commandMap[k] = v
+		}
+	}
+}
+
 type SystemStats struct {
 	CPU      float64 `json:"cpu"`
 	RAM      float64 `json:"ram"`
@@ -142,6 +221,9 @@ var (
 	artCachePath string
 	artCacheData string
 
+	winClients   = make(map[chan string]bool)
+	winClientsMu sync.Mutex
+
 	cmdLog   []LogEntry
 	cmdLogMu sync.Mutex
 
@@ -151,6 +233,10 @@ var (
 
 	pingOK bool
 	pingMu sync.RWMutex
+
+	lastWMClass string
+	lastTitle   string
+	windowMu    sync.Mutex
 )
 
 func addLog(cmd string) {
@@ -168,6 +254,7 @@ func addLog(cmd string) {
 func main() {
 	initConfig()
 	buildCommandMap()
+	buildProfileCommandMap()
 
 	// Serve frontend assets
 	http.Handle("/", http.FileServer(http.Dir(".")))
@@ -190,10 +277,12 @@ func main() {
 	http.HandleFunc("/api/audio-stream/stream", handleStreamPlay)
 	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
 	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
+	http.HandleFunc("/api/window-stream", handleWindowSSE)
 
-	// Background ticker to broadcast MPRIS state to connected web decks
+	// Background tickers
 	go startMediaBroadcaster()
 	go startPingChecker()
+	go startWindowWatcher()
 
 	pingTarget := appCfg.PingTarget
 	if pingTarget == "" {
@@ -542,6 +631,191 @@ func checkAndSkipAds() {
 		log.Printf("ad-skip: FAILED on %s: %v | %s", p, err, string(out))
 	} else {
 		log.Printf("ad-skip: OK on %s", p)
+	}
+}
+
+// ─── Active Window Detection ──────────────────────────────────
+
+type WindowFocusEvent struct {
+	Event   string `json:"event"`
+	AppClass string `json:"app_class"`
+	Title   string `json:"title"`
+}
+
+func detectFocusedWindow() (string, string) {
+	cls, title := "", ""
+
+	out, err := exec.Command("gdbus", "call", "--session",
+		"--dest", "org.gnome.Shell",
+		"--object-path", "/org/gnome/Shell",
+		"--method", "org.gnome.Shell.Eval",
+		"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
+			".meta_window.get_wm_class()||''").CombinedOutput()
+	if err == nil {
+		s := strings.TrimSpace(string(out))
+		if strings.HasPrefix(s, "(true, '") && strings.Count(s, "'") >= 2 {
+			cls = strings.Split(s, "'")[1]
+		}
+	}
+	if cls != "" {
+		out2, _ := exec.Command("gdbus", "call", "--session",
+			"--dest", "org.gnome.Shell",
+			"--object-path", "/org/gnome/Shell",
+			"--method", "org.gnome.Shell.Eval",
+			"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
+				".meta_window.get_title()||''").CombinedOutput()
+		s := strings.TrimSpace(string(out2))
+		if strings.HasPrefix(s, "(true, '") && strings.Count(s, "'") >= 2 {
+			title = strings.Split(s, "'")[1]
+		}
+		return cls, title
+	}
+
+	out, err = exec.Command("xdotool", "getactivewindow", "getwindowclassname").CombinedOutput()
+	if err == nil {
+		cls = strings.TrimSpace(string(out))
+	}
+	out, err = exec.Command("xdotool", "getactivewindow", "getwindowname").CombinedOutput()
+	if err == nil {
+		title = strings.TrimSpace(string(out))
+	}
+	if cls != "" {
+		return cls, title
+	}
+
+	cls, title = detectByProcessList()
+	return cls, title
+}
+
+func detectByProcessList() (string, string) {
+	procs := map[string]string{
+		"chromium": "chromium", "chrome": "chromium", "firefox": "firefox",
+		"brave": "brave", "vlc": "vlc", "mpv": "mpv",
+		"code": "code", "code-oss": "code",
+	}
+
+	out, err := exec.Command("ps", "aux").CombinedOutput()
+	if err != nil {
+		return "", ""
+	}
+	lines := strings.Split(string(out), "\n")
+
+	var cls string
+	priority := 0
+
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		for proc, wmClass := range procs {
+			if strings.Contains(lower, proc) {
+				p := 1
+				if proc == "chrome" || proc == "chromium" {
+					p = 1
+				}
+				if proc == "code" || proc == "code-oss" {
+					p = 3
+				}
+				if proc == "vlc" || proc == "mpv" {
+					if strings.Contains(lower, "playerctl") || strings.Contains(lower, "mpris") {
+						p = 4
+					} else {
+						p = 2
+					}
+				}
+				if p > priority {
+					priority = p
+					cls = wmClass
+				}
+			}
+		}
+	}
+
+	return cls, cls
+}
+
+func startWindowWatcher() {
+	ticker := time.NewTicker(300 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		cls, title := detectFocusedWindow()
+		if cls == "" {
+			continue
+		}
+		windowMu.Lock()
+		changed := cls != lastWMClass || title != lastTitle
+		if changed {
+			lastWMClass = cls
+			lastTitle = title
+		}
+		windowMu.Unlock()
+		if changed {
+			broadcastWindowFocus(cls, title)
+		}
+	}
+}
+
+func broadcastWindowFocus(cls, title string) {
+	evt := WindowFocusEvent{
+		Event:    "WINDOW_FOCUS_CHANGED",
+		AppClass: cls,
+		Title:    title,
+	}
+	data, err := json.Marshal(evt)
+	if err != nil {
+		return
+	}
+	msg := string(data)
+
+	winClientsMu.Lock()
+	for ch := range winClients {
+		select {
+		case ch <- msg:
+		default:
+		}
+	}
+	winClientsMu.Unlock()
+}
+
+func handleWindowSSE(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := make(chan string, 8)
+	winClientsMu.Lock()
+	winClients[ch] = true
+	winClientsMu.Unlock()
+
+	defer func() {
+		winClientsMu.Lock()
+		delete(winClients, ch)
+		winClientsMu.Unlock()
+		close(ch)
+	}()
+
+	windowMu.Lock()
+	if lastWMClass != "" {
+		evt := WindowFocusEvent{
+			Event:    "WINDOW_FOCUS_CHANGED",
+			AppClass: lastWMClass,
+			Title:    lastTitle,
+		}
+		if d, e := json.Marshal(evt); e == nil {
+			ch <- string(d)
+		}
+	}
+	windowMu.Unlock()
+
+	notify := r.Context().Done()
+	for {
+		select {
+		case <-notify:
+			return
+		case msg := <-ch:
+			fmt.Fprintf(w, "data: %s\n\n", msg)
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
 	}
 }
 
