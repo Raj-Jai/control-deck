@@ -121,11 +121,11 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
         />
       </div>
 
-      <div className="flex justify-center items-center gap-3 text-xs text-deck-dim mt-0.5">
+      <div className="flex justify-center items-center gap-3 text-xs text-deck-dim mt-0.5 min-w-0">
         {netParts.map((part, i) => (
-          <span key={i} className="flex items-center gap-1">
+          <span key={i} className="flex items-center gap-1 truncate max-w-[180px]">
             {i === netParts.length - 1 && pingIcon}
-            {part}
+            <span className="truncate">{part}</span>
           </span>
         ))}
       </div>

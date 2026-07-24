@@ -119,10 +119,10 @@ export default function App() {
             style={{ scrollbarWidth: 'none' }}
           >
             {/* Page 0: Home */}
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 wide:p-6 pb-0">
-              <div className="grid grid-cols-1 wide:grid-cols-[1fr_340px] gap-4 wide:gap-6">
+            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 {/* LEFT */}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 min-w-0">
                   {caps.playerctl && (
                     <div>
                       <div className="flex items-center gap-2.5 mb-1">
@@ -147,7 +147,7 @@ export default function App() {
                 </div>
 
                 {/* RIGHT */}
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-4 min-w-0">
                   {caps.caffeine && <CaffeineCard state={state} />}
                   <AudioStreamCard state={state} />
                   <div>
@@ -169,29 +169,29 @@ export default function App() {
             </div>
 
             {/* Page 1: Media Browser */}
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 wide:p-6 pb-0">
+            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <MediaBrowserDeck state={state} caps={caps} />
             </div>
 
             {/* Page 2: Video Player */}
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 wide:p-6 pb-0">
+            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <VideoPlayerDeck state={state} caps={caps} />
             </div>
 
             {/* Page 3: IDE */}
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 wide:p-6 pb-0">
+            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <IdeDeck state={state} caps={caps} />
             </div>
 
             {/* Page 4: Terminal */}
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 wide:p-6 pb-0">
+            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <TerminalDeck state={state} caps={caps} />
             </div>
           </div>
         </div>
 
         {/* Bottom strip */}
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 wide:px-6 pb-3 sm:pb-4 wide:pb-6">
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 pb-3 sm:pb-4 md:pb-5 lg:pb-6">
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => scrollTo(page - 1)}

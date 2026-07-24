@@ -10,13 +10,12 @@
   }
 
   body {
-    @apply min-h-[100dvh] antialiased;
+    @apply min-h-[100dvh] antialiased overflow-x-hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
       'Helvetica Neue', Arial, sans-serif;
     padding: env(safe-area-inset-top) env(safe-area-inset-right)
       env(safe-area-inset-bottom) env(safe-area-inset-left);
     touch-action: manipulation;
-    overflow-x: hidden;
   }
 
   /* Large touch-friendly range slider */
@@ -81,7 +80,9 @@
 
 @layer components {
   .deck-card {
-    @apply rounded-xl p-4 border w-full transition-all duration-200;
+    @apply rounded-xl p-4 border w-full min-w-0 transition-all duration-200;
+    overflow-wrap: break-word;
+    word-break: break-word;
     background: rgba(30, 41, 59, 0.6);
     backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.04);
@@ -102,8 +103,10 @@
 
   .toggle-card {
     @apply relative flex flex-col items-center justify-center gap-2.5
-      rounded-xl px-3 py-5 cursor-pointer select-none w-full
+      rounded-xl px-3 py-5 cursor-pointer select-none w-full min-w-0
       transition-all duration-150 overflow-hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
     background: rgba(30, 41, 59, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.04);
   }
