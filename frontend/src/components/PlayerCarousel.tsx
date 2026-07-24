@@ -21,13 +21,17 @@ export default function PlayerCarousel({ players }: PlayerCarouselProps) {
     setIdx(((i % players.length) + players.length) % players.length);
   }, [players.length]);
 
+  const isSlider = (el: EventTarget | null) =>
+    el instanceof HTMLElement && el.tagName === 'INPUT' && (el as HTMLInputElement).type === 'range';
+
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isSlider(e.target)) return;
     touchStart.current = e.touches[0].clientX;
     setDragging(true);
   }, []);
 
   const onTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!dragging) return;
+    if (!dragging || isSlider(e.target)) return;
     setDragging(false);
     const dx = e.changedTouches[0].clientX - touchStart.current;
     if (dx > SWIPE_THRESHOLD) go(clampedIdx - 1);
