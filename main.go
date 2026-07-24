@@ -38,6 +38,8 @@ func buildCommandMap() {
 		"playpause":      {"playerctl", "play-pause"},
 		"next":           {"playerctl", "next"},
 		"previous":       {"playerctl", "previous"},
+		"seekBack10":     {"playerctl", "position", "10-"},
+		"seekFwd10":      {"playerctl", "position", "10+"},
 		"volUp":          {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"},
 		"volDown":        {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"},
 		"mute":           {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"},

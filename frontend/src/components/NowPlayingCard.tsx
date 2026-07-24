@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import {
   Music,
   SkipBack,
+  Rewind,
+  FastForward,
   Play,
   Pause,
   SkipForward,
@@ -122,12 +124,18 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
         <button className="media-btn" onClick={() => triggerCommand('previous', playerId)} disabled={isOffline || isIdle}>
           <SkipBack size={18} />
         </button>
+        <button className="media-btn" onClick={() => triggerCommand('seekBack10', playerId)} disabled={isOffline || isIdle}>
+          <Rewind size={16} />
+        </button>
         <button
           className="media-btn w-12 h-12"
           onClick={() => triggerCommand('playpause', playerId)}
           disabled={isOffline || isIdle}
         >
           {status === 'Playing' ? <Pause size={20} /> : <Play size={20} />}
+        </button>
+        <button className="media-btn" onClick={() => triggerCommand('seekFwd10', playerId)} disabled={isOffline || isIdle}>
+          <FastForward size={16} />
         </button>
         <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline || isIdle}>
           <SkipForward size={18} />
