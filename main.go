@@ -333,6 +333,7 @@ func handleSeek(w http.ResponseWriter, r *http.Request) {
 		if err := cmd.Run(); err != nil {
 			log.Printf("Error seeking to %f: %v", pos, err)
 		}
+		broadcastState()
 	}(req.Position)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -434,35 +435,38 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func broadcastState() {
+	clientsMu.Lock()
+	clientCount := len(clients)
+	clientsMu.Unlock()
+	if clientCount == 0 {
+		return
+	}
+
+	state := fetchMPRISState()
+	data, err := json.Marshal(state)
+	if err != nil {
+		return
+	}
+
+	msg := string(data)
+	clientsMu.Lock()
+	for ch := range clients {
+		select {
+		case ch <- msg:
+		default:
+		}
+	}
+	clientsMu.Unlock()
+}
+
 // Polls MPRIS state via playerctl and broadcasts to SSE clients
 func startMediaBroadcaster() {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		clientsMu.Lock()
-		clientCount := len(clients)
-		clientsMu.Unlock()
-
-		if clientCount == 0 {
-			continue
-		}
-
-		state := fetchMPRISState()
-		data, err := json.Marshal(state)
-		if err != nil {
-			continue
-		}
-
-		msg := string(data)
-		clientsMu.Lock()
-		for ch := range clients {
-			select {
-			case ch <- msg:
-			default:
-			}
-		}
-		clientsMu.Unlock()
+		broadcastState()
 	}
 }
 

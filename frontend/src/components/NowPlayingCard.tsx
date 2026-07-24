@@ -22,7 +22,7 @@ function formatTime(seconds: number): string {
 
 export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const dragging = useRef(false);
-  const commitRef = useRef<number | null>(null);
+  const seekRef = useRef(0);
   const [localPos, setLocalPos] = useState<number | null>(null);
   const [artError, setArtError] = useState(false);
 
@@ -34,21 +34,10 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const artUrl = player?.art_url ?? null;
   const playerId = player?.id;
 
-  useEffect(() => {
-    if (commitRef.current !== null && Math.abs(pos - commitRef.current) < 1.5) {
-      commitRef.current = null;
-      setLocalPos(null);
-    }
-  }, [pos]);
-
-  useEffect(() => {
-    if (commitRef.current === null) return;
-    const t = setTimeout(() => {
-      commitRef.current = null;
-      setLocalPos(null);
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [localPos]);
+  if (localPos !== null && seekRef.current !== 0 && Math.abs(pos - seekRef.current) < 2) {
+    seekRef.current = 0;
+    setLocalPos(null);
+  }
 
   const displayVal = localPos !== null ? localPos : Math.floor(pos);
 
@@ -57,7 +46,8 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
 
   const commitSeek = (v: number) => {
     dragging.current = false;
-    commitRef.current = v;
+    seekRef.current = v;
+    setLocalPos(v);
     seekTo(v, playerId);
   };
 
