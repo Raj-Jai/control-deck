@@ -12,8 +12,6 @@ import type { MediaState } from '../hooks/useMediaStream';
 import type { ToggleConfig } from '../config/deckConfig';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { triggerCommand } from '../services/apiService';
-import AudioStreamCard from './AudioStreamCard';
-
 interface ToggleGridProps {
   state: MediaState | null;
 }
@@ -83,10 +81,6 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
       {visible.map((cfg) => {
-        if (cfg.id === 'audioStream') {
-          return <AudioStreamCard key="audioStream" state={state} />;
-        }
-
         const active = !cfg.cmd && isToggleActive(cfg.id, state);
         return (
           <div

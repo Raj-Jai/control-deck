@@ -1,15 +1,16 @@
 import { useRef, useState, useCallback } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { PlayerState } from '../hooks/useMediaStream';
+import type { MediaState, PlayerState } from '../hooks/useMediaStream';
 import NowPlayingCard from './NowPlayingCard';
 
 interface PlayerCarouselProps {
   players: PlayerState[];
+  state?: MediaState | null;
 }
 
 const SWIPE_THRESHOLD = 50;
 
-export default function PlayerCarousel({ players }: PlayerCarouselProps) {
+export default function PlayerCarousel({ players, state }: PlayerCarouselProps) {
   const [idx, setIdx] = useState(0);
   const touchStart = useRef(0);
   const [dragging, setDragging] = useState(false);
@@ -39,7 +40,7 @@ export default function PlayerCarousel({ players }: PlayerCarouselProps) {
   }, [dragging, clampedIdx, go]);
 
   if (players.length === 0) {
-    return <NowPlayingCard player={null} />;
+    return <NowPlayingCard player={null} state={state ?? null} />;
   }
 
   return (
@@ -65,7 +66,7 @@ export default function PlayerCarousel({ players }: PlayerCarouselProps) {
         </>
       )}
 
-      <NowPlayingCard player={players[clampedIdx]} />
+      <NowPlayingCard player={players[clampedIdx]} state={state ?? null} />
 
       {players.length > 1 && (
         <div className="flex justify-center items-center gap-1.5 mt-2">

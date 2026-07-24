@@ -8,11 +8,13 @@ import {
   Pause,
   SkipForward,
 } from 'lucide-react';
-import type { PlayerState } from '../hooks/useMediaStream';
+import type { MediaState, PlayerState } from '../hooks/useMediaStream';
 import { triggerCommand, seekTo } from '../services/apiService';
+import AudioStreamCard from './AudioStreamCard';
 
 interface NowPlayingCardProps {
   player: PlayerState | null;
+  state?: MediaState | null;
 }
 
 function formatTime(seconds: number): string {
@@ -22,7 +24,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function NowPlayingCard({ player }: NowPlayingCardProps) {
+export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const dragging = useRef(false);
   const seekRef = useRef(0);
   const [localPos, setLocalPos] = useState<number | null>(null);
@@ -148,6 +150,7 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
         <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline || isIdle}>
           <SkipForward size={18} />
         </button>
+        {state && <AudioStreamCard state={state} compact />}
       </div>
     </div>
   );

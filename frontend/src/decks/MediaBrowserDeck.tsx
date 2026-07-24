@@ -36,7 +36,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted">Now Playing</span>
             <div className="flex-1 h-px bg-white/[0.04]" />
           </div>
-          <PlayerCarousel players={state?.players ?? []} />
+          <PlayerCarousel players={state?.players ?? []} state={state} />
         </div>
       )}
 

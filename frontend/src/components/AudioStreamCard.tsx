@@ -4,9 +4,10 @@ import type { MediaState } from '../hooks/useMediaStream';
 
 interface Props {
   state: MediaState | null;
+  compact?: boolean;
 }
 
-export default function AudioStreamCard({ state }: Props) {
+export default function AudioStreamCard({ state, compact }: Props) {
   const [local, setLocal] = useState<'idle' | 'playing' | 'active_elsewhere'>('idle');
   const retryTimer = useRef<ReturnType<typeof setTimeout>>();
   const aliveRef = useRef(false);
@@ -143,6 +144,20 @@ export default function AudioStreamCard({ state }: Props) {
   const isJoinable = local === 'active_elsewhere';
   const label = isActive ? 'Stop' : isJoinable ? 'Join' : 'Stream';
   const Icon = (isActive || isJoinable) ? RadioTower : Radio;
+
+  if (compact) {
+    return (
+      <button
+        className={`media-btn relative ${isActive ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''} ${isJoinable ? 'text-yellow-400' : ''}`}
+        onClick={handleToggle}
+        title={label}
+      >
+        <span className={isActive ? 'animate-pulse' : ''}>
+          <Icon size={16} />
+        </span>
+      </button>
+    );
+  }
 
   return (
     <div

@@ -13,7 +13,6 @@ import CaffeineCard from './components/CaffeineCard';
 import AppMixerCard from './components/AppMixerCard';
 import CommandLogCard from './components/CommandLogCard';
 import ClipboardCard from './components/ClipboardCard';
-import AudioStreamCard from './components/AudioStreamCard';
 import MediaBrowserDeck from './decks/MediaBrowserDeck';
 import VideoPlayerDeck from './decks/VideoPlayerDeck';
 import IdeDeck from './decks/IdeDeck';
@@ -74,7 +73,7 @@ export default function App() {
 
   return (
     <LockScreen>
-      <div className="min-h-[100dvh] flex flex-col relative">
+      <div className="min-h-[100dvh] flex flex-col relative pb-14">
         <button
           onClick={toggleFull}
           className="fixed top-3 right-3 z-50 w-8 h-8 rounded-lg flex items-center justify-center
@@ -130,7 +129,7 @@ export default function App() {
                         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
                         <div className="flex-1 h-px bg-white/[0.04]" />
                       </div>
-                      <PlayerCarousel players={state?.players ?? []} />
+                      <PlayerCarousel players={state?.players ?? []} state={state} />
                     </div>
                   )}
                   {state && (
@@ -149,7 +148,6 @@ export default function App() {
                 {/* RIGHT */}
                 <div className="flex flex-col gap-4 min-w-0">
                   {caps.caffeine && <CaffeineCard state={state} />}
-                  <AudioStreamCard state={state} />
                   <div>
                     <div className="flex items-center gap-2.5 mb-1">
                       <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
@@ -190,8 +188,11 @@ export default function App() {
           </div>
         </div>
 
-        {/* Bottom strip */}
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 pb-3 sm:pb-4 md:pb-5 lg:pb-6">
+      </div>
+
+      {/* Bottom strip — fixed to bottom of screen */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04]">
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <button
               onClick={() => scrollTo(page - 1)}
