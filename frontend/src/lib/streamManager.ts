@@ -1,5 +1,4 @@
-const WARMUP_MS = 2000;
-const WARMUP_BYTES = 28000;
+const WARMUP_BYTES = 28000; // ~2s at 128kbps MP3
 
 type Listener = (active: boolean) => void;
 
@@ -14,9 +13,7 @@ let audio: HTMLAudioElement | null = null;
 let liveQueue: ArrayBuffer[] = [];
 let preQueue: ArrayBuffer[] = [];
 let draining = false;
-let startedAt = 0;
 let totalBytes = 0;
-let warmupTimer: ReturnType<typeof setTimeout> | null = null;
 
 function notify() {
   listeners.forEach(cb => cb(active));
@@ -32,9 +29,7 @@ function feed() {
 
 function warmupCheck() {
   if (active || !opening) return;
-  const elapsed = Date.now() - startedAt;
-  if (elapsed >= WARMUP_MS && totalBytes >= WARMUP_BYTES) {
-    warmupTimer = null;
+  if (totalBytes >= WARMUP_BYTES) {
     beginPlayback();
   }
 }
@@ -49,8 +44,8 @@ function beginPlayback() {
     if (preQueue.length > 0) {
       liveQueue.push(...preQueue);
       preQueue = [];
-      feed();
     }
+    feed();
   }).catch(() => {
     opening = false;
     cleanup();
@@ -68,10 +63,6 @@ function connectWs(retries = 3) {
   w.onmessage = (e) => {
     if (!gotSync && typeof e.data === 'string') {
       gotSync = true;
-      try {
-        const msg = JSON.parse(e.data);
-        startedAt = Math.floor(msg.startedAt / 1_000_000);
-      } catch { return; }
       warmupCheck();
       return;
     }
@@ -161,7 +152,6 @@ export function start() {
 
 export function stop() {
   opening = false;
-  if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = null; }
   cleanup();
   notify();
 }
@@ -178,7 +168,6 @@ function cleanupSingle(m: MediaSource, a: HTMLAudioElement) {
 function cleanup() {
   active = false;
   opening = false;
-  if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = null; }
   if (ws) { ws.close(); ws = null; }
   liveQueue = [];
   preQueue = [];
