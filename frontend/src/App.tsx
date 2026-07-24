@@ -1,6 +1,7 @@
 import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
+import { useArtTheming } from './hooks/useArtTheming';
 import NowPlayingCard from './components/NowPlayingCard';
 import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
@@ -12,6 +13,7 @@ import ClipboardCard from './components/ClipboardCard';
 export default function App() {
   const { state, loading, error } = useMediaStream();
   const caps = useCapabilities();
+  useArtTheming(state?.art_url);
 
   return (
     <LockScreen>

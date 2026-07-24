@@ -110,3 +110,59 @@
     opacity: 0;
   }
 }
+
+/* Art-themed overrides */
+:root {
+  --art-primary: #06b6d4;
+  --art-accent: #06b6d4;
+}
+
+.art-themed input[type='range']::-webkit-slider-thumb {
+  background: var(--art-accent) !important;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--art-accent) 40%, transparent) !important;
+}
+.art-themed input[type='range']::-moz-range-thumb {
+  background: var(--art-accent) !important;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--art-accent) 40%, transparent) !important;
+}
+.art-themed .text-deck-accent {
+  color: var(--art-accent) !important;
+}
+.art-themed .bg-deck-accent {
+  background: var(--art-accent) !important;
+}
+.art-themed .bg-deck-accent\/10 {
+  background: color-mix(in srgb, var(--art-accent) 10%, transparent) !important;
+}
+.art-themed .bg-deck-accent\/15 {
+  background: color-mix(in srgb, var(--art-accent) 15%, transparent) !important;
+}
+.art-themed .border-deck-accent {
+  border-color: var(--art-accent) !important;
+}
+.art-themed .border-deck-accent\/20 {
+  border-color: color-mix(in srgb, var(--art-accent) 20%, transparent) !important;
+}
+.art-themed .border-deck-accent\/30 {
+  border-color: color-mix(in srgb, var(--art-accent) 30%, transparent) !important;
+}
+.art-themed .shadow-\[0_0_10px_rgba\(6\,182\,212\,0\.2\)\] {
+  box-shadow: 0 0 10px color-mix(in srgb, var(--art-accent) 20%, transparent) !important;
+}
+.art-themed .shadow-\[0_0_12px_rgba\(6\,182\,212\,0\.25\)\] {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--art-accent) 25%, transparent) !important;
+}
+.art-themed .toggle-card.active {
+  border-color: color-mix(in srgb, var(--art-accent) 30%, transparent) !important;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--art-accent) 15%, transparent),
+    inset 0 0 40px color-mix(in srgb, var(--art-accent) 5%, transparent) !important;
+}
+.art-themed .toggle-card.active .toggle-label {
+  color: var(--art-accent) !important;
+}
+.art-themed .toggle-ripple {
+  background: color-mix(in srgb, var(--art-accent) 25%, transparent) !important;
+}
+.art-themed .media-btn:active {
+  background: var(--art-accent) !important;
+}
