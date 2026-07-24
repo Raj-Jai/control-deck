@@ -4,6 +4,7 @@ import NowPlayingCard from './components/NowPlayingCard';
 import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
 import CaffeineCard from './components/CaffeineCard';
+import AudioStreamCard from './components/AudioStreamCard';
 import SystemStatsCard from './components/SystemStatsCard';
 import ClipboardCard from './components/ClipboardCard';
 
@@ -36,8 +37,9 @@ export default function App() {
             {/* Right column */}
             <div className="flex flex-col gap-3">
               <ToggleGrid state={state} />
-              <CaffeineCard state={state} />
-              <ClipboardCard />
+            <CaffeineCard state={state} />
+            <AudioStreamCard />
+            <ClipboardCard />
               <SystemStatsCard state={state} />
             </div>
           </div>

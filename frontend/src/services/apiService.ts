@@ -90,3 +90,10 @@ export async function setDefaultSink(id: number): Promise<void> {
   const data = await res.json();
   if (data.error) throw new Error(data.error);
 }
+
+export async function getAudioStreamStatus(): Promise<boolean> {
+  const res = await fetch('/api/audio-stream/status');
+  const data = await res.json();
+  return data.active;
+}
+

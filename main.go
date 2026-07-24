@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,6 +15,10 @@ import (
 	"sync"
 	"time"
 )
+
+func isFinite(v float64) bool {
+	return !math.IsInf(v, 0) && !math.IsNaN(v)
+}
 
 // Caffeine schema directory (GNOME Shell extension)
 var caffeineSD = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
@@ -112,6 +117,9 @@ func main() {
 	http.HandleFunc("/api/clipboard/push", handleClipboardPush)
 	http.HandleFunc("/api/audio/sinks", handleGetSinks)
 	http.HandleFunc("/api/audio/set-sink", handleSetSink)
+	http.HandleFunc("/api/audio-stream/stream", handleStreamPlay)
+	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
+	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
 
 	// Background ticker to broadcast MPRIS state to connected web decks
 	go startMediaBroadcaster()
@@ -171,6 +179,12 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	// Fire command in background thread for low-latency response
 	go func(cmdArgs []string) {
+		if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
+			p := findBestPlayer()
+			if p != "" && p != cmdArgs[1] {
+				cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
+			}
+		}
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Error executing %v: %v | Output: %s", cmdArgs, err, string(out))
@@ -195,7 +209,11 @@ func handleSeek(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func(pos float64) {
-		cmd := exec.Command("playerctl", "position", fmt.Sprintf("%f", pos))
+		p := findBestPlayer()
+		if p == "" {
+			return
+		}
+		cmd := exec.Command("playerctl", "--player", p, "position", fmt.Sprintf("%f", pos))
 		if err := cmd.Run(); err != nil {
 			log.Printf("Error seeking to %f: %v", pos, err)
 		}
@@ -393,6 +411,75 @@ func runPlayerctl(args ...string) (string, error) {
 	return runCmd("playerctl", args...)
 }
 
+// findBestPlayer lists all MPRIS players, scores them, and returns the most
+// likely real-media-player (prefers Playing + non-trivial title + non-zero
+// length over browser tabs like the dashboard page itself).
+func findBestPlayer() string {
+	out, err := runCmd("playerctl", "-l")
+	if err != nil || out == "" {
+		return ""
+	}
+	players := strings.Fields(out)
+	if len(players) == 1 {
+		return players[0]
+	}
+
+	type candidate struct {
+		name   string
+		score  int
+		status string
+		title  string
+	}
+	var cands []candidate
+
+	for _, p := range players {
+		status, _ := runCmd("playerctl", "--player", p, "status")
+		title, _ := runCmd("playerctl", "--player", p, "metadata", "xesam:title")
+		lenRaw, _ := runCmd("playerctl", "--player", p, "metadata", "mpris:length")
+		var length float64
+		if l, err := strconv.ParseFloat(strings.TrimSpace(lenRaw), 64); err == nil {
+			length = l
+		}
+
+		score := 0
+		if status == "Playing" {
+			score += 10
+		} else if status == "Paused" {
+			score += 5
+		}
+		if len(title) > 0 && title != "Control Deck" {
+			score += 3
+		}
+		if len(title) > 10 {
+			score += 2
+		}
+		if length > 1000000 {
+			score += 3
+		}
+
+		cands = append(cands, candidate{name: p, score: score, status: status, title: title})
+	}
+
+	best := cands[0]
+	for _, c := range cands[1:] {
+		if c.score > best.score {
+			best = c
+		}
+	}
+
+	return best.name
+}
+
+// runPlayerctlBest runs playerctl targeting the best (most likely real) player.
+func runPlayerctlBest(args ...string) (string, error) {
+	p := findBestPlayer()
+	if p == "" {
+		return "", fmt.Errorf("no player found")
+	}
+	cmdArgs := append([]string{"--player", p}, args...)
+	return runCmd("playerctl", cmdArgs...)
+}
+
 func startPingChecker() {
 	for {
 		err := exec.Command("ping", "-c", "1", "-W", "2", "8.8.8.8").Run()
@@ -543,25 +630,31 @@ func fetchSystemStats() *SystemStats {
 }
 
 func fetchMPRISState() MediaState {
-	title, _ := runPlayerctl("metadata", "xesam:title")
-	artist, _ := runPlayerctl("metadata", "xesam:artist")
-	status, _ := runPlayerctl("status")
+	title, _ := runPlayerctlBest("metadata", "xesam:title")
+	artist, _ := runPlayerctlBest("metadata", "xesam:artist")
+	status, _ := runPlayerctlBest("status")
 
-	lenStr, lenErr := runPlayerctl("metadata", "mpris:length")
+	lenStr, lenErr := runPlayerctlBest("metadata", "mpris:length")
 	var length float64
 	if lenErr == nil {
 		if l, e := strconv.ParseFloat(lenStr, 64); e == nil {
 			length = l / 1000000.0
 		}
 	}
+	if length < 0 || !isFinite(length) {
+		length = 0
+	}
 
-	posStr, posErr := runPlayerctl("position")
+	posStr, posErr := runPlayerctlBest("position")
 	var posSeconds float64
 	if posErr == nil {
 		posSeconds, _ = strconv.ParseFloat(posStr, 64)
 	}
+	if posSeconds < 0 || !isFinite(posSeconds) {
+		posSeconds = 0
+	}
 
-	artStr, _ := runPlayerctl("metadata", "mpris:artUrl")
+	artStr, _ := runPlayerctlBest("metadata", "mpris:artUrl")
 
 	volOut, volErr := runCmd("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
 	var volume float64 = -1
