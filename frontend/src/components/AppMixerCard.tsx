@@ -43,9 +43,13 @@ export default function AppMixerCard({ streams }: { streams: AppStreamInfo[] }) 
                   <span className="text-xs font-medium text-deck-text truncate block">
                     {s.app || 'Unknown'}
                   </span>
-                  {s.media_name && s.media_name !== s.app && (
+                  {s.media_name && s.media_name !== s.app ? (
                     <span className="text-[10px] text-deck-dim truncate block">
                       {s.media_name}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-deck-dim/50 truncate block">
+                      stream #{s.id}
                     </span>
                   )}
                 </div>
