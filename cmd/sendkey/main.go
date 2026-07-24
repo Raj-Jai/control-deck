@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -56,6 +55,11 @@ var keyMap = map[string]uint16{
 	"right": 106,
 	"v":     47,
 	"space": 57,
+	"j":     36,
+	"l":     38,
+	"t":     20,
+	"m":     50,
+	"k":     37,
 }
 
 var ctrlKeys = map[string]uint16{
@@ -67,6 +71,11 @@ var ctrlKeys = map[string]uint16{
 	"ctrl_e": 18,
 	"ctrl_w": 17,
 	"ctrl_u": 22,
+}
+
+var shiftKeys = map[string]uint16{
+	"shift_.": 52,
+	"shift_,": 51,
 }
 
 func ioctl(fd, op uintptr, data unsafe.Pointer) error {
@@ -85,15 +94,17 @@ func writeEvent(fd uintptr, eType, code uint16, value int32) error {
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: sendkey <key> [player]")
-		fmt.Fprintln(os.Stderr, "keys: f, c, F11, F5, F9, F10, tab, esc, enter, up, down, left, right, space")
+		fmt.Fprintln(os.Stderr, "keys: f, c, j, k, l, m, t, v, space, F11, F5, F9, F10, tab, esc, enter, up, down, left, right")
 		fmt.Fprintln(os.Stderr, "ctrl combos: ctrl_c, ctrl_d, ctrl_z, ctrl_l, ctrl_a, ctrl_e, ctrl_w, ctrl_u")
+		fmt.Fprintln(os.Stderr, "shift combos: shift_., shift_,")
 		os.Exit(1)
 	}
 
 	keyName := os.Args[1]
 	keyCode, ok := keyMap[keyName]
 	ctrlCode, isCtrl := ctrlKeys[keyName]
-	if !ok && !isCtrl {
+	shiftCode, isShift := shiftKeys[keyName]
+	if !ok && !isCtrl && !isShift {
 		fmt.Fprintf(os.Stderr, "unknown key: %s\n", keyName)
 		os.Exit(1)
 	}
@@ -104,7 +115,7 @@ func main() {
 	}
 
 	if player != "" {
-		busName := "org.mpris.MediaPlayer2." + strings.ReplaceAll(player, ".", "_")
+		busName := "org.mpris.MediaPlayer2." + player
 		exec.Command("gdbus", "call", "--session",
 			"--dest", busName,
 			"--object-path", "/org/mpris/MediaPlayer2",
@@ -163,6 +174,14 @@ func main() {
 		time.Sleep(50 * time.Millisecond)
 		writeEvent(uintptr(fd), evKey, ctrlCode, 0)
 		writeEvent(uintptr(fd), evKey, 29, 0) // KEY_LEFTCTRL up
+		writeEvent(uintptr(fd), evSyn, synReport, 0)
+	} else if isShift {
+		writeEvent(uintptr(fd), evKey, 42, 1) // KEY_LEFTSHIFT down
+		writeEvent(uintptr(fd), evKey, shiftCode, 1)
+		writeEvent(uintptr(fd), evSyn, synReport, 0)
+		time.Sleep(50 * time.Millisecond)
+		writeEvent(uintptr(fd), evKey, shiftCode, 0)
+		writeEvent(uintptr(fd), evKey, 42, 0) // KEY_LEFTSHIFT up
 		writeEvent(uintptr(fd), evSyn, synReport, 0)
 	} else {
 		writeEvent(uintptr(fd), evKey, keyCode, 1)

@@ -32,6 +32,13 @@ var (
 	}
 )
 
+var speedSteps = []float64{0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2}
+
+var (
+	speedMu         sync.RWMutex
+	currentSpeedIdx int = 3 // index 3 = 1.0x
+)
+
 func buildCommandMap() {
 	caffeineSD = appCfg.CaffeineSchemaDir
 	if caffeineSD == "" {
@@ -112,6 +119,15 @@ func buildProfileCommandMap() {
 		"key_tab":   {sk, "tab"},
 		"key_enter": {sk, "enter"},
 
+		// Media: YouTube shortcut keys
+		"key_j": {sk, "j"},
+		"key_k": {sk, "k"},
+		"key_l": {sk, "l"},
+		"key_m": {sk, "m"},
+		"key_t": {sk, "t"},
+		"key_c": {sk, "c"},
+		"key_space": {sk, "space"},
+
 		// Terminal: Ctrl+key combos (via sendkey)
 		"key_ctrl_c": {sk, "ctrl_c"},
 		"key_ctrl_z": {sk, "ctrl_z"},
@@ -133,13 +149,17 @@ func buildProfileCommandMap() {
 		"tmux_win_prev": {"bash", "-c", "tmux previous-window 2>/dev/null || true"},
 		"tmux_win_next": {"bash", "-c", "tmux next-window 2>/dev/null || true"},
 
-		// Media playback speed via gdbus (Rate property on MPRIS)
-		"speed_0.5":  {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 0.5>" 2>/dev/null`},
-		"speed_0.75": {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 0.75>" 2>/dev/null`},
-		"speed_1":    {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 1>" 2>/dev/null`},
-		"speed_1.25": {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 1.25>" 2>/dev/null`},
-		"speed_1.5":  {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 1.5>" 2>/dev/null`},
-		"speed_2":    {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 2>" 2>/dev/null`},
+		// Speed — handled by handleSpeedCommand (intercepted before commandMap lookup)
+		"speed_up":   {"sh", "-c", ":"},
+		"speed_down": {"sh", "-c", ":"},
+		"speed_0.25": {"sh", "-c", ":"},
+		"speed_0.5":  {"sh", "-c", ":"},
+		"speed_0.75": {"sh", "-c", ":"},
+		"speed_1":    {"sh", "-c", ":"},
+		"speed_1.25": {"sh", "-c", ":"},
+		"speed_1.5":  {"sh", "-c", ":"},
+		"speed_1.75": {"sh", "-c", ":"},
+		"speed_2":    {"sh", "-c", ":"},
 
 		// Video player sync
 		"aspect_default": {"bash", "-c", sk + " v"},
@@ -238,8 +258,9 @@ var (
 	lastTitle   string
 	windowMu    sync.Mutex
 
-	mediaPlaying   bool
-	mediaPlayingMu sync.RWMutex
+	mediaPlaying       bool
+	mediaPlayingPlayer string
+	mediaPlayingMu     sync.RWMutex
 )
 
 func addLog(cmd string) {
@@ -407,6 +428,15 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Intercept speed commands for the shift+. / shift+, state machine
+	if strings.HasPrefix(req.Command, "speed_") {
+		addLog("▶ " + req.Command)
+		go handleSpeedCommand(req.Command)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
+		return
+	}
+
 	args, exists := commandMap[req.Command]
 	if !exists {
 		http.Error(w, "Unknown command", http.StatusBadRequest)
@@ -440,6 +470,87 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
+}
+
+// handleSpeedCommand implements a Shift+. / Shift+, state machine matching YouTube's
+// native 8-speed step array. Accepts:
+//   speed_up       — increment one step
+//   speed_down     — decrement one step
+//   speed_<float>  — jump to exact step (e.g. speed_1.5)
+// It sends the required number of shift+. / shift+, keystrokes with 55ms spacing,
+// then broadcasts the updated speed via the window SSE.
+func handleSpeedCommand(cmd string) {
+	suffix := strings.TrimPrefix(cmd, "speed_")
+
+	speedMu.RLock()
+	cur := currentSpeedIdx
+	speedMu.RUnlock()
+
+	targetIdx := -1
+
+	switch suffix {
+	case "up":
+		targetIdx = cur + 1
+		if targetIdx >= len(speedSteps) {
+			targetIdx = len(speedSteps) - 1
+		}
+	case "down":
+		targetIdx = cur - 1
+		if targetIdx < 0 {
+			targetIdx = 0
+		}
+	default:
+		target, err := strconv.ParseFloat(suffix, 64)
+		if err != nil {
+			return
+		}
+		for i, s := range speedSteps {
+			if math.Abs(s-target) < 0.001 {
+				targetIdx = i
+				break
+			}
+		}
+	}
+
+	if targetIdx < 0 || targetIdx == cur {
+		return
+	}
+
+	sk := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
+	delta := targetIdx - cur
+	key := "shift_."
+	if delta < 0 {
+		key = "shift_,"
+		delta = -delta
+	}
+
+	for i := 0; i < delta; i++ {
+		exec.Command(sk, key).Run()
+		time.Sleep(55 * time.Millisecond)
+	}
+
+	speedMu.Lock()
+	currentSpeedIdx = targetIdx
+	speedMu.Unlock()
+
+	addLog(fmt.Sprintf("speed → %.2fx (delta %d, key %s)", speedSteps[targetIdx], targetIdx-cur, key))
+
+	// Broadcast through window SSE
+	evt := map[string]interface{}{
+		"event": "YT_SPEED_UPDATED",
+		"speed": speedSteps[targetIdx],
+	}
+	if d, err := json.Marshal(evt); err == nil {
+		winClientsMu.Lock()
+		msg := string(d)
+		for ch := range winClients {
+			select {
+			case ch <- msg:
+			default:
+			}
+		}
+		winClientsMu.Unlock()
+	}
 }
 
 // Handles timeline seeking via playerctl
@@ -576,24 +687,26 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 }
 
 func broadcastState() {
+	state := fetchMPRISState()
+
+	mediaPlayingMu.Lock()
+	mediaPlaying = false
+	mediaPlayingPlayer = ""
+	for _, p := range state.Players {
+		if p.Status == "Playing" {
+			mediaPlaying = true
+			mediaPlayingPlayer = p.ID
+			break
+		}
+	}
+	mediaPlayingMu.Unlock()
+
 	clientsMu.Lock()
 	clientCount := len(clients)
 	clientsMu.Unlock()
 	if clientCount == 0 {
 		return
 	}
-
-	state := fetchMPRISState()
-
-	mediaPlayingMu.Lock()
-	mediaPlaying = false
-	for _, p := range state.Players {
-		if p.Status == "Playing" {
-			mediaPlaying = true
-			break
-		}
-	}
-	mediaPlayingMu.Unlock()
 
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -656,20 +769,32 @@ type WindowFocusEvent struct {
 func detectFocusedWindow() (string, string) {
 	mediaPlayingMu.RLock()
 	mp := mediaPlaying
+	player := mediaPlayingPlayer
 	mediaPlayingMu.RUnlock()
 	if mp {
-		return "chromium", "(media playing)"
+		title := "(media playing)"
+		if player != "" {
+			if t, err := runCmd("playerctl", "--player", player, "metadata", "xesam:title"); err == nil && t != "" {
+				title = strings.TrimSpace(t)
+			}
+		}
+		log.Printf("win detect: MPRIS playing → chromium | %s", title)
+		return "chromium", title
 	}
 
 	if cls, title := detectByShell(); cls != "" {
+		log.Printf("win detect: Shell → %s | %s", cls, title)
 		return cls, title
 	}
 
 	if cls, title := detectByXdotool(); cls != "" {
+		log.Printf("win detect: xdotool → %s | %s", cls, title)
 		return cls, title
 	}
 
-	return detectByProcessList()
+	cls, _ := detectByProcessList()
+	log.Printf("win detect: process list → %s", cls)
+	return cls, cls
 }
 
 func detectByShell() (string, string) {
@@ -776,6 +901,7 @@ func startWindowWatcher() {
 		}
 		windowMu.Unlock()
 		if changed {
+			log.Printf("win focus changed: %s | %s", cls, title)
 			broadcastWindowFocus(cls, title)
 		}
 	}
@@ -832,6 +958,18 @@ func handleWindowSSE(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	windowMu.Unlock()
+
+	speedMu.RLock()
+	initSpeed := speedSteps[currentSpeedIdx]
+	speedMu.RUnlock()
+	if initSpeed > 0 {
+		if d, e := json.Marshal(map[string]interface{}{
+			"event": "YT_SPEED_UPDATED",
+			"speed": initSpeed,
+		}); e == nil {
+			ch <- string(d)
+		}
+	}
 
 	notify := r.Context().Done()
 	for {

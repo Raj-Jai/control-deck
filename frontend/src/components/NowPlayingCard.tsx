@@ -7,8 +7,6 @@ import {
   Play,
   Pause,
   SkipForward,
-  Monitor,
-  Captions,
 } from 'lucide-react';
 import type { PlayerState } from '../hooks/useMediaStream';
 import { triggerCommand, seekTo } from '../services/apiService';
@@ -61,7 +59,8 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
     : '';
 
   return (
-    <div className={`deck-card flex flex-col gap-3.5 transition-all duration-300 min-h-[280px] ${cardBorder}`}>
+    <div className={`deck-card flex flex-col gap-3 transition-all duration-300 ${cardBorder}`}>
+      {/* Thumbnail + Title + Artist */}
       <div className="flex items-center gap-3">
         <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0 bg-deck-surface2">
           {artUrl && !artError ? (
@@ -105,6 +104,7 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
         </div>
       </div>
 
+      {/* Scrub Bar */}
       <div>
         <input
           type="range"
@@ -127,6 +127,7 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
         </div>
       </div>
 
+      {/* Transport Controls */}
       <div className="flex justify-center items-center gap-3">
         <button className="media-btn" onClick={() => triggerCommand('previous', playerId)} disabled={isOffline || isIdle}>
           <SkipBack size={18} />
@@ -146,23 +147,6 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
         </button>
         <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline || isIdle}>
           <SkipForward size={18} />
-        </button>
-      </div>
-
-      <div className="flex justify-center items-center gap-2">
-        <button
-          className="icon-btn w-7 h-7 text-deck-dim hover:text-deck-accent"
-          onClick={() => triggerCommand('fullscreen', playerId)}
-          title="Fullscreen (F)"
-        >
-          <Monitor size={13} />
-        </button>
-        <button
-          className="icon-btn w-7 h-7 text-deck-dim hover:text-deck-accent"
-          onClick={() => triggerCommand('captions', playerId)}
-          title="Captions (C)"
-        >
-          <Captions size={13} />
         </button>
       </div>
     </div>
