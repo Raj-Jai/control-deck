@@ -3,6 +3,7 @@ import {
   Lock,
   GraduationCap,
   Shield,
+  Speaker,
   Headphones,
   type LucideIcon,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ const iconMap: Record<string, LucideIcon> = {
   Lock,
   GraduationCap,
   Shield,
+  Speaker,
 };
 
 function createRipple(
@@ -53,6 +55,8 @@ function isToggleActive(id: string, state: MediaState | null): boolean {
   switch (id) {
     case 'bt':
       return state.bluetooth_on;
+    case 'btSink':
+      return state.bt_sink_on;
     case 'warp':
       return state.warp_on;
     default:

@@ -48,6 +48,14 @@ export const DECK_CONFIG: DeckConfig = {
       cmd: 'lock',
     },
     {
+      id: 'btSink',
+      label: 'BT Speaker',
+      icon: 'Speaker',
+      cmdOn: 'btSinkOn',
+      cmdOff: 'btSinkOff',
+      cap: 'bluetooth',
+    },
+    {
       id: 'erp',
       label: 'ERP Login',
       icon: 'GraduationCap',

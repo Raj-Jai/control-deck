@@ -41,6 +41,7 @@ export interface MediaState {
   caffeine_custom: boolean;
   caffeine_duration: number;
   bluetooth_on: boolean;
+  bt_sink_on: boolean;
   warp_on: boolean;
   audio_stream_active: boolean;
   sinks: SinkInfo[];

@@ -46,6 +46,8 @@ func buildCommandMap() {
 		"lock":           {"loginctl", "lock-session"},
 		"bluetoothOn":    {"rfkill", "unblock", "bluetooth"},
 		"bluetoothOff":   {"rfkill", "block", "bluetooth"},
+		"btSinkOn":       {"sh", "-c", "bluetoothctl discoverable on && bluetoothctl pairable on"},
+		"btSinkOff":      {"bluetoothctl", "discoverable", "off"},
 		"btConnect":      {"bluetoothctl", "connect", appCfg.BTMAC},
 		"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
 		"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
@@ -86,6 +88,7 @@ type MediaState struct {
 	CaffeineDuration  int    `json:"caffeine_duration"`
 	BluetoothOn       bool   `json:"bluetooth_on"`
 	WarpOn            bool   `json:"warp_on"`
+	BTSinkOn          bool   `json:"bt_sink_on"`
 	AudioStreamActive bool        `json:"audio_stream_active"`
 	Sinks             []Sink      `json:"sinks"`
 	AppStreams        []AppStream `json:"app_streams"`
@@ -135,6 +138,7 @@ func main() {
 	http.HandleFunc("/api/audio/set-sink", handleSetSink)
 	http.HandleFunc("/api/audio/app-streams", handleGetAppStreams)
 	http.HandleFunc("/api/audio/set-app-stream", handleSetAppStream)
+
 	http.HandleFunc("/api/audio-stream/stream", handleStreamPlay)
 	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
 	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
@@ -783,6 +787,9 @@ func fetchMPRISState() MediaState {
 	btOut, _ := runCmd("rfkill", "list", "bluetooth")
 	btOn := strings.Contains(btOut, "Soft blocked: no")
 
+	btShow, _ := runCmd("bluetoothctl", "show")
+	btSinkOn := strings.Contains(btShow, "Discoverable: yes")
+
 	warpOut, _ := runCmd("warp-cli", "status")
 	warpOn := strings.Contains(warpOut, "Connected")
 
@@ -808,6 +815,7 @@ func fetchMPRISState() MediaState {
 		CaffeineCustom:   caffeineCustom,
 		CaffeineDuration: caffeineDur,
 		BluetoothOn:      btOn,
+		BTSinkOn:         btSinkOn,
 		WarpOn:            warpOn,
 		AudioStreamActive: streamActive,
 		Sinks:             sinks,
