@@ -91,8 +91,10 @@ function connectWs(retries = 3) {
   };
 
   w.onclose = w.onerror = () => {
-    if (!active) return;
+    if (!active && !opening) return;
     if (retries > 0) {
+      preQueue = [];
+      totalBytes = 0;
       setTimeout(() => connectWs(retries - 1), 1000);
     } else {
       cleanup();
