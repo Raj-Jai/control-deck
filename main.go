@@ -23,6 +23,7 @@ func isFinite(v float64) bool {
 var dashPIN string
 var caffeineSD string
 var commandMap map[string][]string
+var adSkippedAt = make(map[string]time.Time)
 
 func buildCommandMap() {
 	caffeineSD = appCfg.CaffeineSchemaDir
@@ -786,6 +787,18 @@ func fetchPlayerState(player string) PlayerState {
 	}
 
 	artStr, _ := runCmd("playerctl", "--player", player, "metadata", "mpris:artUrl")
+
+	// Auto-skip Spotify ads
+	if length > 0 && status == "Playing" && strings.Contains(strings.ToLower(title), "advertisement") {
+		if last, ok := adSkippedAt[player]; !ok || time.Since(last) > 30*time.Second {
+			adSkippedAt[player] = time.Now()
+			go func() {
+				exec.Command("playerctl", "--player", player, "position",
+					fmt.Sprintf("%.0f", length)).Run()
+				log.Printf("ad-skip: skipped \"%s\" on %s (length=%.0fs)", title, player, length)
+			}()
+		}
+	}
 
 	return PlayerState{
 		ID:       player,
