@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Radio, RadioTower } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
+import * as streamManager from '../lib/streamManager';
 
 interface Props {
   state: MediaState | null;
@@ -9,18 +10,11 @@ interface Props {
 
 export default function AudioStreamCard({ state, compact }: Props) {
   const [local, setLocal] = useState<'idle' | 'playing' | 'active_elsewhere'>('idle');
-  const retryTimer = useRef<ReturnType<typeof setTimeout>>();
-  const aliveRef = useRef(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const msRef = useRef<MediaSource | null>(null);
-  const sbRef = useRef<SourceBuffer | null>(null);
-  const queueRef = useRef<ArrayBuffer[]>([]);
-  const drainingRef = useRef(false);
 
   useEffect(() => {
-    aliveRef.current = true;
-    return () => { aliveRef.current = false; };
+    return streamManager.subscribe(active => {
+      setLocal(active ? 'playing' : 'idle');
+    });
   }, []);
 
   useEffect(() => {
@@ -32,112 +26,12 @@ export default function AudioStreamCard({ state, compact }: Props) {
     });
   }, [state?.audio_stream_active]);
 
-  const cleanup = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    queueRef.current = [];
-    drainingRef.current = false;
-
-    if (msRef.current && msRef.current.readyState === 'open') {
-      try { msRef.current.endOfStream(); } catch {}
-    }
-    msRef.current = null;
-    sbRef.current = null;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current.load();
-      audioRef.current = null;
-    }
-  };
-
-  const feed = () => {
-    const sb = sbRef.current;
-    if (!sb || drainingRef.current || sb.updating) return;
-    const queue = queueRef.current;
-    if (queue.length === 0) return;
-    drainingRef.current = true;
-    sb.appendBuffer(queue.shift()!);
-  };
-
-  const startStream = () => {
-    cleanup();
-
-    const ms = new MediaSource();
-    msRef.current = ms;
-
-    const audio = new Audio();
-    audioRef.current = audio;
-    audio.src = URL.createObjectURL(ms);
-    audio.preload = 'auto';
-
-    ms.onsourceopen = () => {
-      if (!aliveRef.current) return;
-      let sb: SourceBuffer;
-      try {
-        sb = ms.addSourceBuffer('audio/mpeg');
-      } catch {
-        setLocal('idle');
-        cleanup();
-        return;
-      }
-      sbRef.current = sb;
-
-      sb.onupdateend = () => {
-        drainingRef.current = false;
-        if (!aliveRef.current) return;
-
-        if (sb.buffered.length > 0) {
-          const end = sb.buffered.end(sb.buffered.length - 1);
-          const start = sb.buffered.start(0);
-          if (end - start > 10) {
-            try { sb.remove(0, end - 8); } catch {}
-          }
-        }
-
-        feed();
-      };
-
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${location.host}/api/audio-stream/ws`);
-      ws.binaryType = 'arraybuffer';
-      wsRef.current = ws;
-
-      ws.onmessage = (e) => {
-        if (!aliveRef.current) return;
-        queueRef.current.push(e.data as ArrayBuffer);
-        feed();
-      };
-
-      ws.onclose = ws.onerror = () => {
-        if (!aliveRef.current) return;
-        if (ms.readyState === 'open') {
-          try { ms.endOfStream(); } catch {}
-        }
-        setLocal('idle');
-      };
-    };
-
-    audio.play().then(() => {
-      if (aliveRef.current) setLocal('playing');
-    }).catch(() => {
-      if (!aliveRef.current) return;
-      setLocal('idle');
-      cleanup();
-      retryTimer.current = setTimeout(() => { if (aliveRef.current) setLocal('idle'); }, 3000);
-    });
-  };
-
   const handleToggle = () => {
     if (local === 'playing' || local === 'active_elsewhere') {
-      setLocal('idle');
-      cleanup();
+      streamManager.stop();
       return;
     }
-    startStream();
+    streamManager.start();
   };
 
   const isActive = local === 'playing';
