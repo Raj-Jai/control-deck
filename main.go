@@ -800,11 +800,18 @@ func fetchAllPlayers() []PlayerState {
 	}
 	ids := strings.Fields(out)
 	players := make([]PlayerState, 0, len(ids))
+	seen := make(map[string]bool)
 	for _, id := range ids {
-		ps := fetchPlayerState(id)
-		if ps.Title != "" || ps.Status == "Playing" || ps.Status == "Paused" {
-			players = append(players, ps)
+		base := id
+		if idx := strings.LastIndex(id, "."); idx > 0 {
+			base = id[:idx]
 		}
+		if seen[base] {
+			continue
+		}
+		seen[base] = true
+		ps := fetchPlayerState(id)
+		players = append(players, ps)
 	}
 	return players
 }

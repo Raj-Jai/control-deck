@@ -28,7 +28,8 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const [artError, setArtError] = useState(false);
 
   const isOffline = !player;
-  const status = player?.status ?? 'Stopped';
+  const isIdle = !!player && !player.title && player.status !== 'Playing' && player.status !== 'Paused';
+  const status = isOffline ? 'Stopped' : (player.status || 'Stopped');
   const pos = player?.position ?? 0;
   const len = player?.length ?? 0;
   const artUrl = player?.art_url ?? null;
@@ -40,8 +41,8 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
     }
   }, [pos]);
 
-  const displayTitle = isOffline ? 'No Track' : player.title;
-  const displayArtist = isOffline ? 'Idle / Disconnected' : player.artist ?? 'Unknown Artist';
+  const displayTitle = isOffline ? 'No Track' : (player.title || 'Idle');
+  const displayArtist = isOffline ? 'Idle / Disconnected' : (player.artist || '');
 
   return (
     <div className="deck-card flex flex-col gap-3.5">
@@ -67,7 +68,7 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
           <p className="text-xs text-deck-dim truncate mt-0.5">{displayArtist}</p>
           <span
             className={`inline-flex items-center gap-1 text-[11px] font-medium mt-1.5 px-2 py-0.5 rounded-full ${
-              isOffline
+              isOffline || isIdle
                 ? 'bg-deck-surface2 text-deck-muted'
                 : status === 'Playing'
                 ? 'bg-deck-accent/15 text-deck-accent'
@@ -76,14 +77,14 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
           >
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                isOffline
+                isOffline || isIdle
                   ? 'bg-deck-muted'
                   : status === 'Playing'
                   ? 'bg-deck-accent'
                   : 'bg-yellow-400'
               }`}
             />
-            {isOffline ? 'Offline' : status}
+            {isOffline ? 'Offline' : isIdle ? 'Idle' : status}
           </span>
         </div>
       </div>
@@ -120,7 +121,7 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
             }
           }}
           className="w-full"
-          disabled={isOffline}
+          disabled={isOffline || isIdle}
         />
         <div className="flex justify-between text-[11px] text-deck-dim mt-1">
           <span>{formatTime(pos)}</span>
@@ -129,17 +130,17 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
       </div>
 
       <div className="flex justify-center items-center gap-3">
-        <button className="media-btn" onClick={() => triggerCommand('previous', playerId)} disabled={isOffline}>
+        <button className="media-btn" onClick={() => triggerCommand('previous', playerId)} disabled={isOffline || isIdle}>
           <SkipBack size={18} />
         </button>
         <button
           className="media-btn w-12 h-12"
           onClick={() => triggerCommand('playpause', playerId)}
-          disabled={isOffline}
+          disabled={isOffline || isIdle}
         >
           {status === 'Playing' ? <Pause size={20} /> : <Play size={20} />}
         </button>
-        <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline}>
+        <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline || isIdle}>
           <SkipForward size={18} />
         </button>
       </div>
