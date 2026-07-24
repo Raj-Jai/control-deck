@@ -9,6 +9,7 @@ import {
 import { DECK_CONFIG } from '../config/deckConfig';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { ToggleConfig } from '../config/deckConfig';
+import { useCapabilities } from '../hooks/useCapabilities';
 import { triggerCommand } from '../services/apiService';
 
 interface ToggleGridProps {
@@ -61,6 +62,9 @@ function isToggleActive(id: string, state: MediaState | null): boolean {
 
 export default function ToggleGrid({ state }: ToggleGridProps) {
   const { toggles } = DECK_CONFIG;
+  const caps = useCapabilities();
+
+  const visible = toggles.filter(t => !t.cap || caps[t.cap as keyof typeof caps]);
 
   const handleClick = (cfg: ToggleConfig, el: HTMLElement) => {
     if (cfg.cmd) {
@@ -73,7 +77,7 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
 
   return (
     <div className="grid grid-cols-3 gap-3">
-      {toggles.map((cfg) => {
+      {visible.map((cfg) => {
         const active = !cfg.cmd && isToggleActive(cfg.id, state);
         return (
           <div

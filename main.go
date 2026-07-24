@@ -119,6 +119,7 @@ func main() {
 	http.Handle("/", http.FileServer(http.Dir(".")))
 
 	// API Routes
+	http.HandleFunc("/api/capabilities", handleCapabilities)
 	http.HandleFunc("/api/auth", handleAuth)
 	http.HandleFunc("/api/command", handleCommand)
 	http.HandleFunc("/seek", handleSeek)
@@ -163,6 +164,69 @@ func main() {
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+func handleCapabilities(w http.ResponseWriter, r *http.Request) {
+	caps := map[string]bool{
+		"caffeine":    checkCaffeine(),
+		"bluetooth":   checkBluetooth(),
+		"warp":        checkBinary("warp-cli"),
+		"erp":         checkBinary("erp"),
+		"night_light": checkNightLight(),
+		"brightness":  checkBinary("brightnessctl"),
+		"clipboard":   checkBinary("wl-copy") || checkBinary("xclip"),
+		"ffmpeg":      checkBinary("ffmpeg"),
+		"playerctl":   checkBinary("playerctl"),
+		"battery":     checkBattery(),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(caps)
+}
+
+func checkBinary(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func checkCaffeine() bool {
+	sd := caffeineSD
+	if sd == "" {
+		sd = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
+	}
+	out, err := exec.Command("gsettings", "--schemadir", sd, "list-schemas").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "org.gnome.shell.extensions.caffeine")
+}
+
+func checkNightLight() bool {
+	out, err := exec.Command("gsettings", "list-schemas").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "org.gnome.settings-daemon.plugins.color")
+}
+
+func checkBluetooth() bool {
+	if !checkBinary("rfkill") {
+		return false
+	}
+	out, _ := exec.Command("rfkill", "list", "bluetooth").Output()
+	return len(out) > 0
+}
+
+func checkBattery() bool {
+	ents, err := os.ReadDir("/sys/class/power_supply")
+	if err != nil {
+		return false
+	}
+	for _, e := range ents {
+		if strings.HasPrefix(e.Name(), "BAT") {
+			return true
+		}
+	}
+	return false
 }
 
 func handleAuth(w http.ResponseWriter, r *http.Request) {

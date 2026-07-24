@@ -1,5 +1,6 @@
 import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
+import { useCapabilities } from './hooks/useCapabilities';
 import NowPlayingCard from './components/NowPlayingCard';
 import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
@@ -10,6 +11,7 @@ import ClipboardCard from './components/ClipboardCard';
 
 export default function App() {
   const { state, loading, error } = useMediaStream();
+  const caps = useCapabilities();
 
   return (
     <LockScreen>
@@ -30,16 +32,16 @@ export default function App() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Left column */}
             <div className="flex flex-col gap-3">
-              <NowPlayingCard state={state} />
-              <StepperControls state={state} />
+              {caps.playerctl && <NowPlayingCard state={state} />}
+              <StepperControls state={state} caps={caps} />
             </div>
 
             {/* Right column */}
             <div className="flex flex-col gap-3">
               <ToggleGrid state={state} />
-            <CaffeineCard state={state} />
-            <AudioStreamCard />
-            <ClipboardCard />
+              {caps.caffeine && <CaffeineCard state={state} />}
+              {caps.ffmpeg && <AudioStreamCard />}
+              {caps.clipboard && <ClipboardCard />}
               <SystemStatsCard state={state} />
             </div>
           </div>

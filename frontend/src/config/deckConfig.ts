@@ -9,6 +9,8 @@ export interface ToggleConfig {
   cmdOn?: string;
   /** Toggle off command */
   cmdOff?: string;
+  /** Only show when this capability is available */
+  cap?: string;
 }
 
 export interface DeckConfig {
@@ -37,6 +39,7 @@ export const DECK_CONFIG: DeckConfig = {
       icon: 'Bluetooth',
       cmdOn: 'bluetoothOn',
       cmdOff: 'bluetoothOff',
+      cap: 'bluetooth',
     },
     {
       id: 'lock',
@@ -49,6 +52,7 @@ export const DECK_CONFIG: DeckConfig = {
       label: 'ERP Login',
       icon: 'GraduationCap',
       cmd: 'erpLogin',
+      cap: 'erp',
     },
     {
       id: 'warp',
@@ -56,6 +60,7 @@ export const DECK_CONFIG: DeckConfig = {
       icon: 'Shield',
       cmdOn: 'warpOn',
       cmdOff: 'warpOff',
+      cap: 'warp',
     },
   ],
 };

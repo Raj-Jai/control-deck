@@ -1,6 +1,6 @@
 {
-  "pin": "1234",
-  "bt_mac": "AA:BB:CC:DD:EE:FF",
+  "pin": "0616",
+  "bt_mac": "88:D0:39:7D:66:CC",
   "ping_target": "8.8.8.8",
   "http_port": 8080,
   "https_port": 8443,
@@ -10,5 +10,4 @@
     "warpOn": ["warp-cli", "connect"],
     "warpOff": ["warp-cli", "disconnect"]
   }
-}
 }

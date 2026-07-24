@@ -1,16 +1,18 @@
 import { useRef, useState, useEffect } from 'react';
 import { Moon, Volume2, VolumeX, Speaker, Headphones } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
+import type { Capability } from '../hooks/useCapabilities';
 import { triggerCommand, setVolume, setBrightness, fetchSinks, setDefaultSink } from '../services/apiService';
 import type { SinkInfo } from '../services/apiService';
 
 interface StepperControlsProps {
   state: MediaState | null;
+  caps: Record<string, boolean>;
 }
 
 const THROTTLE_MS = 80;
 
-export default function StepperControls({ state }: StepperControlsProps) {
+export default function StepperControls({ state, caps }: StepperControlsProps) {
   const draggingVol = useRef(false);
   const draggingBri = useRef(false);
   const lastVolSend = useRef(0);
@@ -124,7 +126,7 @@ export default function StepperControls({ state }: StepperControlsProps) {
       </div>
 
       {/* Brightness */}
-      <div className="deck-card">
+      {caps.brightness && <div className="deck-card">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim mb-2">
           Brightness
         </div>
@@ -168,7 +170,7 @@ export default function StepperControls({ state }: StepperControlsProps) {
             {showBri}%
           </span>
         </div>
-      </div>
+      </div>}
 
 
     </div>
