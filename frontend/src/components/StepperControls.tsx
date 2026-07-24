@@ -2,8 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import { Moon, Volume2, VolumeX, Speaker, Headphones } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capability } from '../hooks/useCapabilities';
-import { triggerCommand, setVolume, setBrightness, fetchSinks, setDefaultSink } from '../services/apiService';
-import type { SinkInfo } from '../services/apiService';
+import { triggerCommand, setVolume, setBrightness, setDefaultSink } from '../services/apiService';
+import type { SinkInfo } from '../hooks/useMediaStream';
 
 interface StepperControlsProps {
   state: MediaState | null;
@@ -32,19 +32,14 @@ export default function StepperControls({ state, caps }: StepperControlsProps) {
     if (!draggingVol.current && !draggingBri.current) return;
   });
 
-  const loadSinks = () => fetchSinks().then(setSinks).catch(() => {});
-
   useEffect(() => {
-    loadSinks();
-    const interval = setInterval(loadSinks, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (state?.sinks) setSinks(state.sinks);
+  }, [state?.sinks]);
 
   const handleSinkSelect = async (id: number) => {
     setSinkLoading(true);
     try {
       await setDefaultSink(id);
-      await loadSinks();
     } catch {}
     setSinkLoading(false);
   };

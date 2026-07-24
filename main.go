@@ -80,13 +80,15 @@ type MediaState struct {
 	Volume     float64 `json:"volume"`
 	Muted      bool    `json:"muted"`
 	Brightness float64 `json:"brightness"`
-	NightLight        bool `json:"night_light"`
-	CaffeineOn        bool `json:"caffeine_on"`
-	CaffeineCustom    bool `json:"caffeine_custom"`
-	CaffeineDuration  int  `json:"caffeine_duration"`
-	BluetoothOn       bool `json:"bluetooth_on"`
-	WarpOn       bool `json:"warp_on"`
-	Sys        *SystemStats `json:"sys"`
+	NightLight        bool   `json:"night_light"`
+	CaffeineOn        bool   `json:"caffeine_on"`
+	CaffeineCustom    bool   `json:"caffeine_custom"`
+	CaffeineDuration  int    `json:"caffeine_duration"`
+	BluetoothOn       bool   `json:"bluetooth_on"`
+	WarpOn            bool   `json:"warp_on"`
+	AudioStreamActive bool   `json:"audio_stream_active"`
+	Sinks             []Sink `json:"sinks"`
+	Sys               *SystemStats `json:"sys"`
 }
 
 type CommandRequest struct {
@@ -781,6 +783,12 @@ func fetchMPRISState() MediaState {
 	warpOut, _ := runCmd("warp-cli", "status")
 	warpOn := strings.Contains(warpOut, "Connected")
 
+	streamMgr.mu.Lock()
+	streamActive := len(streamMgr.listeners) > 0
+	streamMgr.mu.Unlock()
+
+	sinks, _ := fetchSinks()
+
 	return MediaState{
 		Title:       title,
 		Artist:      artist,
@@ -796,7 +804,9 @@ func fetchMPRISState() MediaState {
 		CaffeineCustom:   caffeineCustom,
 		CaffeineDuration: caffeineDur,
 		BluetoothOn:      btOn,
-		WarpOn:      warpOn,
-		Sys:         fetchSystemStats(),
+		WarpOn:            warpOn,
+		AudioStreamActive: streamActive,
+		Sinks:             sinks,
+		Sys:               fetchSystemStats(),
 	}
 }

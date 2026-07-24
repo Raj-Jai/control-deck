@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { Radio, RadioTower, Loader2 } from 'lucide-react';
 import { getAudioStreamStatus } from '../services/apiService';
+import type { MediaState } from '../hooks/useMediaStream';
 
-type StreamState = 'idle' | 'loading' | 'playing' | 'error' | 'active_elsewhere';
+interface Props {
+  state: MediaState | null;
+}
 
-export default function AudioStreamCard() {
-  const [state, setState] = useState<StreamState>('idle');
+export default function AudioStreamCard({ state }: Props) {
+  const [local, setLocal] = useState<'idle' | 'playing' | 'active_elsewhere'>('idle');
   const retryTimer = useRef<ReturnType<typeof setTimeout>>();
   const aliveRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -15,21 +18,15 @@ export default function AudioStreamCard() {
     return () => { aliveRef.current = false; };
   }, []);
 
+  // Sync with SSE state
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const active = await getAudioStreamStatus();
-        setState(prev => {
-          if (active && prev === 'idle') return 'active_elsewhere';
-          if (!active && prev === 'active_elsewhere') return 'idle';
-          return prev;
-        });
-      } catch {}
-    };
-    const iv = setInterval(poll, 3000);
-    poll();
-    return () => { clearInterval(iv); clearTimeout(retryTimer.current); };
-  }, []);
+    if (!state) return;
+    setLocal(prev => {
+      if (state.audio_stream_active && prev === 'idle') return 'active_elsewhere';
+      if (!state.audio_stream_active && prev === 'active_elsewhere') return 'idle';
+      return prev;
+    });
+  }, [state?.audio_stream_active]);
 
   const cleanup = () => {
     if (audioRef.current) {
@@ -41,13 +38,12 @@ export default function AudioStreamCard() {
   };
 
   const handleToggle = async () => {
-    if (state === 'playing') {
-      setState('idle');
+    if (local === 'playing' || local === 'active_elsewhere') {
+      setLocal('idle');
       cleanup();
       return;
     }
 
-    setState('loading');
     cleanup();
 
     const audio = new Audio();
@@ -57,36 +53,35 @@ export default function AudioStreamCard() {
 
     audio.onerror = () => {
       if (!aliveRef.current) return;
-      setState('error');
+      setLocal('idle');
       cleanup();
-      retryTimer.current = setTimeout(() => { if (aliveRef.current) setState('idle'); }, 3000);
+      retryTimer.current = setTimeout(() => { if (aliveRef.current) setLocal('idle'); }, 3000);
     };
 
     audio.onended = () => {
       if (!aliveRef.current) return;
-      setState('idle');
+      setLocal('idle');
       cleanup();
     };
 
     try {
       await audio.play();
-      if (aliveRef.current) setState('playing');
-    } catch (err) {
+      if (aliveRef.current) setLocal('playing');
+    } catch {
       if (!aliveRef.current) return;
-      setState('error');
+      setLocal('idle');
       cleanup();
-      retryTimer.current = setTimeout(() => { if (aliveRef.current) setState('idle'); }, 3000);
+      retryTimer.current = setTimeout(() => { if (aliveRef.current) setLocal('idle'); }, 3000);
     }
   };
 
-  const busy = state === 'loading';
-  const Icon = state === 'playing' ? RadioTower : Radio;
+  const busy = false;
+  const Icon = local === 'playing' ? RadioTower : Radio;
   const label =
-    state === 'idle' ? 'Stream Audio' :
-    state === 'loading' ? 'Connecting…' :
-    state === 'playing' ? 'Stop Stream' :
-    state === 'active_elsewhere' ? 'Join Stream' :
-    'Retry…';
+    local === 'idle' ? 'Stream Audio' :
+    local === 'playing' ? 'Stop Stream' :
+    local === 'active_elsewhere' ? 'Join Stream' :
+    'Stream Audio';
 
   return (
     <div className="deck-card">
@@ -101,27 +96,23 @@ export default function AudioStreamCard() {
         disabled={busy}
         className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold
           uppercase tracking-wider border transition-all duration-100 active:scale-95
-          ${state === 'playing'
+          ${local === 'playing'
             ? 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/20'
             : 'bg-deck-surface2 border-white/5 text-deck-text hover:bg-deck-accent/15 hover:border-deck-accent/30 hover:text-deck-accent'
           }
           disabled:opacity-50 disabled:pointer-events-none`}
       >
-        {busy ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <span className={state === 'playing' ? 'animate-pulse' : ''}>
-            <Icon size={16} />
-          </span>
-        )}
+        <span className={local === 'playing' ? 'animate-pulse' : ''}>
+          <Icon size={16} />
+        </span>
         {label}
       </button>
-      {state === 'playing' && (
+      {local === 'playing' && (
         <div className="text-[10px] text-deck-dim text-center mt-2">
           Streaming MP3 — ~2s latency
         </div>
       )}
-      {state === 'active_elsewhere' && (
+      {local === 'active_elsewhere' && (
         <div className="text-[10px] text-deck-dim text-center mt-2">
           Stream active — tap to join
         </div>

@@ -12,6 +12,13 @@ export interface SystemStats {
   ping_ok: boolean;
 }
 
+export interface SinkInfo {
+  id: number;
+  name: string;
+  description: string;
+  default: boolean;
+}
+
 export interface MediaState {
   title: string | null;
   artist: string | null;
@@ -28,6 +35,8 @@ export interface MediaState {
   caffeine_duration: number;
   bluetooth_on: boolean;
   warp_on: boolean;
+  audio_stream_active: boolean;
+  sinks: SinkInfo[];
   sys: SystemStats | null;
 }
 

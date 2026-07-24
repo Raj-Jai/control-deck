@@ -40,7 +40,7 @@ export default function App() {
             <div className="flex flex-col gap-3">
               <ToggleGrid state={state} />
               {caps.caffeine && <CaffeineCard state={state} />}
-              {caps.ffmpeg && <AudioStreamCard />}
+              {caps.ffmpeg && <AudioStreamCard state={state} />}
               {caps.clipboard && <ClipboardCard />}
               <SystemStatsCard state={state} />
             </div>
