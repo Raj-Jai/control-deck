@@ -19,7 +19,7 @@ const (
 	frameTypeAudio = 0x02
 
 	frameSamples   = 2048
-	sampleRate     = 44100
+	sampleRate     = 48000
 	channels       = 2
 	bytesPerSample = 2
 	frameBytes     = frameSamples * channels * bytesPerSample
@@ -49,7 +49,7 @@ func (m *StreamManager) start() error {
 		"-f", "pulse", "-i", "@DEFAULT_MONITOR@",
 		"-f", "s16le",
 		"-ac", "2",
-		"-ar", "44100",
+		"-ar", "48000",
 		"-acodec", "pcm_s16le",
 		"pipe:1")
 	stdout, err := cmd.StdoutPipe()
@@ -65,7 +65,7 @@ func (m *StreamManager) start() error {
 	m.stopCh = make(chan struct{})
 
 	go m.readLoop()
-	log.Println("audio-stream: started (PCM s16le 44100Hz stereo)")
+	log.Println("audio-stream: started (PCM s16le 48000Hz stereo)")
 	return nil
 }
 
@@ -118,6 +118,7 @@ func (m *StreamManager) readLoop() {
 			case ch <- frame:
 			default:
 				go func(c chan []byte, d []byte) {
+					defer func() { recover() }()
 					select {
 					case c <- d:
 					case <-time.After(3 * time.Second):

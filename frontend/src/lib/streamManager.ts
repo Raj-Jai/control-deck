@@ -9,8 +9,16 @@ function readUint64BE(dv: DataView, offset: number): number {
 }
 
 const FRAME_SAMPLES = 2048;
-const BATCH_FRAMES = 20;
-const TARGET_DELAY = 1500;
+const BATCH_FRAMES = 3;
+const TARGET_DELAY = 500;
+const TARGET_BUFFER = 350;
+
+const PI_KP = 0.000008;
+const PI_KI = 0.0000003;
+const PI_MAX = 0.003;
+const PI_INTEGRAL_LIMIT = 500;
+
+const FADE_SEC = 0.002;
 
 class SyncedAudioPlayer {
   private ctx: AudioContext | null = null;
@@ -21,7 +29,7 @@ class SyncedAudioPlayer {
   private perfBase = 0;
   private dateBase = 0;
 
-  private sampleRate = 44100;
+  private sampleRate = 48000;
   private channels = 2;
   private bytesPerSample = 2;
 
@@ -33,6 +41,8 @@ class SyncedAudioPlayer {
   private firstBatchPTS = 0;
 
   private scheduledEnd = 0;
+  private currentRate = 1.0;
+  private integralError = 0;
 
   hostTimeMs(): number {
     return (performance.now() - this.perfBase) + this.dateBase + this.clockOffset;
@@ -65,23 +75,52 @@ class SyncedAudioPlayer {
       buffer.getChannelData(ch).set(this.accChannels[ch]);
     }
 
-    const targetPlay = this.firstBatchPTS + TARGET_DELAY;
-    const now = this.hostTimeMs();
-    const delay = targetPlay - now;
-    if (delay < 0) {
-      this.accFrames = 0;
-      return;
+    let ctxTime: number;
+    let duration: number;
+
+    if (this.scheduledEnd === 0) {
+      this.currentRate = 1.0;
+      this.integralError = 0;
+      const targetPlay = this.firstBatchPTS + TARGET_DELAY;
+      const now = this.hostTimeMs();
+      const delay = targetPlay - now;
+      if (delay < 0) {
+        this.accFrames = 0;
+        return;
+      }
+      ctxTime = this.ctx.currentTime + delay / 1000;
+      duration = totalFrames / this.sampleRate;
+    } else {
+      const bufferAheadMs = (this.scheduledEnd - this.ctx.currentTime) * 1000;
+      const error = bufferAheadMs - TARGET_BUFFER;
+      this.integralError = Math.max(-PI_INTEGRAL_LIMIT,
+        Math.min(PI_INTEGRAL_LIMIT,
+          this.integralError + error * 0.05));
+      let adj = error * PI_KP + this.integralError * PI_KI;
+      adj = Math.max(-PI_MAX, Math.min(PI_MAX, adj));
+      this.currentRate = 1.0 + adj;
+
+      duration = totalFrames / (this.sampleRate * this.currentRate);
+      ctxTime = this.scheduledEnd;
     }
 
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.ctx.destination);
+    source.playbackRate.value = this.currentRate;
 
-    const baseTime = Math.max(this.ctx.currentTime, this.scheduledEnd);
-    const ctxTime = baseTime + delay / 1000;
-    source.start(ctxTime);
+    const gain = this.ctx.createGain();
+    const startTime = ctxTime;
+    const endTime = ctxTime + duration;
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(1, startTime + FADE_SEC);
+    gain.gain.setValueAtTime(1, endTime - FADE_SEC);
+    gain.gain.linearRampToValueAtTime(0, endTime);
 
-    this.scheduledEnd = ctxTime + totalFrames / this.sampleRate;
+    source.connect(gain);
+    gain.connect(this.ctx.destination);
+    source.start(startTime);
+
+    this.scheduledEnd = endTime;
     this.accFrames = 0;
   }
 
@@ -113,10 +152,17 @@ class SyncedAudioPlayer {
   async start() {
     if (this.active) return;
 
-    const ctx = new AudioContext();
+    let ctx: AudioContext;
+    try {
+      ctx = new AudioContext({ sampleRate: 48000 });
+    } catch {
+      ctx = new AudioContext();
+    }
     this.ctx = ctx;
     this.accFrames = 0;
     this.scheduledEnd = 0;
+    this.currentRate = 1.0;
+    this.integralError = 0;
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const w = new WebSocket(`${proto}//${location.host}/api/audio-stream/ws`);
