@@ -23,7 +23,6 @@ function formatTime(seconds: number): string {
 export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const dragging = useRef(false);
   const dragVal = useRef(0);
-  const lastSeek = useRef(0);
   const [artError, setArtError] = useState(false);
 
   const isOffline = !player;
@@ -33,14 +32,6 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const len = player?.length ?? 0;
   const artUrl = player?.art_url ?? null;
   const playerId = player?.id;
-
-  const seekWithThrottle = (v: number) => {
-    const now = Date.now();
-    if (now - lastSeek.current >= 100) {
-      lastSeek.current = now;
-      seekTo(v, playerId);
-    }
-  };
 
   const displayTitle = isOffline ? 'No Track' : (player.title || 'Idle');
   const displayArtist = isOffline ? 'Idle / Disconnected' : (player.artist || '');
@@ -97,10 +88,8 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
           max={len > 0 ? Math.floor(len) : 100}
           value={dragging.current ? dragVal.current : Math.floor(pos)}
           onChange={(e) => {
-            const v = Number(e.target.value);
-            dragVal.current = v;
+            dragVal.current = Number(e.target.value);
             dragging.current = true;
-            seekWithThrottle(v);
           }}
           onMouseUp={() => {
             if (dragging.current) {
