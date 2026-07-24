@@ -3,6 +3,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      screens: {
+        wide: '800px',
+      },
       colors: {
         deck: {
           bg: '#0f172a',

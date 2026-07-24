@@ -70,5 +70,11 @@ export const DECK_CONFIG: DeckConfig = {
       cmdOff: 'warpOff',
       cap: 'warp',
     },
+    {
+      id: 'audioStream',
+      label: 'Stream',
+      icon: 'Radio',
+      cap: 'ffmpeg',
+    },
   ],
 };

@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Radio, RadioTower, Loader2 } from 'lucide-react';
-import { getAudioStreamStatus } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 
 interface Props {
@@ -18,7 +17,6 @@ export default function AudioStreamCard({ state }: Props) {
     return () => { aliveRef.current = false; };
   }, []);
 
-  // Sync with SSE state
   useEffect(() => {
     if (!state) return;
     setLocal(prev => {
@@ -37,7 +35,7 @@ export default function AudioStreamCard({ state }: Props) {
     }
   };
 
-  const handleToggle = async () => {
+  const handleToggle = () => {
     if (local === 'playing' || local === 'active_elsewhere') {
       setLocal('idle');
       cleanup();
@@ -45,7 +43,6 @@ export default function AudioStreamCard({ state }: Props) {
     }
 
     cleanup();
-
     const audio = new Audio();
     audioRef.current = audio;
     audio.src = '/api/audio-stream/stream';
@@ -64,59 +61,32 @@ export default function AudioStreamCard({ state }: Props) {
       cleanup();
     };
 
-    try {
-      await audio.play();
+    audio.play().then(() => {
       if (aliveRef.current) setLocal('playing');
-    } catch {
+    }).catch(() => {
       if (!aliveRef.current) return;
       setLocal('idle');
       cleanup();
       retryTimer.current = setTimeout(() => { if (aliveRef.current) setLocal('idle'); }, 3000);
-    }
+    });
   };
 
-  const busy = false;
-  const Icon = local === 'playing' ? RadioTower : Radio;
-  const label =
-    local === 'idle' ? 'Stream Audio' :
-    local === 'playing' ? 'Stop Stream' :
-    local === 'active_elsewhere' ? 'Join Stream' :
-    'Stream Audio';
+  const isActive = local === 'playing';
+  const isJoinable = local === 'active_elsewhere';
+  const label = isActive ? 'Stop' : isJoinable ? 'Join' : 'Stream';
+  const Icon = (isActive || isJoinable) ? RadioTower : Radio;
 
   return (
-    <div className="deck-card">
-      <div className="flex items-center gap-2 mb-2">
-        <Radio size={16} className="text-deck-accent" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim">
-          Audio Stream
-        </span>
-      </div>
-      <button
-        onClick={handleToggle}
-        disabled={busy}
-        className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold
-          uppercase tracking-wider border transition-all duration-100 active:scale-95
-          ${local === 'playing'
-            ? 'bg-red-500/15 border-red-500/30 text-red-400 hover:bg-red-500/20'
-            : 'bg-deck-surface2 border-white/5 text-deck-text hover:bg-deck-accent/15 hover:border-deck-accent/30 hover:text-deck-accent'
-          }
-          disabled:opacity-50 disabled:pointer-events-none`}
-      >
-        <span className={local === 'playing' ? 'animate-pulse' : ''}>
-          <Icon size={16} />
-        </span>
+    <div
+      className={`toggle-card ${isActive ? 'active' : ''} ${isJoinable ? 'ring-1 ring-yellow-500/30' : ''}`}
+      onClick={handleToggle}
+    >
+      <span className={`text-[28px] leading-none ${isActive ? 'animate-pulse' : ''}`}>
+        <Icon size={28} />
+      </span>
+      <span className="toggle-label text-xs font-semibold text-center leading-tight">
         {label}
-      </button>
-      {local === 'playing' && (
-        <div className="text-[10px] text-deck-dim text-center mt-2">
-          Streaming MP3 — ~2s latency
-        </div>
-      )}
-      {local === 'active_elsewhere' && (
-        <div className="text-[10px] text-deck-dim text-center mt-2">
-          Stream active — tap to join
-        </div>
-      )}
+      </span>
     </div>
   );
 }

@@ -53,8 +53,13 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
     seekTo(v, playerId);
   };
 
+  const isPlaying = !isOffline && !isIdle && status === 'Playing';
+  const cardBorder = isPlaying
+    ? 'border-deck-accent/20 shadow-[0_0_24px_rgba(6,182,212,0.08)]'
+    : '';
+
   return (
-    <div className="deck-card flex flex-col gap-3.5">
+    <div className={`deck-card flex flex-col gap-3.5 transition-all duration-300 ${cardBorder}`}>
       <div className="flex items-center gap-3">
         <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0 bg-deck-surface2">
           {artUrl && !artError ? (
@@ -85,11 +90,11 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
             }`}
           >
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
+              className={`status-dot ${
                 isOffline || isIdle
                   ? 'bg-deck-muted'
                   : status === 'Playing'
-                  ? 'bg-deck-accent'
+                  ? 'playing'
                   : 'bg-yellow-400'
               }`}
             />

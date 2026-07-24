@@ -10,29 +10,52 @@
   }
 
   body {
-    @apply min-h-screen antialiased;
+    @apply min-h-[100dvh] antialiased;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
       'Helvetica Neue', Arial, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    touch-action: manipulation;
+    overflow-x: hidden;
   }
 
-  /* Custom range slider styling */
+  /* Large touch-friendly range slider */
   input[type='range'] {
-    @apply w-full h-1.5 appearance-none cursor-pointer rounded-full;
-    background: #334155;
+    @apply w-full appearance-none cursor-pointer rounded-full;
+    height: 10px;
+    background: #1e293b;
     outline: none;
     touch-action: none;
+    transition: opacity 0.15s;
   }
 
   input[type='range']::-webkit-slider-thumb {
-    @apply appearance-none w-4 h-4 rounded-full cursor-pointer;
+    @apply appearance-none rounded-full cursor-pointer;
+    width: 24px;
+    height: 24px;
     background: #06b6d4;
-    box-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  input[type='range']::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.7), 0 1px 6px rgba(0, 0, 0, 0.4);
+  }
+
+  input[type='range']::-webkit-slider-thumb:active {
+    transform: scale(0.95);
   }
 
   input[type='range']::-moz-range-thumb {
-    @apply w-4 h-4 rounded-full border-0 cursor-pointer;
+    @apply w-6 h-6 rounded-full border-0 cursor-pointer;
     background: #06b6d4;
-    box-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  input[type='range']:disabled {
+    opacity: 0.35;
+    pointer-events: none;
   }
 
   /* Scrollbar */
@@ -50,10 +73,23 @@
 
 @layer components {
   .deck-card {
-    @apply rounded-xl p-4 border;
+    @apply rounded-xl p-4 border transition-all duration-200;
     background: rgba(30, 41, 59, 0.6);
     backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.04);
+  }
+
+  .deck-card:hover {
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  .deck-card-interactive {
+    @apply deck-card cursor-pointer;
+  }
+
+  .deck-card-interactive:hover {
+    border-color: rgba(6, 182, 212, 0.15);
+    box-shadow: 0 0 24px rgba(6, 182, 212, 0.05);
   }
 
   .toggle-card {
@@ -66,6 +102,10 @@
 
   .toggle-card:active {
     transform: scale(0.95);
+  }
+
+  .toggle-card:hover {
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
   .toggle-card.active {
@@ -85,6 +125,11 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
 
+  .icon-btn:hover {
+    background: #475569;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
   .icon-btn:active {
     transform: scale(0.85);
   }
@@ -92,6 +137,11 @@
   .media-btn {
     @apply icon-btn w-10 h-10 text-deck-text;
   }
+
+  .media-btn:hover {
+    @apply bg-deck-accent/15 border-deck-accent/30 text-deck-accent;
+  }
+
   .media-btn:active {
     @apply bg-deck-accent text-white;
   }
@@ -102,6 +152,16 @@
     background: rgba(6, 182, 212, 0.25);
     animation: rippleAnim 0.5s ease-out forwards;
   }
+
+  /* Pulse dot for playing status */
+  .status-dot {
+    @apply w-1.5 h-1.5 rounded-full;
+  }
+
+  .status-dot.playing {
+    animation: pulseDot 1.5s ease-in-out infinite;
+    background: #06b6d4;
+  }
 }
 
 @keyframes rippleAnim {
@@ -109,6 +169,11 @@
     transform: scale(4);
     opacity: 0;
   }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 /* Art-themed overrides */
@@ -119,50 +184,66 @@
 
 .art-themed input[type='range']::-webkit-slider-thumb {
   background: var(--art-accent) !important;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--art-accent) 40%, transparent) !important;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--art-accent) 50%, transparent),
+    0 1px 4px rgba(0,0,0,0.3) !important;
 }
+
 .art-themed input[type='range']::-moz-range-thumb {
   background: var(--art-accent) !important;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--art-accent) 40%, transparent) !important;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--art-accent) 50%, transparent),
+    0 1px 4px rgba(0,0,0,0.3) !important;
 }
+
 .art-themed .text-deck-accent {
   color: var(--art-accent) !important;
 }
+
 .art-themed .bg-deck-accent {
   background: var(--art-accent) !important;
 }
+
 .art-themed .bg-deck-accent\/10 {
   background: color-mix(in srgb, var(--art-accent) 10%, transparent) !important;
 }
+
 .art-themed .bg-deck-accent\/15 {
   background: color-mix(in srgb, var(--art-accent) 15%, transparent) !important;
 }
+
 .art-themed .border-deck-accent {
   border-color: var(--art-accent) !important;
 }
+
 .art-themed .border-deck-accent\/20 {
   border-color: color-mix(in srgb, var(--art-accent) 20%, transparent) !important;
 }
+
 .art-themed .border-deck-accent\/30 {
   border-color: color-mix(in srgb, var(--art-accent) 30%, transparent) !important;
 }
+
 .art-themed .shadow-\[0_0_10px_rgba\(6\,182\,212\,0\.2\)\] {
   box-shadow: 0 0 10px color-mix(in srgb, var(--art-accent) 20%, transparent) !important;
 }
+
 .art-themed .shadow-\[0_0_12px_rgba\(6\,182\,212\,0\.25\)\] {
   box-shadow: 0 0 12px color-mix(in srgb, var(--art-accent) 25%, transparent) !important;
 }
+
 .art-themed .toggle-card.active {
   border-color: color-mix(in srgb, var(--art-accent) 30%, transparent) !important;
   box-shadow: 0 0 20px color-mix(in srgb, var(--art-accent) 15%, transparent),
     inset 0 0 40px color-mix(in srgb, var(--art-accent) 5%, transparent) !important;
 }
+
 .art-themed .toggle-card.active .toggle-label {
   color: var(--art-accent) !important;
 }
+
 .art-themed .toggle-ripple {
   background: color-mix(in srgb, var(--art-accent) 25%, transparent) !important;
 }
+
 .art-themed .media-btn:active {
   background: var(--art-accent) !important;
 }
