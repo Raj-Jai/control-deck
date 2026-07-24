@@ -9,6 +9,7 @@ import CaffeineCard from './components/CaffeineCard';
 import AppMixerCard from './components/AppMixerCard';
 import SystemStatsCard from './components/SystemStatsCard';
 import ClipboardCard from './components/ClipboardCard';
+import CommandLogCard from './components/CommandLogCard';
 
 function SectionDivider({ label }: { label: string }) {
   return (
@@ -74,6 +75,7 @@ export default function App() {
 
               {caps.caffeine && <CaffeineCard state={state} />}
               {caps.clipboard && <ClipboardCard />}
+              <CommandLogCard log={state?.cmd_log ?? []} />
             </div>
           </div>
         </div>

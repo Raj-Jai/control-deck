@@ -14,6 +14,7 @@ A web‑based dashboard for a local Linux workstation, accessed from tablets and
 - **Caffeine** — toggle GNOME Caffeine extension (30m, 1h, or infinite)
 - **Lock Screen** — PIN‑protected dashboard lock with 6‑hour session
 - **Toggles** — Bluetooth, BT Speaker, WARP, Lock Desktop, ERP Login, and any custom commands from config
+- **Command Log** — Every action (play/pause, skip, seek, volume, brightness, ad-skip) is logged with a timestamp and displayed in real-time via SSE in a Command Log card on the dashboard, newest first
 - **Capability Detection** — frontend auto-hides cards whose backend dependencies are missing
 
 ## Architecture

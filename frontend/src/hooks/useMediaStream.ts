@@ -38,6 +38,11 @@ export interface PlayerState {
   length: number;
 }
 
+export interface CmdLogEntry {
+  time: string;
+  command: string;
+}
+
 export interface MediaState {
   title: string | null;
   artist: string | null;
@@ -60,6 +65,7 @@ export interface MediaState {
   sinks: SinkInfo[];
   app_streams: AppStreamInfo[];
   sys: SystemStats | null;
+  cmd_log: CmdLogEntry[];
 }
 
 interface UseMediaStreamResult {

@@ -23,7 +23,14 @@ func isFinite(v float64) bool {
 var dashPIN string
 var caffeineSD string
 var commandMap map[string][]string
-var adSkippedAt = make(map[string]time.Time)
+var (
+	adPending struct {
+		sync.Mutex
+		player string
+		length float64
+		setAt  time.Time
+	}
+)
 
 func buildCommandMap() {
 	caffeineSD = appCfg.CaffeineSchemaDir
@@ -97,6 +104,7 @@ type MediaState struct {
 	Sinks             []Sink        `json:"sinks"`
 	AppStreams        []AppStream   `json:"app_streams"`
 	Sys               *SystemStats  `json:"sys"`
+	CmdLog            []LogEntry    `json:"cmd_log"`
 }
 
 type PlayerState struct {
@@ -120,11 +128,19 @@ type SeekRequest struct {
 	Player   string  `json:"player,omitempty"`
 }
 
+type LogEntry struct {
+	Time    string `json:"time"`
+	Command string `json:"command"`
+}
+
 var (
 	clients      = make(map[chan string]bool)
 	clientsMu    sync.Mutex
 	artCachePath string
 	artCacheData string
+
+	cmdLog   []LogEntry
+	cmdLogMu sync.Mutex
 
 	cpuPrevIdle  uint64
 	cpuPrevTotal uint64
@@ -133,6 +149,18 @@ var (
 	pingOK bool
 	pingMu sync.RWMutex
 )
+
+func addLog(cmd string) {
+	cmdLogMu.Lock()
+	defer cmdLogMu.Unlock()
+	cmdLog = append(cmdLog, LogEntry{
+		Time:    time.Now().Format("15:04:05"),
+		Command: cmd,
+	})
+	if len(cmdLog) > 30 {
+		cmdLog = cmdLog[len(cmdLog)-30:]
+	}
+}
 
 func main() {
 	initConfig()
@@ -290,6 +318,8 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	addLog("▶ " + req.Command)
+
 	// Fire command in background thread for low-latency response
 	go func(cmdArgs []string) {
 		if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
@@ -324,6 +354,8 @@ func handleSeek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	addLog(fmt.Sprintf("seek %.1fs", req.Position))
+
 	go func(pos float64) {
 		p := req.Player
 		if p == "" {
@@ -355,6 +387,8 @@ func handleSetVolume(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
+	addLog(fmt.Sprintf("volume %.0f%%", req.Volume*100))
+
 	go func(v float64) {
 		cmd := exec.Command("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", fmt.Sprintf("%f", v))
 		if err := cmd.Run(); err != nil {
@@ -377,6 +411,8 @@ func handleSetBrightness(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
+	addLog(fmt.Sprintf("brightness %.0f%%", req.Brightness))
+
 	go func(v float64) {
 		cmd := exec.Command("brightnessctl", "set", fmt.Sprintf("%d%%", int(v)))
 		if err := cmd.Run(); err != nil {
@@ -470,6 +506,32 @@ func startMediaBroadcaster() {
 
 	for range ticker.C {
 		broadcastState()
+		checkAndSkipAds()
+	}
+}
+
+// checkAndSkipAds consumes the pending ad (stashed by fetchPlayerState)
+// and runs a bare playerctl position with zero preceding queries.
+func checkAndSkipAds() {
+	adPending.Lock()
+	p := adPending.player
+	l := adPending.length
+	adPending.player = ""
+	adPending.length = 0
+	adPending.Unlock()
+
+	if p == "" || l <= 0 {
+		return
+	}
+
+	addLog("ad-skip → seek end")
+	log.Printf("ad-skip: seeking on %s to %.0fs", p, l)
+	out, err := exec.Command("playerctl", "--player", p, "position",
+		fmt.Sprintf("%f", l)).CombinedOutput()
+	if err != nil {
+		log.Printf("ad-skip: FAILED on %s: %v | %s", p, err, string(out))
+	} else {
+		log.Printf("ad-skip: OK on %s", p)
 	}
 }
 
@@ -788,15 +850,19 @@ func fetchPlayerState(player string) PlayerState {
 
 	artStr, _ := runCmd("playerctl", "--player", player, "metadata", "mpris:artUrl")
 
-	// Auto-skip Spotify ads
-	if length > 0 && status == "Playing" && strings.Contains(strings.ToLower(title), "advertisement") {
-		if last, ok := adSkippedAt[player]; !ok || time.Since(last) > 30*time.Second {
-			adSkippedAt[player] = time.Now()
-			go func() {
-				exec.Command("playerctl", "--player", player, "position",
-					fmt.Sprintf("%.0f", length)).Run()
-				log.Printf("ad-skip: skipped \"%s\" on %s (length=%.0fs)", title, player, length)
-			}()
+	// Stash ad info for checkAndSkipAds to act on (zero preceding queries)
+	if length > 0 && status == "Playing" && title != "" {
+		lower := strings.ToLower(title)
+		if strings.Contains(lower, "advertisement") ||
+			strings.HasPrefix(lower, "ad") ||
+			strings.Contains(lower, "sponsored") {
+			adPending.Lock()
+			if time.Since(adPending.setAt) > 2*time.Second {
+				adPending.player = player
+				adPending.length = length
+				adPending.setAt = time.Now()
+			}
+			adPending.Unlock()
 		}
 	}
 
@@ -907,6 +973,11 @@ func fetchMPRISState() MediaState {
 	appStreams := fetchAppStreams()
 	players := fetchAllPlayers()
 
+	cmdLogMu.Lock()
+	logCopy := make([]LogEntry, len(cmdLog))
+	copy(logCopy, cmdLog)
+	cmdLogMu.Unlock()
+
 	return MediaState{
 		Title:       title,
 		Artist:      artist,
@@ -929,5 +1000,6 @@ func fetchMPRISState() MediaState {
 		Sinks:             sinks,
 		AppStreams:        appStreams,
 		Sys:               fetchSystemStats(),
+		CmdLog:            logCopy,
 	}
 }
