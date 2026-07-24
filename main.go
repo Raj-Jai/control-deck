@@ -48,6 +48,9 @@ func buildCommandMap() {
 		"previous":       {"playerctl", "previous"},
 		"seekBack10":     {"playerctl", "position", "10-"},
 		"seekFwd10":      {"playerctl", "position", "10+"},
+
+		"fullscreen":     {os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey", "f"},
+		"captions":       {os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey", "c"},
 		"volUp":          {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"},
 		"volDown":        {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"},
 		"mute":           {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"},
@@ -320,7 +323,8 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	addLog("▶ " + req.Command)
 
-	// Fire command in background thread for low-latency response
+	sendkeyBin := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
+
 	go func(cmdArgs []string) {
 		if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
 			p := req.Player
@@ -329,6 +333,14 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 			}
 			if p != "" && p != cmdArgs[1] {
 				cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
+			}
+		} else if (req.Command == "fullscreen" || req.Command == "captions") && cmdArgs[0] == sendkeyBin {
+			p := req.Player
+			if p == "" {
+				p = findBestPlayer()
+			}
+			if p != "" {
+				cmdArgs = []string{cmdArgs[0], cmdArgs[1], p}
 			}
 		}
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
@@ -510,8 +522,6 @@ func startMediaBroadcaster() {
 	}
 }
 
-// checkAndSkipAds consumes the pending ad (stashed by fetchPlayerState)
-// and runs a bare playerctl position with zero preceding queries.
 func checkAndSkipAds() {
 	adPending.Lock()
 	p := adPending.player
@@ -850,11 +860,9 @@ func fetchPlayerState(player string) PlayerState {
 
 	artStr, _ := runCmd("playerctl", "--player", player, "metadata", "mpris:artUrl")
 
-	// Stash ad info for checkAndSkipAds to act on (zero preceding queries)
 	if length > 0 && status == "Playing" && title != "" {
 		lower := strings.ToLower(title)
 		if strings.Contains(lower, "advertisement") ||
-			strings.HasPrefix(lower, "ad") ||
 			strings.Contains(lower, "sponsored") {
 			adPending.Lock()
 			if time.Since(adPending.setAt) > 2*time.Second {

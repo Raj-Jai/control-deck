@@ -65,7 +65,7 @@ export default function StepperControls({ state, caps }: StepperControlsProps) {
     : (bri >= 0 ? Math.round(bri) : localBri);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
       {/* Volume */}
       <div className="deck-card">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim mb-2">

@@ -73,7 +73,7 @@
 
 @layer components {
   .deck-card {
-    @apply rounded-xl p-4 border transition-all duration-200;
+    @apply rounded-xl p-4 border w-full transition-all duration-200;
     background: rgba(30, 41, 59, 0.6);
     backdrop-filter: blur(12px);
     border-color: rgba(255, 255, 255, 0.04);
@@ -94,7 +94,7 @@
 
   .toggle-card {
     @apply relative flex flex-col items-center justify-center gap-2.5
-      rounded-xl px-3 py-5 cursor-pointer select-none
+      rounded-xl px-3 py-5 cursor-pointer select-none w-full
       transition-all duration-150 overflow-hidden;
     background: rgba(30, 41, 59, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.04);

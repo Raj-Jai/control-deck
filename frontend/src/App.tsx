@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
@@ -27,10 +29,35 @@ export default function App() {
   const { state, loading, error } = useMediaStream();
   const caps = useCapabilities();
   useArtTheming(state?.art_url);
+  const [full, setFull] = useState(false);
+
+  useEffect(() => {
+    const cb = () => setFull(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', cb);
+    return () => document.removeEventListener('fullscreenchange', cb);
+  }, []);
+
+  const toggleFull = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen();
+    }
+  };
 
   return (
     <LockScreen>
-      <div className="min-h-[100dvh] flex flex-col">
+      <div className="min-h-[100dvh] flex flex-col relative">
+        <button
+          onClick={toggleFull}
+          className="fixed top-3 right-3 z-50 w-8 h-8 rounded-lg flex items-center justify-center
+            bg-black/40 backdrop-blur border border-white/10 text-deck-dim
+            hover:bg-deck-accent/20 hover:text-deck-accent hover:border-deck-accent/30
+            transition-all duration-100 active:scale-90"
+          title={full ? 'Exit fullscreen' : 'Fullscreen'}
+        >
+          {full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+        </button>
         <div className="flex-1 w-full max-w-6xl mx-auto p-3 sm:p-4 wide:p-6">
           {loading && (
             <div className="text-center text-deck-dim text-sm py-4">
