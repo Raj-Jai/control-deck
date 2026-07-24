@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -281,6 +282,7 @@ func main() {
 	initConfig()
 	buildCommandMap()
 	buildProfileCommandMap()
+	initVideoPlayerConfig()
 
 	// Serve frontend assets
 	http.Handle("/", http.FileServer(http.Dir(".")))
@@ -303,6 +305,9 @@ func main() {
 	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
 	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
 	http.HandleFunc("/api/window-stream", handleWindowSSE)
+
+	http.HandleFunc("/api/video/status", handleVideoStatus)
+	http.HandleFunc("/api/video/command", handleVideoCommand)
 
 	// Background tickers
 	go startMediaBroadcaster()
@@ -349,6 +354,8 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		"ffmpeg":      checkBinary("ffmpeg"),
 		"playerctl":   checkBinary("playerctl"),
 		"battery":     checkBattery(),
+		"mpv_socket":  checkMPVSocket(),
+		"vlc_http":    checkVLCInterface(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(caps)
@@ -385,6 +392,24 @@ func checkBluetooth() bool {
 	}
 	out, _ := exec.Command("rfkill", "list", "bluetooth").Output()
 	return len(out) > 0
+}
+
+func checkMPVSocket() bool {
+	conn, err := net.DialTimeout("unix", "/tmp/mpvsocket", 200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+func checkVLCInterface() bool {
+	resp, err := http.Get("http://localhost:8080/requests/status.json")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 func checkBattery() bool {

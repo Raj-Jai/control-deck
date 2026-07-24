@@ -54,6 +54,12 @@ var keyMap = map[string]uint16{
 	"left":  105,
 	"right": 106,
 	"v":     47,
+	"b":     48,
+	"e":     18,
+	"g":     34,
+	"h":     35,
+	"z":     44,
+	"x":     45,
 	"space": 57,
 	"j":     36,
 	"l":     38,
@@ -94,7 +100,7 @@ func writeEvent(fd uintptr, eType, code uint16, value int32) error {
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: sendkey <key> [player]")
-		fmt.Fprintln(os.Stderr, "keys: f, c, j, k, l, m, t, v, space, F11, F5, F9, F10, tab, esc, enter, up, down, left, right")
+		fmt.Fprintln(os.Stderr, "keys: f, c, b, e, g, h, j, k, l, m, t, v, z, x, space, F11, F5, F9, F10, tab, esc, enter, up, down, left, right")
 		fmt.Fprintln(os.Stderr, "ctrl combos: ctrl_c, ctrl_d, ctrl_z, ctrl_l, ctrl_a, ctrl_e, ctrl_w, ctrl_u")
 		fmt.Fprintln(os.Stderr, "shift combos: shift_., shift_,")
 		os.Exit(1)

@@ -97,3 +97,34 @@ export async function getAudioStreamStatus(): Promise<boolean> {
   return data.active;
 }
 
+export interface VideoTrack {
+  id: number;
+  title: string;
+  active: boolean;
+}
+
+export interface VideoStatus {
+  active_player: string;
+  sub_delay: number;
+  audio_delay: number;
+  aspect_ratio: string;
+  speed: number;
+  position: number;
+  length: number;
+  subtitles: VideoTrack[];
+  audio_tracks: VideoTrack[];
+}
+
+export async function fetchVideoStatus(): Promise<VideoStatus> {
+  const res = await fetch('/api/video/status');
+  return res.json();
+}
+
+export async function sendVideoCommand(action: string, payload?: Record<string, unknown>): Promise<void> {
+  await fetch('/api/video/command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, ...payload }),
+  });
+}
+
