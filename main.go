@@ -86,8 +86,9 @@ type MediaState struct {
 	CaffeineDuration  int    `json:"caffeine_duration"`
 	BluetoothOn       bool   `json:"bluetooth_on"`
 	WarpOn            bool   `json:"warp_on"`
-	AudioStreamActive bool   `json:"audio_stream_active"`
-	Sinks             []Sink `json:"sinks"`
+	AudioStreamActive bool        `json:"audio_stream_active"`
+	Sinks             []Sink      `json:"sinks"`
+	AppStreams        []AppStream `json:"app_streams"`
 	Sys               *SystemStats `json:"sys"`
 }
 
@@ -132,6 +133,8 @@ func main() {
 	http.HandleFunc("/api/clipboard/push", handleClipboardPush)
 	http.HandleFunc("/api/audio/sinks", handleGetSinks)
 	http.HandleFunc("/api/audio/set-sink", handleSetSink)
+	http.HandleFunc("/api/audio/app-streams", handleGetAppStreams)
+	http.HandleFunc("/api/audio/set-app-stream", handleSetAppStream)
 	http.HandleFunc("/api/audio-stream/stream", handleStreamPlay)
 	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
 	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
@@ -788,6 +791,7 @@ func fetchMPRISState() MediaState {
 	streamMgr.mu.Unlock()
 
 	sinks, _ := fetchSinks()
+	appStreams := fetchAppStreams()
 
 	return MediaState{
 		Title:       title,
@@ -807,6 +811,7 @@ func fetchMPRISState() MediaState {
 		WarpOn:            warpOn,
 		AudioStreamActive: streamActive,
 		Sinks:             sinks,
+		AppStreams:        appStreams,
 		Sys:               fetchSystemStats(),
 	}
 }

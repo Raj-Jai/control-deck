@@ -7,6 +7,7 @@ import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
 import CaffeineCard from './components/CaffeineCard';
 import AudioStreamCard from './components/AudioStreamCard';
+import AppMixerCard from './components/AppMixerCard';
 import SystemStatsCard from './components/SystemStatsCard';
 import ClipboardCard from './components/ClipboardCard';
 
@@ -43,6 +44,7 @@ export default function App() {
               <ToggleGrid state={state} />
               {caps.caffeine && <CaffeineCard state={state} />}
               {caps.ffmpeg && <AudioStreamCard state={state} />}
+              <AppMixerCard streams={state?.app_streams ?? []} />
               {caps.clipboard && <ClipboardCard />}
               <SystemStatsCard state={state} />
             </div>

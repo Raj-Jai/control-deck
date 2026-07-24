@@ -12,6 +12,13 @@ export interface SystemStats {
   ping_ok: boolean;
 }
 
+export interface AppStreamInfo {
+  id: number;
+  app: string;
+  volume: number;
+  muted: boolean;
+}
+
 export interface SinkInfo {
   id: number;
   name: string;
@@ -37,6 +44,7 @@ export interface MediaState {
   warp_on: boolean;
   audio_stream_active: boolean;
   sinks: SinkInfo[];
+  app_streams: AppStreamInfo[];
   sys: SystemStats | null;
 }
 

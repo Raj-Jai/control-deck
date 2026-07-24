@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -15,6 +17,13 @@ type Sink struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Default     bool   `json:"default"`
+}
+
+type AppStream struct {
+	ID     int    `json:"id"`
+	App    string `json:"app"`
+	Volume int    `json:"volume"`  // 0-100
+	Muted  bool   `json:"muted"`
 }
 
 func handleGetSinks(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +105,95 @@ func fetchSinks() ([]Sink, error) {
 	}
 
 	return sinks, nil
+}
+
+func handleGetAppStreams(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fetchAppStreams())
+}
+
+func handleSetAppStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		ID     int  `json:"id"`
+		Volume *int `json:"volume,omitempty"`
+		Muted  *bool `json:"muted,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Volume != nil {
+		pct := math.Max(0, math.Min(100, float64(*req.Volume)))
+		linear := math.Pow(pct/100, 2)
+		volStr := fmt.Sprintf("%.6f", linear)
+		exec.Command("pactl", "set-sink-input-volume", strconv.Itoa(req.ID), volStr).Run()
+	}
+	if req.Muted != nil {
+		val := "0"
+		if *req.Muted {
+			val = "1"
+		}
+		exec.Command("pactl", "set-sink-input-mute", strconv.Itoa(req.ID), val).Run()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func fetchAppStreams() []AppStream {
+	out, err := exec.Command("pactl", "list", "sink-inputs").Output()
+	if err != nil {
+		return nil
+	}
+
+	var streams []AppStream
+	var current AppStream
+
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.HasPrefix(line, "Sink Input #") {
+			if current.ID != 0 {
+				streams = append(streams, current)
+			}
+			var id int
+			fmt.Sscanf(line, "Sink Input #%d", &id)
+			current = AppStream{ID: id, Volume: 100}
+		} else if strings.HasPrefix(line, "\tMute: ") {
+			current.Muted = strings.TrimSpace(strings.TrimPrefix(line, "\tMute: ")) == "yes"
+		} else if strings.HasPrefix(line, "\tVolume: ") {
+			parts := strings.Fields(line)
+			for i, p := range parts {
+				if p == "front-left:" || p == "front-right:" {
+					if i+1 < len(parts) {
+						v := strings.TrimSuffix(parts[i+1], "/")
+						v = strings.TrimSpace(v)
+						if pct, err := strconv.Atoi(strings.TrimSuffix(v, "%")); err == nil {
+							current.Volume = pct
+						}
+					}
+				}
+			}
+		} else if strings.HasPrefix(line, "\t\tapplication.name") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				current.App = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+
+	if current.ID != 0 {
+		streams = append(streams, current)
+	}
+	return streams
 }
 
 func getDefaultSinkName() string {
