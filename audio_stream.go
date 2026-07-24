@@ -83,6 +83,8 @@ func (m *StreamManager) stopLocked() {
 
 func (m *StreamManager) readLoop() {
 	buf := make([]byte, frameBytes)
+	var sampleCount int64
+	firstPTS := time.Now().UnixMilli()
 	for {
 		select {
 		case <-m.stopCh:
@@ -102,7 +104,8 @@ func (m *StreamManager) readLoop() {
 			return
 		}
 
-		pts := time.Now().UnixMilli()
+		pts := firstPTS + (sampleCount * 1000 / int64(sampleRate))
+		sampleCount += int64(frameSamples)
 
 		frame := make([]byte, 1+8+frameBytes)
 		frame[0] = frameTypeAudio

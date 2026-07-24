@@ -8,6 +8,10 @@ function readUint64BE(dv: DataView, offset: number): number {
   return hi * 4294967296 + lo;
 }
 
+const FRAME_SAMPLES = 2048;
+const BATCH_FRAMES = 20;
+const TARGET_DELAY = 1500;
+
 class SyncedAudioPlayer {
   private ctx: AudioContext | null = null;
   private ws: WebSocket | null = null;
@@ -21,11 +25,14 @@ class SyncedAudioPlayer {
   private channels = 2;
   private bytesPerSample = 2;
 
-  private targetDelay = 400;
-
-  private destroyed = false;
   private ntpResolve: (() => void) | null = null;
   private ntpOffsets: number[] = [];
+
+  private accChannels: Float32Array[] = [];
+  private accFrames = 0;
+  private firstBatchPTS = 0;
+
+  private scheduledEnd = 0;
 
   hostTimeMs(): number {
     return (performance.now() - this.perfBase) + this.dateBase + this.clockOffset;
@@ -35,15 +42,8 @@ class SyncedAudioPlayer {
     listeners.forEach(cb => cb(this.active));
   }
 
-  private cleanupWS(prevWs: WebSocket) {
-    prevWs.onmessage = null;
-    prevWs.onclose = null;
-    prevWs.onerror = null;
-    prevWs.close();
-  }
-
-  private processPCM(data: ArrayBuffer): Float32Array[] {
-    const int16 = new Int16Array(data, 0, Math.floor(data.byteLength / 2));
+  private pcmToFloat(data: ArrayBuffer): Float32Array[] {
+    const int16 = new Int16Array(data);
     const samplesPerChannel = int16.length / this.channels;
     const result: Float32Array[] = [];
     for (let ch = 0; ch < this.channels; ch++) {
@@ -56,37 +56,67 @@ class SyncedAudioPlayer {
     return result;
   }
 
-  private scheduleFrame(pts: number, pcm: ArrayBuffer) {
-    if (!this.ctx || !this.active) return;
+  private flushBatch() {
+    if (!this.ctx || this.accFrames === 0) return;
 
-    const targetPlay = pts + this.targetDelay;
+    const totalFrames = this.accFrames * FRAME_SAMPLES;
+    const buffer = this.ctx.createBuffer(this.channels, totalFrames, this.sampleRate);
+    for (let ch = 0; ch < this.channels; ch++) {
+      buffer.getChannelData(ch).set(this.accChannels[ch]);
+    }
+
+    const targetPlay = this.firstBatchPTS + TARGET_DELAY;
     const now = this.hostTimeMs();
     const delay = targetPlay - now;
-
-    if (delay < 0) return;
-
-    const channels = this.processPCM(pcm);
-    const frames = channels[0].length;
-
-    const audioBuffer = this.ctx.createBuffer(this.channels, frames, this.sampleRate);
-    for (let ch = 0; ch < this.channels; ch++) {
-      audioBuffer.getChannelData(ch).set(channels[ch]);
+    if (delay < 0) {
+      this.accFrames = 0;
+      return;
     }
 
     const source = this.ctx.createBufferSource();
-    source.buffer = audioBuffer;
+    source.buffer = buffer;
     source.connect(this.ctx.destination);
 
-    const ctxTime = this.ctx.currentTime + delay / 1000;
+    const baseTime = Math.max(this.ctx.currentTime, this.scheduledEnd);
+    const ctxTime = baseTime + delay / 1000;
     source.start(ctxTime);
+
+    this.scheduledEnd = ctxTime + totalFrames / this.sampleRate;
+    this.accFrames = 0;
+  }
+
+  private feedFrame(pts: number, pcm: ArrayBuffer) {
+    if (!this.ctx || !this.active) return;
+
+    const channels = this.pcmToFloat(pcm);
+
+    if (this.accFrames === 0) {
+      this.firstBatchPTS = pts;
+      this.accChannels = channels.map(c => new Float32Array(c));
+    } else {
+      for (let ch = 0; ch < this.channels; ch++) {
+        const old = this.accChannels[ch];
+        const n = old.length + channels[ch].length;
+        const merged = new Float32Array(n);
+        merged.set(old);
+        merged.set(channels[ch], old.length);
+        this.accChannels[ch] = merged;
+      }
+    }
+    this.accFrames++;
+
+    if (this.accFrames >= BATCH_FRAMES) {
+      this.flushBatch();
+    }
   }
 
   async start() {
     if (this.active) return;
-    this.destroyed = false;
 
     const ctx = new AudioContext();
     this.ctx = ctx;
+    this.accFrames = 0;
+    this.scheduledEnd = 0;
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const w = new WebSocket(`${proto}//${location.host}/api/audio-stream/ws`);
@@ -141,7 +171,7 @@ class SyncedAudioPlayer {
               const innerDv = new DataView(ev.data);
               if (innerDv.getUint8(0) === 0x02) {
                 const pts = readUint64BE(innerDv, 1);
-                this.scheduleFrame(pts, ev.data.slice(9));
+                this.feedFrame(pts, ev.data.slice(9));
               }
             };
 
@@ -202,7 +232,9 @@ class SyncedAudioPlayer {
   }
 
   stop() {
-    this.destroyed = true;
+    if (this.accFrames > 0) {
+      this.flushBatch();
+    }
     this.active = false;
     if (this.ws) {
       this.ws.onmessage = null;
@@ -215,6 +247,7 @@ class SyncedAudioPlayer {
       this.ctx.close();
       this.ctx = null;
     }
+    this.accFrames = 0;
     this.notify();
   }
 
