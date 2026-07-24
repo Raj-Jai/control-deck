@@ -89,18 +89,32 @@ type MediaState struct {
 	BluetoothOn       bool   `json:"bluetooth_on"`
 	WarpOn            bool   `json:"warp_on"`
 	BTSinkOn          bool   `json:"bt_sink_on"`
-	AudioStreamActive bool        `json:"audio_stream_active"`
-	Sinks             []Sink      `json:"sinks"`
-	AppStreams        []AppStream `json:"app_streams"`
-	Sys               *SystemStats `json:"sys"`
+	AudioStreamActive bool         `json:"audio_stream_active"`
+	Players           []PlayerState `json:"players"`
+	Sinks             []Sink        `json:"sinks"`
+	AppStreams        []AppStream   `json:"app_streams"`
+	Sys               *SystemStats  `json:"sys"`
+}
+
+type PlayerState struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Title    string  `json:"title"`
+	Artist   string  `json:"artist"`
+	Status   string  `json:"status"`
+	ArtURL   string  `json:"art_url"`
+	Position float64 `json:"position"`
+	Length   float64 `json:"length"`
 }
 
 type CommandRequest struct {
 	Command string `json:"command"`
+	Player  string `json:"player,omitempty"`
 }
 
 type SeekRequest struct {
 	Position float64 `json:"position"`
+	Player   string  `json:"player,omitempty"`
 }
 
 var (
@@ -276,7 +290,10 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 	// Fire command in background thread for low-latency response
 	go func(cmdArgs []string) {
 		if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
-			p := findBestPlayer()
+			p := req.Player
+			if p == "" {
+				p = findBestPlayer()
+			}
 			if p != "" && p != cmdArgs[1] {
 				cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
 			}
@@ -305,7 +322,10 @@ func handleSeek(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func(pos float64) {
-		p := findBestPlayer()
+		p := req.Player
+		if p == "" {
+			p = findBestPlayer()
+		}
 		if p == "" {
 			return
 		}
@@ -729,6 +749,66 @@ func fetchSystemStats() *SystemStats {
 	}
 }
 
+func playerPrettyName(id string) string {
+	if idx := strings.Index(id, "."); idx > 0 {
+		return strings.Title(id[:idx])
+	}
+	return strings.Title(id)
+}
+
+func fetchPlayerState(player string) PlayerState {
+	title, _ := runCmd("playerctl", "--player", player, "metadata", "xesam:title")
+	artist, _ := runCmd("playerctl", "--player", player, "metadata", "xesam:artist")
+	status, _ := runCmd("playerctl", "--player", player, "status")
+
+	lenStr, _ := runCmd("playerctl", "--player", player, "metadata", "mpris:length")
+	var length float64
+	if l, e := strconv.ParseFloat(lenStr, 64); e == nil {
+		length = l / 1000000.0
+	}
+	if length < 0 || !isFinite(length) {
+		length = 0
+	}
+
+	posStr, _ := runCmd("playerctl", "--player", player, "position")
+	var posSeconds float64
+	if p, e := strconv.ParseFloat(posStr, 64); e == nil {
+		posSeconds = p
+	}
+	if posSeconds < 0 || !isFinite(posSeconds) {
+		posSeconds = 0
+	}
+
+	artStr, _ := runCmd("playerctl", "--player", player, "metadata", "mpris:artUrl")
+
+	return PlayerState{
+		ID:       player,
+		Name:     playerPrettyName(player),
+		Title:    title,
+		Artist:   artist,
+		Status:   status,
+		ArtURL:   resolveArtURL(artStr),
+		Position: posSeconds,
+		Length:   length,
+	}
+}
+
+func fetchAllPlayers() []PlayerState {
+	out, err := runCmd("playerctl", "-l")
+	if err != nil || out == "" {
+		return nil
+	}
+	ids := strings.Fields(out)
+	players := make([]PlayerState, 0, len(ids))
+	for _, id := range ids {
+		ps := fetchPlayerState(id)
+		if ps.Title != "" || ps.Status == "Playing" || ps.Status == "Paused" {
+			players = append(players, ps)
+		}
+	}
+	return players
+}
+
 func fetchMPRISState() MediaState {
 	title, _ := runPlayerctlBest("metadata", "xesam:title")
 	artist, _ := runPlayerctlBest("metadata", "xesam:artist")
@@ -799,6 +879,7 @@ func fetchMPRISState() MediaState {
 
 	sinks, _ := fetchSinks()
 	appStreams := fetchAppStreams()
+	players := fetchAllPlayers()
 
 	return MediaState{
 		Title:       title,
@@ -818,6 +899,7 @@ func fetchMPRISState() MediaState {
 		BTSinkOn:         btSinkOn,
 		WarpOn:            warpOn,
 		AudioStreamActive: streamActive,
+		Players:           players,
 		Sinks:             sinks,
 		AppStreams:        appStreams,
 		Sys:               fetchSystemStats(),

@@ -6,11 +6,11 @@ import {
   Pause,
   SkipForward,
 } from 'lucide-react';
-import type { MediaState } from '../hooks/useMediaStream';
+import type { PlayerState } from '../hooks/useMediaStream';
 import { triggerCommand, seekTo } from '../services/apiService';
 
 interface NowPlayingCardProps {
-  state: MediaState | null;
+  player: PlayerState | null;
 }
 
 function formatTime(seconds: number): string {
@@ -20,33 +20,31 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export default function NowPlayingCard({ state }: NowPlayingCardProps) {
+export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const dragging = useRef(false);
   const dragVal = useRef(0);
   const lastSeek = useRef(0);
   const [renderTick, setRenderTick] = useState(0);
-  const artLoadedRef = useRef(false);
   const [artError, setArtError] = useState(false);
 
-  const isOffline = !state?.title;
-  const status = state?.status ?? 'Stopped';
-  const pos = state?.position ?? 0;
-  const len = state?.length ?? 0;
-  const artUrl = state?.art_url ?? null;
+  const isOffline = !player;
+  const status = player?.status ?? 'Stopped';
+  const pos = player?.position ?? 0;
+  const len = player?.length ?? 0;
+  const artUrl = player?.art_url ?? null;
+  const playerId = player?.id;
 
-  // Re-render when SSE updates position (only when not dragging)
   useEffect(() => {
     if (!dragging.current) {
       setRenderTick((t) => t + 1);
     }
   }, [pos]);
 
-  const displayTitle = isOffline ? 'No Track' : state.title;
-  const displayArtist = isOffline ? 'Idle / Disconnected' : state.artist ?? 'Unknown Artist';
+  const displayTitle = isOffline ? 'No Track' : player.title;
+  const displayArtist = isOffline ? 'Idle / Disconnected' : player.artist ?? 'Unknown Artist';
 
   return (
     <div className="deck-card flex flex-col gap-3.5">
-      {/* Art + Info row */}
       <div className="flex items-center gap-3">
         <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0 bg-deck-surface2">
           {artUrl && !artError ? (
@@ -54,7 +52,7 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
               src={artUrl}
               alt=""
               className="w-full h-full object-cover"
-              onLoad={() => { artLoadedRef.current = true; setArtError(false); }}
+              onLoad={() => setArtError(false)}
               onError={() => setArtError(true)}
             />
           ) : (
@@ -90,7 +88,6 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
         </div>
       </div>
 
-      {/* Timeline */}
       <div>
         <input
           type="range"
@@ -105,20 +102,20 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
             const now = Date.now();
             if (now - lastSeek.current >= 100) {
               lastSeek.current = now;
-              seekTo(v);
+              seekTo(v, playerId);
             }
           }}
           onMouseUp={() => {
             if (dragging.current) {
               dragging.current = false;
-              seekTo(dragVal.current);
+              seekTo(dragVal.current, playerId);
               setRenderTick((t) => t + 1);
             }
           }}
           onTouchEnd={() => {
             if (dragging.current) {
               dragging.current = false;
-              seekTo(dragVal.current);
+              seekTo(dragVal.current, playerId);
               setRenderTick((t) => t + 1);
             }
           }}
@@ -131,19 +128,18 @@ export default function NowPlayingCard({ state }: NowPlayingCardProps) {
         </div>
       </div>
 
-      {/* Playback controls */}
       <div className="flex justify-center items-center gap-3">
-        <button className="media-btn" onClick={() => triggerCommand('previous')} disabled={isOffline}>
+        <button className="media-btn" onClick={() => triggerCommand('previous', playerId)} disabled={isOffline}>
           <SkipBack size={18} />
         </button>
         <button
           className="media-btn w-12 h-12"
-          onClick={() => triggerCommand('playpause')}
+          onClick={() => triggerCommand('playpause', playerId)}
           disabled={isOffline}
         >
           {status === 'Playing' ? <Pause size={20} /> : <Play size={20} />}
         </button>
-        <button className="media-btn" onClick={() => triggerCommand('next')} disabled={isOffline}>
+        <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline}>
           <SkipForward size={18} />
         </button>
       </div>

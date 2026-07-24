@@ -2,7 +2,7 @@ import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
 import { useArtTheming } from './hooks/useArtTheming';
-import NowPlayingCard from './components/NowPlayingCard';
+import PlayerCarousel from './components/PlayerCarousel';
 import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
 import CaffeineCard from './components/CaffeineCard';
@@ -35,7 +35,7 @@ export default function App() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Left column */}
             <div className="flex flex-col gap-3">
-              {caps.playerctl && <NowPlayingCard state={state} />}
+              {caps.playerctl && <PlayerCarousel players={state?.players ?? []} />}
               <StepperControls state={state} caps={caps} />
             </div>
 

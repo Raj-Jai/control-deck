@@ -27,6 +27,17 @@ export interface SinkInfo {
   default: boolean;
 }
 
+export interface PlayerState {
+  id: string;
+  name: string;
+  title: string | null;
+  artist: string | null;
+  status: string | null;
+  art_url: string | null;
+  position: number;
+  length: number;
+}
+
 export interface MediaState {
   title: string | null;
   artist: string | null;
@@ -45,6 +56,7 @@ export interface MediaState {
   bt_sink_on: boolean;
   warp_on: boolean;
   audio_stream_active: boolean;
+  players: PlayerState[];
   sinks: SinkInfo[];
   app_streams: AppStreamInfo[];
   sys: SystemStats | null;

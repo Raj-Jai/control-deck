@@ -2,24 +2,24 @@ import { DECK_CONFIG } from '../config/deckConfig';
 
 const { api } = DECK_CONFIG;
 
-export async function triggerCommand(cmd: string): Promise<void> {
+export async function triggerCommand(cmd: string, player?: string): Promise<void> {
   try {
     await fetch(api.command, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmd }),
+      body: JSON.stringify({ command: cmd, ...(player ? { player } : {}) }),
     });
   } catch (err) {
     console.error('Command failed:', err);
   }
 }
 
-export async function seekTo(position: number): Promise<void> {
+export async function seekTo(position: number, player?: string): Promise<void> {
   try {
     await fetch(api.seek, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position }),
+      body: JSON.stringify({ position, ...(player ? { player } : {}) }),
     });
   } catch (err) {
     console.error('Seek failed:', err);
