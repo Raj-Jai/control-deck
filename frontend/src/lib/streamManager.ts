@@ -1,3 +1,6 @@
+const WARMUP_MS = 2000;
+const WARMUP_BYTES = 28000;
+
 type Listener = (active: boolean) => void;
 
 const listeners = new Set<Listener>();
@@ -8,8 +11,12 @@ let ws: WebSocket | null = null;
 let ms: MediaSource | null = null;
 let sb: SourceBuffer | null = null;
 let audio: HTMLAudioElement | null = null;
-let queue: ArrayBuffer[] = [];
+let liveQueue: ArrayBuffer[] = [];
+let preQueue: ArrayBuffer[] = [];
 let draining = false;
+let startedAt = 0;
+let totalBytes = 0;
+let warmupTimer: ReturnType<typeof setTimeout> | null = null;
 
 function notify() {
   listeners.forEach(cb => cb(active));
@@ -17,9 +24,38 @@ function notify() {
 
 function feed() {
   if (!sb || draining || sb.updating) return;
-  if (queue.length === 0) return;
+  const q = liveQueue.length > 0 ? liveQueue : preQueue;
+  if (q.length === 0) return;
   draining = true;
-  sb.appendBuffer(queue.shift()!);
+  sb.appendBuffer(q.shift()!);
+}
+
+function warmupCheck() {
+  if (active || !opening) return;
+  const elapsed = Date.now() - startedAt;
+  if (elapsed >= WARMUP_MS && totalBytes >= WARMUP_BYTES) {
+    warmupTimer = null;
+    beginPlayback();
+  }
+}
+
+function beginPlayback() {
+  if (!audio || !opening) return;
+  audio.play().then(() => {
+    if (!opening) { stop(); return; }
+    active = true;
+    opening = false;
+    notify();
+    if (preQueue.length > 0) {
+      liveQueue.push(...preQueue);
+      preQueue = [];
+      feed();
+    }
+  }).catch(() => {
+    opening = false;
+    cleanup();
+    notify();
+  });
 }
 
 function connectWs(retries = 3) {
@@ -27,10 +63,31 @@ function connectWs(retries = 3) {
   const w = new WebSocket(`${proto}//${location.host}/api/audio-stream/ws`);
   w.binaryType = 'arraybuffer';
   ws = w;
+  let gotSync = false;
 
   w.onmessage = (e) => {
-    queue.push(e.data as ArrayBuffer);
-    feed();
+    if (!gotSync && typeof e.data === 'string') {
+      gotSync = true;
+      try {
+        const msg = JSON.parse(e.data);
+        startedAt = Math.floor(msg.startedAt / 1_000_000);
+      } catch { return; }
+      warmupCheck();
+      return;
+    }
+
+    if (!gotSync) return;
+
+    const buf = e.data as ArrayBuffer;
+    totalBytes += buf.byteLength;
+
+    if (!active) {
+      preQueue.push(buf);
+      warmupCheck();
+    } else {
+      liveQueue.push(buf);
+      feed();
+    }
   };
 
   w.onclose = w.onerror = () => {
@@ -57,6 +114,9 @@ export function isActive(): boolean {
 export function start() {
   if (active || opening) return;
   opening = true;
+  preQueue = [];
+  liveQueue = [];
+  totalBytes = 0;
 
   const m = new MediaSource();
   const a = new Audio();
@@ -91,24 +151,15 @@ export function start() {
       feed();
     };
 
-    connectWs();
     ms = m;
     audio = a;
-
-    a.play().then(() => {
-      active = true;
-      opening = false;
-      notify();
-    }).catch(() => {
-      opening = false;
-      cleanup();
-      notify();
-    });
+    connectWs();
   };
 }
 
 export function stop() {
   opening = false;
+  if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = null; }
   cleanup();
   notify();
 }
@@ -125,8 +176,11 @@ function cleanupSingle(m: MediaSource, a: HTMLAudioElement) {
 function cleanup() {
   active = false;
   opening = false;
+  if (warmupTimer) { clearTimeout(warmupTimer); warmupTimer = null; }
   if (ws) { ws.close(); ws = null; }
-  queue = [];
+  liveQueue = [];
+  preQueue = [];
+  totalBytes = 0;
   draining = false;
   if (ms && ms.readyState === 'open') {
     try { ms.endOfStream(); } catch {}

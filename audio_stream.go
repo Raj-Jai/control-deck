@@ -22,6 +22,7 @@ type StreamManager struct {
 	stdout    *bufio.Reader
 	listeners map[chan []byte]bool
 	stopCh    chan struct{}
+	startedAt time.Time
 }
 
 func (m *StreamManager) start() error {
@@ -31,6 +32,8 @@ func (m *StreamManager) start() error {
 	if m.ffCmd != nil {
 		return nil
 	}
+
+	m.startedAt = time.Now()
 
 	cmd := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error",
 		"-f", "pulse", "-i", "@DEFAULT_MONITOR@",
@@ -152,7 +155,15 @@ func handleStreamWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer streamMgr.removeListener(ch)
 
+	// Send start timestamp as first frame for cross-device sync
+	streamMgr.mu.Lock()
+	t0 := streamMgr.startedAt.UnixNano()
+	streamMgr.mu.Unlock()
+	syncMsg, _ := json.Marshal(map[string]int64{"startedAt": t0})
 	ctx := r.Context()
+	if err := conn.Write(ctx, websocket.MessageText, syncMsg); err != nil {
+		return
+	}
 	for {
 		select {
 		case <-ctx.Done():
