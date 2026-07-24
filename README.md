@@ -1,41 +1,77 @@
 # Control Deck
 
-A web‑based dashboard for a local Linux workstation, accessed from tablets and phones over the local network. Media controls, system stats, clipboard sync, audio streaming, and more.
+A web-based local network dashboard for a Linux workstation, served to tablets and phones over LAN. Media control, system telemetry, clipboard sync, multi-device synchronized audio streaming, and a swipeable touch UI.
 
 ## Features
 
-- **Now Playing** — MPRIS media controls for all active players (swipe between them): play/pause, next/previous, timeline seek, album art
-- **Per‑App Audio Mixer** — view and control volume/mute of individual app audio streams (PulseAudio sink-inputs)
-- **Volume & Brightness** — sliders with night‑light toggle and audio output sink switching
-- **System Stats** — CPU, RAM, battery, temperature, network info with ping status
-- **Clipboard Sync** — bi‑directional pull/push between browser and host (wl‑paste/wl‑copy + xclip)
-- **Audio Stream** — real‑time MP3 stream from the host's audio output to the browser
-- **BT Speaker** — make the host discoverable as a Bluetooth speaker (phone → laptop streaming)
-- **Caffeine** — toggle GNOME Caffeine extension (30m, 1h, or infinite)
-- **Lock Screen** — PIN‑protected dashboard lock with 6‑hour session
-- **Toggles** — Bluetooth, BT Speaker, WARP, Lock Desktop, ERP Login, and any custom commands from config
-- **Command Log** — Every action (play/pause, skip, seek, volume, brightness, ad-skip) is logged with a timestamp and displayed in real-time via SSE in a Command Log card on the dashboard, newest first
+- **Multi-Deck Touch UI** — 5 swipeable pages (Home / Media / Video / Code / Terminal) with `scroll-snap` carousel, dot indicators, and fixed bottom nav bar
+- **Now Playing** — MPRIS media controls across all active players: play/pause, next/prev, seek, volume, album art. Swipeable carousel when multiple players are active
+- **Synchronized Audio Stream** — real-time PCM audio from the host's audio output (`@DEFAULT_MONITOR@`) broadcast to every connected device via WebSocket, with NTP-based clock sync and Web Audio API scheduling for sample-accurate multi-device alignment
+- **Per-App Audio Mixer** — view and control volume/mute of individual PulseAudio sink-inputs
+- **Volume & Brightness** — sliders, night-light toggle, audio output sink switching
+- **System Stats** — CPU, RAM, battery, temperature, network info, ping status
+- **Clipboard Sync** — bi-directional pull/push between browser and host (wl-paste/wl-copy + xclip)
+- **Speed Control** — 8-step playback speed toggle (0.25x–2.0x) for YouTube and video players via keystroke injection
+- **Window Detection** — GNOME Shell D-Bus extension + godbus signal listener for instant focus events; app routing matrix maps `wm_class` to the correct deck page (YouTube enrichment via window title)
+- **Custom Commands** — configurable CLI commands exposed as toggle buttons (ERP login, WARP, etc.)
+- **Sendkey Tool** — keystroke injection via `/dev/uinput` for shift combos, arrows, F-keys, ctrl combos; optionally raises MPRIS windows via D-Bus
+- **Toggles** — Bluetooth, BT Speaker, WARP, Lock Desktop, Caffeine, ERP Login, Night Light, Audio Stream
+- **Command Log** — every action logged with timestamp, displayed in real-time via SSE
 - **Capability Detection** — frontend auto-hides cards whose backend dependencies are missing
+- **Dashboard Lock** — optional PIN lock with 6-hour session
 
 ## Architecture
 
 ```
-┌──────────────┐    HTTP/SSE     ┌──────────────┐
-│   Go Server  │ ◄─────────────► │  React PWA   │
-│  (port 8080) │                 │  (tablet)    │
-│              │                 │              │
-│  ffmpeg ─────┼──MP3 chunked HTTP──►  <audio>  │
-│              │                 │              │
-│  playerctl ──┼──SSE: all players──►  Carousel │
-│              │                 │              │
-│  pactl ──────┼──SSE: app streams►  Mixer     │
-└──────────────┘                 └──────────────┘
+┌───────────────────┐     HTTP/SSE/WS      ┌──────────────────┐
+│   Go Server       │ ◄──────────────────► │  React PWA       │
+│  (localhost:8080) │                      │  (tablet/phone)  │
+│                   │                      │                  │
+│  ffmpeg ──────PCM────WebSocket────────►  │  Web Audio API   │
+│  PulseAudio       │   NTP sync +         │  AudioContext     │
+│  @DEFAULT_MONITOR │   timestamped        │  + buffer         │
+│                   │   frames             │  scheduling       │
+│  MPRIS ────SSE───────all players──────►  │  PlayerCarousel   │
+│  (playerctl)      │                      │                  │
+│                   │                      │  ┌────────────┐  │
+│  Window Focus ──SSE──active app────────►  │  │ 5-Deck UI  │  │
+│  (D-Bus signal)   │                      │  └────────────┘  │
+│                   │                      │                  │
+│  pactl ────SSE───────app streams───────►  │  Mixer sliders  │
+└───────────────────┘                      └──────────────────┘
 ```
 
-- **Backend**: Go (`main.go`) — MPRIS polling, command execution, clipboard, audio capture, SSE broadcast
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS — single‑page PWA
-- **Audio**: FFmpeg captures PulseAudio monitor → MP3 → chunked HTTP → `<audio>` element
-- **State**: All dashboard state (media, sinks, app streams, system stats) pushed via SSE — no polling
+### Audio Streaming Pipeline
+
+```
+PulseAudio @DEFAULT_MONITOR
+       │
+       ▼
+FFmpeg → PCM s16le 48000Hz stereo → pipe
+       │
+       ▼
+readLoop() → io.ReadFull(8192B) → sample-accurate PTS
+       │
+       ▼
+Binary frame: [0x02 | PTS(uint64 BE) | PCM data]
+       │
+       ▼
+WebSocket fan-out to N clients
+       │
+       ▼
+SyncedAudioPlayer (Web Audio API):
+  1. NTP clock sync (10-ping, outlier rejection)
+  2. Accumulate 3 frames (~128ms) per batch
+  3. PI drift compensator adjusts playbackRate ±0.3%
+  4. 2ms GainNode crossfade at buffer boundaries
+  5. AudioBufferSourceNode.start(ctxTime)
+```
+
+- **Backend**: Go — MPRIS polling, command execution, clipboard, audio capture, SSE broadcast, WebSocket audio streaming
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS — single-page PWA
+- **Audio**: FFmpeg captures PulseAudio monitor → raw PCM → WebSocket → Web Audio API `AudioContext` with NTP-synchronized sample-accurate scheduling
+- **State**: Media state, app focus, system stats pushed via SSE — no polling
+- **Window Detection**: GNOME Shell D-Bus extension + Go godbus signal listener for sub-100ms focus change events
 
 ## Setup
 
@@ -47,51 +83,36 @@ A web‑based dashboard for a local Linux workstation, accessed from tablets and
 
 **Linux packages (install via your distro's package manager):**
 
-| Package / Tool | Required by | Purpose |
-|----------------|-------------|---------|
-| `playerctl` | Media controls | Query MPRIS players, play/pause/next/prev/seek |
-| `wireplumber` (or `pipewire-media-session`) | Volume control | `wpctl` — get/set/mute system volume |
-| `pulseaudio-utils` | Audio sink switching + app mixer | `pactl` — list sinks, set default, list sink-inputs |
-| `brightnessctl` | Brightness control | Get/set display backlight |
-| `ffmpeg` | Audio streaming | Capture PulseAudio monitor → MP3 stream |
-| `wl-clipboard` **or** `xclip` | Clipboard sync | Bi-directional clipboard pull/push (Wayland: `wl-copy`/`wl-paste`, X11: `xclip`) |
-| `iw` / `wireless-tools` | System stats | `iwgetid` — get current Wi-Fi SSID |
-| `bluez` | Bluetooth toggles | `bluetoothctl` — connect/discover; `rfkill` — toggle radio |
-| `networkmanager` | System info | `hostname -I` — get local IP |
-| `iputils` | Ping check | `ping` — internet connectivity indicator |
-| `systemd` | Lock Desktop | `loginctl lock-session` |
-| `glib2` / `glib2-tools` | GNOME toggles | `gsettings` — night light and Caffeine extension (GNOME only) |
-| `bash` | Caffeine commands | Compound `gsettings` invocations for Caffeine timers |
+| Package / Tool | Purpose |
+|----------------|---------|
+| `playerctl` | Query MPRIS players, play/pause/next/prev/seek |
+| `wireplumber` (or `pipewire-media-session`) | `wpctl` — get/set/mute system volume |
+| `pulseaudio-utils` | `pactl` — list sinks, set default, list sink-inputs |
+| `brightnessctl` | Get/set display backlight |
+| `ffmpeg` | PulseAudio monitor capture → PCM stream |
+| `wl-clipboard` **or** `xclip` | Bi-directional clipboard (Wayland: `wl-copy`/`wl-paste`, X11: `xclip`) |
+| `iw` / `wireless-tools` | `iwgetid` — current Wi-Fi SSID |
+| `bluez` | `bluetoothctl` — connect/discover; `rfkill` — toggle radio |
+| `networkmanager` | `hostname -I` — local IP |
+| `iputils` | `ping` — internet connectivity indicator |
+| `systemd` | `loginctl lock-session` |
+| `glib2` / `glib2-tools` | `gsettings` — night light and Caffeine extension (GNOME) |
 
-**GNOME Shell extension (optional):**
-- [Caffeine](https://extensions.gnome.org/extension/517/caffeine/) — needed for the Caffeine toggle card
+**GNOME Shell extension (required for instant window detection):**
+- Install from source:
+  ```sh
+  mkdir -p ~/.local/share/gnome-shell/extensions
+  cp -r window-focus-dbus@jairaj.dev ~/.local/share/gnome-shell/extensions/
+  ```
+  Requires a GNOME Shell restart (Alt+F2, `r`) or logout/login.
 
-### Install
+### Build
 
 ```sh
 git clone git@github.com:Raj-Jai/control-deck.git
 cd control-deck
-```
-
-#### Backend
-
-```sh
 go build -o tab-dashboard .
-```
-
-#### Frontend
-
-```sh
-cd frontend
-npm install
-npm run build
-```
-
-### TLS (optional, for PWA)
-
-```sh
-openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt \
-  -days 3650 -nodes -subj "/CN=$(hostname)"
+cd frontend && npm install && npm run build && cd ..
 ```
 
 ### Run
@@ -100,78 +121,58 @@ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt \
 ./tab-dashboard
 ```
 
-Open `http://localhost:8080/static/` in a browser, or `https://localhost:8443/static/` for PWA support.
+Open `http://localhost:8080/` in a browser. For PWA / HTTPS support, see below.
 
-## Auto‑start (systemd)
+### TLS (for PWA on HTTPS)
 
 ```sh
-go build -o ~/.local/bin/tab-dashboard .
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt \
+  -days 3650 -nodes -subj "/CN=$(hostname)"
+# HTTPS served on :8443; HTTP :8080 stays active
+```
+
+### Auto-start (systemd user service)
+
+```sh
 cp tab-dashboard.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now tab-dashboard
 loginctl enable-linger
 ```
 
-## Network Discovery (mDNS/Avahi)
+### Network Discovery (mDNS/Avahi)
 
 ```sh
 sudo cp avahi-service.conf /etc/avahi/services/tab-dashboard.service
 ```
 
-The dashboard becomes discoverable as `control-deck.local` on the local network.
+The dashboard is then discoverable as `control-deck.local`.
 
 ## Configuration
 
-All user-specific settings live in `config.json`:
-
-```json
-{
-  "pin": "1234",
-  "bt_mac": "AA:BB:CC:DD:EE:FF",
-  "ping_target": "8.8.8.8",
-  "http_port": 8080,
-  "https_port": 8443,
-  "caffeine_schema_dir": "",
-  "custom_commands": {
-    "erpLogin": ["erp", "login"],
-    "warpOn": ["warp-cli", "connect"],
-    "warpOff": ["warp-cli", "disconnect"]
-  }
-}
-```
+All user-specific settings in `config.json`:
 
 | Key | Description |
 |-----|-------------|
 | `pin` | Dashboard lock-screen PIN |
-| `bt_mac` | Bluetooth MAC address for the "Connect Headphone" button |
+| `bt_mac` | Bluetooth MAC address for headphone connect |
 | `ping_target` | Host to ping for internet connectivity check |
-| `http_port` / `https_port` | Listen ports (HTTP and HTTPS) |
-| `caffeine_schema_dir` | Override GSettings schema directory for Caffeine extension (auto-derived from `$HOME` if empty) |
+| `http_port` / `https_port` | Listen ports |
+| `caffeine_schema_dir` | Override GSettings schema dir for Caffeine (auto-derived from `$HOME` if empty) |
 | `custom_commands` | Extra CLI commands exposed as toggle/deck actions |
 
-To override without modifying `config.json` (e.g., for local dev):
-
+Override without modifying `config.json`:
 ```sh
-cp config.json config.local.json
-# edit config.local.json
-CONFIG_PATH=config.local.json ./control-deck
+CONFIG_PATH=config.local.json ./tab-dashboard
 ```
-
-- **Player selection**: `findBestPlayer()` scores MPRIS players to prefer real media players over browser tabs
-- **Multi‑player**: All active MPRIS players appear in a swipeable carousel; each has independent controls
-- **App mixer**: Per‑app volume sliders use `pactl` sink-inputs, pushed via SSE
-- **BT Speaker**: `bluetoothctl discoverable on && pairable on` — phone can stream to host
-- **Capabilities**: `GET /api/capabilities` returns detected features; frontend hides unsupported cards
 
 ## Development
 
 ```sh
-cd frontend && npm run dev   # Vite dev server with HMR
+cd frontend && npm run dev   # Vite dev server with HMR (port 5173)
 ```
 
-Rebuild frontend: `cd frontend && npm run build`
-
-The built assets go to `../static/` which the Go server serves at runtime.
+Frontend built assets go to `../static/` which the Go server serves at runtime.
 
 ## License
 
