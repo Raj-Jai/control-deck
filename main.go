@@ -133,13 +133,13 @@ func buildProfileCommandMap() {
 		"tmux_win_prev": {"bash", "-c", "tmux previous-window 2>/dev/null || true"},
 		"tmux_win_next": {"bash", "-c", "tmux next-window 2>/dev/null || true"},
 
-		// Media playback speed
-		"speed_0.5":  {"bash", "-c", "playerctl --player $PLAYER position 0 && playerctl --player $PLAYER rate 0.5"},
-		"speed_0.75": {"bash", "-c", "playerctl --player $PLAYER rate 0.75"},
-		"speed_1":    {"bash", "-c", "playerctl --player $PLAYER rate 1"},
-		"speed_1.25": {"bash", "-c", "playerctl --player $PLAYER rate 1.25"},
-		"speed_1.5":  {"bash", "-c", "playerctl --player $PLAYER rate 1.5"},
-		"speed_2":    {"bash", "-c", "playerctl --player $PLAYER rate 2"},
+		// Media playback speed via gdbus (Rate property on MPRIS)
+		"speed_0.5":  {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 0.5>" 2>/dev/null`},
+		"speed_0.75": {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 0.75>" 2>/dev/null`},
+		"speed_1":    {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 1>" 2>/dev/null`},
+		"speed_1.25": {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 1.25>" 2>/dev/null`},
+		"speed_1.5":  {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 1.5>" 2>/dev/null`},
+		"speed_2":    {"sh", "-c", `gdbus call --session --dest "$PLAYER_BUS" --object-path /org/mpris/MediaPlayer2 --method org.freedesktop.DBus.Properties.Set org.mpris.MediaPlayer2.Player Rate "<double 2>" 2>/dev/null`},
 
 		// Video player sync
 		"aspect_default": {"bash", "-c", sk + " v"},
@@ -237,6 +237,9 @@ var (
 	lastWMClass string
 	lastTitle   string
 	windowMu    sync.Mutex
+
+	mediaPlaying   bool
+	mediaPlayingMu sync.RWMutex
 )
 
 func addLog(cmd string) {
@@ -414,29 +417,26 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	sendkeyBin := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
 
-	go func(cmdArgs []string) {
-		if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
+		go func(cmdArgs []string) {
 			p := req.Player
 			if p == "" {
 				p = findBestPlayer()
 			}
-			if p != "" && p != cmdArgs[1] {
-				cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
+			if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
+				if p != "" && p != cmdArgs[1] {
+					cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
+				}
+			} else if (req.Command == "fullscreen" || req.Command == "captions") && cmdArgs[0] == sendkeyBin {
+				if p != "" {
+					cmdArgs = []string{cmdArgs[0], cmdArgs[1], p}
+				}
 			}
-		} else if (req.Command == "fullscreen" || req.Command == "captions") && cmdArgs[0] == sendkeyBin {
-			p := req.Player
-			if p == "" {
-				p = findBestPlayer()
+			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+			cmd.Env = append(os.Environ(), "PLAYER="+p, "PLAYER_BUS=org.mpris.MediaPlayer2."+p)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				log.Printf("Error executing %v: %v | Output: %s", cmdArgs, err, string(out))
 			}
-			if p != "" {
-				cmdArgs = []string{cmdArgs[0], cmdArgs[1], p}
-			}
-		}
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Error executing %v: %v | Output: %s", cmdArgs, err, string(out))
-		}
-	}(args)
+		}(args)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
@@ -584,6 +584,17 @@ func broadcastState() {
 	}
 
 	state := fetchMPRISState()
+
+	mediaPlayingMu.Lock()
+	mediaPlaying = false
+	for _, p := range state.Players {
+		if p.Status == "Playing" {
+			mediaPlaying = true
+			break
+		}
+	}
+	mediaPlayingMu.Unlock()
+
 	data, err := json.Marshal(state)
 	if err != nil {
 		return
@@ -643,47 +654,68 @@ type WindowFocusEvent struct {
 }
 
 func detectFocusedWindow() (string, string) {
-	cls, title := "", ""
+	mediaPlayingMu.RLock()
+	mp := mediaPlaying
+	mediaPlayingMu.RUnlock()
+	if mp {
+		return "chromium", "(media playing)"
+	}
 
+	if cls, title := detectByShell(); cls != "" {
+		return cls, title
+	}
+
+	if cls, title := detectByXdotool(); cls != "" {
+		return cls, title
+	}
+
+	return detectByProcessList()
+}
+
+func detectByShell() (string, string) {
 	out, err := exec.Command("gdbus", "call", "--session",
 		"--dest", "org.gnome.Shell",
 		"--object-path", "/org/gnome/Shell",
 		"--method", "org.gnome.Shell.Eval",
 		"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
 			".meta_window.get_wm_class()||''").CombinedOutput()
-	if err == nil {
-		s := strings.TrimSpace(string(out))
-		if strings.HasPrefix(s, "(true, '") && strings.Count(s, "'") >= 2 {
-			cls = strings.Split(s, "'")[1]
-		}
+	if err != nil {
+		return "", ""
 	}
-	if cls != "" {
-		out2, _ := exec.Command("gdbus", "call", "--session",
-			"--dest", "org.gnome.Shell",
-			"--object-path", "/org/gnome/Shell",
-			"--method", "org.gnome.Shell.Eval",
-			"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
-				".meta_window.get_title()||''").CombinedOutput()
-		s := strings.TrimSpace(string(out2))
-		if strings.HasPrefix(s, "(true, '") && strings.Count(s, "'") >= 2 {
-			title = strings.Split(s, "'")[1]
-		}
-		return cls, title
+	s := strings.TrimSpace(string(out))
+	if !strings.HasPrefix(s, "(true, '") || strings.Count(s, "'") < 2 {
+		return "", ""
+	}
+	cls := strings.Split(s, "'")[1]
+	if cls == "" {
+		return "", ""
 	}
 
-	out, err = exec.Command("xdotool", "getactivewindow", "getwindowclassname").CombinedOutput()
-	if err == nil {
-		cls = strings.TrimSpace(string(out))
+	out2, _ := exec.Command("gdbus", "call", "--session",
+		"--dest", "org.gnome.Shell",
+		"--object-path", "/org/gnome/Shell",
+		"--method", "org.gnome.Shell.Eval",
+		"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
+			".meta_window.get_title()||''").CombinedOutput()
+	s2 := strings.TrimSpace(string(out2))
+	title := ""
+	if strings.HasPrefix(s2, "(true, '") && strings.Count(s2, "'") >= 2 {
+		title = strings.Split(s2, "'")[1]
 	}
-	out, err = exec.Command("xdotool", "getactivewindow", "getwindowname").CombinedOutput()
-	if err == nil {
-		title = strings.TrimSpace(string(out))
-	}
-	if cls != "" {
-		return cls, title
-	}
+	return cls, title
+}
 
-	cls, title = detectByProcessList()
+func detectByXdotool() (string, string) {
+	out, err := exec.Command("xdotool", "getactivewindow", "getwindowclassname").CombinedOutput()
+	if err != nil {
+		return "", ""
+	}
+	cls := strings.TrimSpace(string(out))
+	if cls == "" {
+		return "", ""
+	}
+	out2, _ := exec.Command("xdotool", "getactivewindow", "getwindowname").CombinedOutput()
+	title := strings.TrimSpace(string(out2))
 	return cls, title
 }
 
@@ -691,45 +723,41 @@ func detectByProcessList() (string, string) {
 	procs := map[string]string{
 		"chromium": "chromium", "chrome": "chromium", "firefox": "firefox",
 		"brave": "brave", "vlc": "vlc", "mpv": "mpv",
+		"gnome-terminal": "gnome-terminal", "kitty": "kitty",
+		"alacritty": "alacritty", "termite": "termite", "foot": "foot",
+		"wezterm": "wezterm", "konsole": "konsole", "windows-terminal": "windows-terminal",
 		"code": "code", "code-oss": "code",
 	}
+	score := map[string]int{
+		"chromium": 1, "chrome": 1, "firefox": 1, "brave": 1,
+		"vlc": 2, "mpv": 2,
+		"gnome-terminal": 4, "kitty": 4, "alacritty": 4, "termite": 4,
+		"foot": 4, "wezterm": 4, "konsole": 4,
+		"code": 3, "code-oss": 3,
+	}
 
-	out, err := exec.Command("ps", "aux").CombinedOutput()
+	out, err := exec.Command("ps", "aux", "--sort=-start_time").CombinedOutput()
 	if err != nil {
 		return "", ""
 	}
 	lines := strings.Split(string(out), "\n")
 
-	var cls string
-	priority := 0
+	bestCls := ""
+	bestPrio := 0
 
 	for _, line := range lines {
 		lower := strings.ToLower(line)
 		for proc, wmClass := range procs {
 			if strings.Contains(lower, proc) {
-				p := 1
-				if proc == "chrome" || proc == "chromium" {
-					p = 1
-				}
-				if proc == "code" || proc == "code-oss" {
-					p = 3
-				}
-				if proc == "vlc" || proc == "mpv" {
-					if strings.Contains(lower, "playerctl") || strings.Contains(lower, "mpris") {
-						p = 4
-					} else {
-						p = 2
-					}
-				}
-				if p > priority {
-					priority = p
-					cls = wmClass
+				p := score[proc]
+				if p > bestPrio {
+					bestPrio = p
+					bestCls = wmClass
 				}
 			}
 		}
 	}
-
-	return cls, cls
+	return bestCls, bestCls
 }
 
 func startWindowWatcher() {
