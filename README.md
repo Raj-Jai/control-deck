@@ -4,31 +4,37 @@ A web‑based dashboard for a local Linux workstation, accessed from tablets and
 
 ## Features
 
-- **Now Playing** — MPRIS media controls: play/pause, next/previous, timeline seek, album art
+- **Now Playing** — MPRIS media controls for all active players (swipe between them): play/pause, next/previous, timeline seek, album art
+- **Per‑App Audio Mixer** — view and control volume/mute of individual app audio streams (PulseAudio sink-inputs)
 - **Volume & Brightness** — sliders with night‑light toggle and audio output sink switching
 - **System Stats** — CPU, RAM, battery, temperature, network info with ping status
 - **Clipboard Sync** — bi‑directional pull/push between browser and host (wl‑paste/wl‑copy + xclip)
 - **Audio Stream** — real‑time MP3 stream from the host's audio output to the browser
+- **BT Speaker** — make the host discoverable as a Bluetooth speaker (phone → laptop streaming)
 - **Caffeine** — toggle GNOME Caffeine extension (30m, 1h, or infinite)
 - **Lock Screen** — PIN‑protected dashboard lock with 6‑hour session
-- **Toggles** — Bluetooth, WARP, Lock Desktop, ERP Login
+- **Toggles** — Bluetooth, BT Speaker, WARP, Lock Desktop, ERP Login, and any custom commands from config
+- **Capability Detection** — frontend auto-hides cards whose backend dependencies are missing
 
 ## Architecture
 
 ```
-┌──────────────┐     HTTP/SSE/WS      ┌──────────────┐
-│   Go Server  │ ◄──────────────────► │  React PWA   │
-│  (port 8080) │                      │  (tablet)    │
-│              │                      │              │
-│  ffmpeg ─────┼──audio stream────────┤  <audio>     │
-│              │                      │              │
-│  playerctl ──┼──MPRIS state─────────┤  NowPlaying  │
-└──────────────┘                      └──────────────┘
+┌──────────────┐    HTTP/SSE     ┌──────────────┐
+│   Go Server  │ ◄─────────────► │  React PWA   │
+│  (port 8080) │                 │  (tablet)    │
+│              │                 │              │
+│  ffmpeg ─────┼──MP3 chunked HTTP──►  <audio>  │
+│              │                 │              │
+│  playerctl ──┼──SSE: all players──►  Carousel │
+│              │                 │              │
+│  pactl ──────┼──SSE: app streams►  Mixer     │
+└──────────────┘                 └──────────────┘
 ```
 
 - **Backend**: Go (`main.go`) — MPRIS polling, command execution, clipboard, audio capture, SSE broadcast
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS — single‑page PWA
 - **Audio**: FFmpeg captures PulseAudio monitor → MP3 → chunked HTTP → `<audio>` element
+- **State**: All dashboard state (media, sinks, app streams, system stats) pushed via SSE — no polling
 
 ## Setup
 
@@ -44,17 +50,17 @@ A web‑based dashboard for a local Linux workstation, accessed from tablets and
 |----------------|-------------|---------|
 | `playerctl` | Media controls | Query MPRIS players, play/pause/next/prev/seek |
 | `wireplumber` (or `pipewire-media-session`) | Volume control | `wpctl` — get/set/mute system volume |
-| `pulseaudio-utils` | Audio sink switching | `pactl` — list sinks, set default audio output |
+| `pulseaudio-utils` | Audio sink switching + app mixer | `pactl` — list sinks, set default, list sink-inputs |
 | `brightnessctl` | Brightness control | Get/set display backlight |
 | `ffmpeg` | Audio streaming | Capture PulseAudio monitor → MP3 stream |
 | `wl-clipboard` **or** `xclip` | Clipboard sync | Bi-directional clipboard pull/push (Wayland: `wl-copy`/`wl-paste`, X11: `xclip`) |
 | `iw` / `wireless-tools` | System stats | `iwgetid` — get current Wi-Fi SSID |
-| `bluez` | Bluetooth toggles | `bluetoothctl` — connect to paired headset; `rfkill` — toggle Bluetooth radio |
-| `networkmanager` | System info | `hostname -I` — get local IP (pre-installed on most distros) |
-| `iputils` | Ping check | `ping` — internet connectivity indicator (pre-installed) |
-| `systemd` | Lock Desktop | `loginctl lock-session` (pre-installed) |
+| `bluez` | Bluetooth toggles | `bluetoothctl` — connect/discover; `rfkill` — toggle radio |
+| `networkmanager` | System info | `hostname -I` — get local IP |
+| `iputils` | Ping check | `ping` — internet connectivity indicator |
+| `systemd` | Lock Desktop | `loginctl lock-session` |
 | `glib2` / `glib2-tools` | GNOME toggles | `gsettings` — night light and Caffeine extension (GNOME only) |
-| `bash` | Caffeine commands | Compound `gsettings` invocations for Caffeine timers (pre-installed) |
+| `bash` | Caffeine commands | Compound `gsettings` invocations for Caffeine timers |
 
 **GNOME Shell extension (optional):**
 - [Caffeine](https://extensions.gnome.org/extension/517/caffeine/) — needed for the Caffeine toggle card
@@ -83,7 +89,6 @@ npm run build
 ### TLS (optional, for PWA)
 
 ```sh
-# Generate self-signed cert
 openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt \
   -days 3650 -nodes -subj "/CN=$(hostname)"
 ```
@@ -141,7 +146,7 @@ All user-specific settings live in `config.json`:
 | `ping_target` | Host to ping for internet connectivity check |
 | `http_port` / `https_port` | Listen ports (HTTP and HTTPS) |
 | `caffeine_schema_dir` | Override GSettings schema directory for Caffeine extension (auto-derived from `$HOME` if empty) |
-| `custom_commands` | Extra CLI commands exposed as toggle/deck actions. These may require external tools not in standard repos (e.g., `warp-cli`, `erp`) — see `custom_commands` in your `config.json` |
+| `custom_commands` | Extra CLI commands exposed as toggle/deck actions |
 
 To override without modifying `config.json` (e.g., for local dev):
 
@@ -151,8 +156,11 @@ cp config.json config.local.json
 CONFIG_PATH=config.local.json ./control-deck
 ```
 
-- **Sinks**: Audio output toggle detects BT vs internal via `bluez` in sink name
-- **Player**: `findBestPlayer()` in `main.go` scores MPRIS players to prefer real media players over browser tabs
+- **Player selection**: `findBestPlayer()` scores MPRIS players to prefer real media players over browser tabs
+- **Multi‑player**: All active MPRIS players appear in a swipeable carousel; each has independent controls
+- **App mixer**: Per‑app volume sliders use `pactl` sink-inputs, pushed via SSE
+- **BT Speaker**: `bluetoothctl discoverable on && pairable on` — phone can stream to host
+- **Capabilities**: `GET /api/capabilities` returns detected features; frontend hides unsupported cards
 
 ## Development
 
