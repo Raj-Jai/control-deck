@@ -45,8 +45,8 @@ A web‑based dashboard for a local Linux workstation, accessed from tablets and
 ### Install
 
 ```sh
-git clone <repo-url> tab-dashboard
-cd tab-dashboard
+git clone git@github.com:Raj-Jai/control-deck.git
+cd control-deck
 ```
 
 #### Backend
@@ -99,7 +99,41 @@ The dashboard becomes discoverable as `control-deck.local` on the local network.
 
 ## Configuration
 
-- **PIN**: Change `dashPIN` in `main.go` (default `"0616"`)
+All user-specific settings live in `config.json`:
+
+```json
+{
+  "pin": "0616",
+  "bt_mac": "88:D0:39:7D:66:CC",
+  "ping_target": "8.8.8.8",
+  "http_port": 8080,
+  "https_port": 8443,
+  "caffeine_schema_dir": "",
+  "custom_commands": {
+    "erpLogin": ["erp", "login"],
+    "warpOn": ["warp-cli", "connect"],
+    "warpOff": ["warp-cli", "disconnect"]
+  }
+}
+```
+
+| Key | Description |
+|-----|-------------|
+| `pin` | Dashboard lock-screen PIN |
+| `bt_mac` | Bluetooth MAC address for the "Connect Headphone" button |
+| `ping_target` | Host to ping for internet connectivity check |
+| `http_port` / `https_port` | Listen ports (HTTP and HTTPS) |
+| `caffeine_schema_dir` | Override GSettings schema directory for Caffeine extension (auto-derived from `$HOME` if empty) |
+| `custom_commands` | Extra CLI commands exposed as toggle/deck actions |
+
+To override without modifying `config.json` (e.g., for local dev):
+
+```sh
+cp config.json config.local.json
+# edit config.local.json
+CONFIG_PATH=config.local.json ./control-deck
+```
+
 - **Sinks**: Audio output toggle detects BT vs internal via `bluez` in sink name
 - **Player**: `findBestPlayer()` in `main.go` scores MPRIS players to prefer real media players over browser tabs
 

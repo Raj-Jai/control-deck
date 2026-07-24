@@ -20,34 +20,43 @@ func isFinite(v float64) bool {
 	return !math.IsInf(v, 0) && !math.IsNaN(v)
 }
 
-// Caffeine schema directory (GNOME Shell extension)
-var caffeineSD = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
-var dashPIN = "0616"
+var dashPIN string
+var caffeineSD string
+var commandMap map[string][]string
 
-// CommandMap routes web deck actions directly to Linux CLI utilities.
-var commandMap = map[string][]string{
-	"playpause":      {"playerctl", "play-pause"},
-	"next":           {"playerctl", "next"},
-	"previous":       {"playerctl", "previous"},
-	"volUp":          {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"},
-	"volDown":        {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"},
-	"mute":           {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"},
-	"brightnessUp":   {"brightnessctl", "set", "+10%"},
-	"brightnessDown": {"brightnessctl", "set", "10%-"},
-	"lock":           {"loginctl", "lock-session"},
-	"bluetoothOn":    {"rfkill", "unblock", "bluetooth"},
-	"bluetoothOff":   {"rfkill", "block", "bluetooth"},
-	"btConnect":      {"bluetoothctl", "connect", "88:D0:39:7D:66:CC"},
-	"warpOn":         {"warp-cli", "connect"},
-	"warpOff":        {"warp-cli", "disconnect"},
-	// Add your script paths here if needed
-	"erpLogin": {"erp", "login"},
-	"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
-	"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
-	"caffeineOff": {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
-	"caffeineOn":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
-	"caffeine30":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
-	"caffeine60":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+func buildCommandMap() {
+	caffeineSD = appCfg.CaffeineSchemaDir
+	if caffeineSD == "" {
+		caffeineSD = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
+	}
+	dashPIN = appCfg.PIN
+	if dashPIN == "" {
+		dashPIN = "0616"
+	}
+
+	commandMap = map[string][]string{
+		"playpause":      {"playerctl", "play-pause"},
+		"next":           {"playerctl", "next"},
+		"previous":       {"playerctl", "previous"},
+		"volUp":          {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%+"},
+		"volDown":        {"wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"},
+		"mute":           {"wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"},
+		"brightnessUp":   {"brightnessctl", "set", "+10%"},
+		"brightnessDown": {"brightnessctl", "set", "10%-"},
+		"lock":           {"loginctl", "lock-session"},
+		"bluetoothOn":    {"rfkill", "unblock", "bluetooth"},
+		"bluetoothOff":   {"rfkill", "block", "bluetooth"},
+		"btConnect":      {"bluetoothctl", "connect", appCfg.BTMAC},
+		"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
+		"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
+		"caffeineOff": {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
+		"caffeineOn":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"caffeine30":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"caffeine60":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+	}
+	for k, v := range appCfg.CustomCommands {
+		commandMap[k] = v
+	}
 }
 
 type SystemStats struct {
@@ -103,6 +112,9 @@ var (
 )
 
 func main() {
+	initConfig()
+	buildCommandMap()
+
 	// Serve frontend assets
 	http.Handle("/", http.FileServer(http.Dir(".")))
 
@@ -125,12 +137,23 @@ func main() {
 	go startMediaBroadcaster()
 	go startPingChecker()
 
-	port := ":8080"
+	pingTarget := appCfg.PingTarget
+	if pingTarget == "" {
+		pingTarget = "8.8.8.8"
+	}
+
+	port := fmt.Sprintf(":%d", appCfg.HTTPPort)
+	if appCfg.HTTPPort == 0 {
+		port = ":8080"
+	}
 	log.Printf("Control Deck running on http://localhost%s\n", port)
 
 	// TLS server for PWA (Chrome requires HTTPS for display: standalone)
 	go func() {
-		httpsPort := ":8443"
+		httpsPort := fmt.Sprintf(":%d", appCfg.HTTPSPort)
+		if appCfg.HTTPSPort == 0 {
+			httpsPort = ":8443"
+		}
 		log.Printf("HTTPS on https://localhost%s (accept self-signed cert once)", httpsPort)
 		if err := http.ListenAndServeTLS(httpsPort, "server.crt", "server.key", nil); err != nil {
 			log.Printf("TLS server: %v", err)
@@ -481,8 +504,12 @@ func runPlayerctlBest(args ...string) (string, error) {
 }
 
 func startPingChecker() {
+	target := appCfg.PingTarget
+	if target == "" {
+		target = "8.8.8.8"
+	}
 	for {
-		err := exec.Command("ping", "-c", "1", "-W", "2", "8.8.8.8").Run()
+		err := exec.Command("ping", "-c", "1", "-W", "2", target).Run()
 		pingMu.Lock()
 		pingOK = err == nil
 		pingMu.Unlock()
