@@ -39,9 +39,16 @@ export default function AppMixerCard({ streams }: { streams: AppStreamInfo[] }) 
           return (
             <div key={s.id} className="deck-card !p-2 !bg-white/[0.03]">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-deck-text truncate min-w-0 mr-2">
-                  {s.app || 'Unknown'}
-                </span>
+                <div className="min-w-0 mr-2 flex-1">
+                  <span className="text-xs font-medium text-deck-text truncate block">
+                    {s.app || 'Unknown'}
+                  </span>
+                  {s.media_name && s.media_name !== s.app && (
+                    <span className="text-[10px] text-deck-dim truncate block">
+                      {s.media_name}
+                    </span>
+                  )}
+                </div>
                 <button
                   className={`icon-btn w-6 h-6 flex-shrink-0 ${
                     s.muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : 'text-deck-text'

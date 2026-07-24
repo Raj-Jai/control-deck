@@ -15,6 +15,7 @@ export interface SystemStats {
 export interface AppStreamInfo {
   id: number;
   app: string;
+  media_name: string;
   volume: number;
   muted: boolean;
 }

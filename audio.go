@@ -20,10 +20,11 @@ type Sink struct {
 }
 
 type AppStream struct {
-	ID     int    `json:"id"`
-	App    string `json:"app"`
-	Volume int    `json:"volume"`  // 0-100
-	Muted  bool   `json:"muted"`
+	ID        int    `json:"id"`
+	App       string `json:"app"`
+	MediaName string `json:"media_name"`
+	Volume    int    `json:"volume"`  // 0-100
+	Muted     bool   `json:"muted"`
 }
 
 func handleGetSinks(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +184,11 @@ func fetchAppStreams() []AppStream {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
 				current.App = strings.Trim(strings.TrimSpace(parts[1]), `" `)
+			}
+		} else if strings.Contains(line, "media.name") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				current.MediaName = strings.Trim(strings.TrimSpace(parts[1]), `" `)
 			}
 		}
 	}
