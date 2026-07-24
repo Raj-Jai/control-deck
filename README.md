@@ -34,13 +34,30 @@ A web‑based dashboard for a local Linux workstation, accessed from tablets and
 
 ### Prerequisites
 
+**Languages & build tools:**
 - Go 1.21+
 - Node.js 18+
-- `playerctl` (media controls)
-- `pulseaudio-utils` / PipeWire (audio capture)
-- `brightnessctl` (backlight control)
-- `wl-clipboard` or `xclip` (clipboard sync)
-- `wpctl` (WirePlumber volume control)
+
+**Linux packages (install via your distro's package manager):**
+
+| Package / Tool | Required by | Purpose |
+|----------------|-------------|---------|
+| `playerctl` | Media controls | Query MPRIS players, play/pause/next/prev/seek |
+| `wireplumber` (or `pipewire-media-session`) | Volume control | `wpctl` — get/set/mute system volume |
+| `pulseaudio-utils` | Audio sink switching | `pactl` — list sinks, set default audio output |
+| `brightnessctl` | Brightness control | Get/set display backlight |
+| `ffmpeg` | Audio streaming | Capture PulseAudio monitor → MP3 stream |
+| `wl-clipboard` **or** `xclip` | Clipboard sync | Bi-directional clipboard pull/push (Wayland: `wl-copy`/`wl-paste`, X11: `xclip`) |
+| `iw` / `wireless-tools` | System stats | `iwgetid` — get current Wi-Fi SSID |
+| `bluez` | Bluetooth toggles | `bluetoothctl` — connect to paired headset; `rfkill` — toggle Bluetooth radio |
+| `networkmanager` | System info | `hostname -I` — get local IP (pre-installed on most distros) |
+| `iputils` | Ping check | `ping` — internet connectivity indicator (pre-installed) |
+| `systemd` | Lock Desktop | `loginctl lock-session` (pre-installed) |
+| `glib2` / `glib2-tools` | GNOME toggles | `gsettings` — night light and Caffeine extension (GNOME only) |
+| `bash` | Caffeine commands | Compound `gsettings` invocations for Caffeine timers (pre-installed) |
+
+**GNOME Shell extension (optional):**
+- [Caffeine](https://extensions.gnome.org/extension/517/caffeine/) — needed for the Caffeine toggle card
 
 ### Install
 
@@ -124,7 +141,7 @@ All user-specific settings live in `config.json`:
 | `ping_target` | Host to ping for internet connectivity check |
 | `http_port` / `https_port` | Listen ports (HTTP and HTTPS) |
 | `caffeine_schema_dir` | Override GSettings schema directory for Caffeine extension (auto-derived from `$HOME` if empty) |
-| `custom_commands` | Extra CLI commands exposed as toggle/deck actions |
+| `custom_commands` | Extra CLI commands exposed as toggle/deck actions. These may require external tools not in standard repos (e.g., `warp-cli`, `erp`) — see `custom_commands` in your `config.json` |
 
 To override without modifying `config.json` (e.g., for local dev):
 
