@@ -22,7 +22,7 @@ function formatTime(seconds: number): string {
 
 export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const dragging = useRef(false);
-  const dragVal = useRef(0);
+  const [localPos, setLocalPos] = useState<number | null>(null);
   const [artError, setArtError] = useState(false);
 
   const isOffline = !player;
@@ -33,8 +33,16 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const artUrl = player?.art_url ?? null;
   const playerId = player?.id;
 
+  const displayVal = localPos !== null ? localPos : Math.floor(pos);
+
   const displayTitle = isOffline ? 'No Track' : (player.title || 'Idle');
   const displayArtist = isOffline ? 'Idle / Disconnected' : (player.artist || '');
+
+  const commitSeek = (v: number) => {
+    dragging.current = false;
+    setLocalPos(null);
+    seekTo(v, playerId);
+  };
 
   return (
     <div className="deck-card flex flex-col gap-3.5">
@@ -86,28 +94,19 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
           type="range"
           min={0}
           max={len > 0 ? Math.floor(len) : 100}
-          value={dragging.current ? dragVal.current : Math.floor(pos)}
+          value={displayVal}
           onChange={(e) => {
-            dragVal.current = Number(e.target.value);
+            const v = Number(e.target.value);
             dragging.current = true;
+            setLocalPos(v);
           }}
-          onMouseUp={() => {
-            if (dragging.current) {
-              dragging.current = false;
-              seekTo(dragVal.current, playerId);
-            }
-          }}
-          onTouchEnd={() => {
-            if (dragging.current) {
-              dragging.current = false;
-              seekTo(dragVal.current, playerId);
-            }
-          }}
+          onMouseUp={() => commitSeek(localPos !== null ? localPos : Math.floor(pos))}
+          onTouchEnd={() => commitSeek(localPos !== null ? localPos : Math.floor(pos))}
           className="w-full"
           disabled={isOffline || isIdle}
         />
         <div className="flex justify-between text-[11px] text-deck-dim mt-1">
-          <span>{formatTime(pos)}</span>
+          <span>{formatTime(displayVal)}</span>
           <span>{len > 0 ? formatTime(len) : '--:--'}</span>
         </div>
       </div>
