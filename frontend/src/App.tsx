@@ -4,7 +4,7 @@ import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
 import { useArtTheming } from './hooks/useArtTheming';
-import { useActiveWindow } from './hooks/useActiveWindow';
+import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
 import PlayerCarousel from './components/PlayerCarousel';
 import SystemStatsCard from './components/SystemStatsCard';
 import StepperControls from './components/StepperControls';
@@ -27,15 +27,9 @@ const pages = [
   { id: 'terminal', label: 'Terminal' },
 ] as const;
 
-const browserClasses = ['chromium', 'firefox', 'google-chrome', 'brave', 'mozilla'];
-
-function isMediaFocus(appClass: string): boolean {
-  return browserClasses.some(c => appClass.toLowerCase().includes(c));
-}
-
 export default function App() {
   const { state, loading, error } = useMediaStream();
-  const { windowInfo } = useActiveWindow();
+  const { appType } = useActiveWindow();
   const caps = useCapabilities();
   useArtTheming(state?.art_url);
   const [full, setFull] = useState(false);
@@ -60,16 +54,16 @@ export default function App() {
     const el = scrollRef.current;
     if (!el) return;
     const child = el.children[i] as HTMLElement;
-    if (child) child.scrollIntoView({ behavior: 'smooth', inline: 'start' });
+    if (child) child.scrollIntoView({ behavior: 'auto', inline: 'start' });
     setPage(i);
   };
 
   // Auto-navigate based on active window focus
   useEffect(() => {
-    if (!windowInfo) return;
-    const target = isMediaFocus(windowInfo.app_class) ? 1 : 0;
+    if (!appType) return;
+    const target = appToPageIndex(appType);
     if (target !== page) scrollTo(target);
-  }, [windowInfo?.app_class, windowInfo?.title]);
+  }, [appType]);
 
   const handleScroll = () => {
     const el = scrollRef.current;

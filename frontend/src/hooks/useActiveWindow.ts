@@ -1,30 +1,28 @@
 import { useEffect, useState } from 'react';
 
-export type Profile = 'media-browser' | 'video-player' | 'ide' | 'terminal' | 'default';
+export type AppType = 'youtube' | 'browser' | 'video' | 'vscode' | 'terminal' | 'default';
 
 export interface WindowFocus {
-  event: 'WINDOW_FOCUS_CHANGED';
-  app_class: string;
+  event: 'APP_FOCUS_CHANGED';
+  app: AppType;
   title: string;
 }
 
-const profilePatterns: [Profile, string[]][] = [
-  ['media-browser', ['firefox', 'chromium', 'brave', 'google-chrome', 'mozilla']],
-  ['video-player', ['vlc', 'mpv', 'celluloid', 'totem', 'snapshop', 'io.mpv']],
-  ['ide', ['code', 'code-oss', 'jetbrain', 'idea', 'pycharm', 'webstorm', 'goland']],
-  ['terminal', ['kitty', 'alacritty', 'gnome-terminal', 'konsole', 'termite', 'urxvt', 'foot', 'wezterm', 'windows-terminal']],
-];
+const appToPage: Record<AppType, number> = {
+  youtube: 1,
+  browser: 0,
+  video: 2,
+  vscode: 3,
+  terminal: 4,
+  default: 0,
+};
 
-export function classifyProfile(wmClass: string): Profile {
-  const lower = wmClass.toLowerCase();
-  for (const [profile, patterns] of profilePatterns) {
-    if (patterns.some(p => lower.includes(p))) return profile;
-  }
-  return 'default';
+export function appToPageIndex(app: AppType): number {
+  return appToPage[app] ?? 0;
 }
 
 export function useActiveWindow() {
-  const [profile, setProfile] = useState<Profile>('default');
+  const [appType, setAppType] = useState<AppType>('default');
   const [windowInfo, setWindowInfo] = useState<WindowFocus | null>(null);
 
   useEffect(() => {
@@ -38,7 +36,7 @@ export function useActiveWindow() {
         try {
           const data: WindowFocus = JSON.parse(e.data);
           setWindowInfo(data);
-          setProfile(classifyProfile(data.app_class));
+          if (data.app) setAppType(data.app);
         } catch { /* skip */ }
       };
 
@@ -56,5 +54,5 @@ export function useActiveWindow() {
     };
   }, []);
 
-  return { profile, windowInfo };
+  return { appType, windowInfo };
 }

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/godbus/dbus/v5"
 )
 
 func isFinite(v float64) bool {
@@ -761,157 +763,219 @@ func checkAndSkipAds() {
 // ─── Active Window Detection ──────────────────────────────────
 
 type WindowFocusEvent struct {
-	Event   string `json:"event"`
-	AppClass string `json:"app_class"`
-	Title   string `json:"title"`
+	Event string `json:"event"`
+	App   string `json:"app"`
+	Title string `json:"title"`
 }
 
+var (
+	browserWmClasses = []string{"chromium", "chrome", "firefox", "brave", "mozilla", "org.mozilla.firefox", "org.chromium.Chromium"}
+	terminalWmClasses = []string{"gnome-terminal", "kitty", "alacritty", "termite", "foot", "wezterm", "konsole", "windows-terminal", "kgx", "ptyxis", "blackbox", "cool-retro-term"}
+	ideWmClasses      = []string{"code", "code-oss", "jetbrains-idea", "jetbrains-pycharm", "jetbrains-webstorm", "jetbrains-goland", "idea", "pycharm", "webstorm", "goland", "android-studio"}
+	videoWmClasses    = []string{"vlc", "mpv", "celluloid", "totem", "snapshop", "io.mpv", "org.videolan.vlc"}
+)
+
 func detectFocusedWindow() (string, string) {
-	mediaPlayingMu.RLock()
-	mp := mediaPlaying
-	player := mediaPlayingPlayer
-	mediaPlayingMu.RUnlock()
-	if mp {
-		title := "(media playing)"
-		if player != "" {
-			if t, err := runCmd("playerctl", "--player", player, "metadata", "xesam:title"); err == nil && t != "" {
-				title = strings.TrimSpace(t)
-			}
-		}
-		log.Printf("win detect: MPRIS playing → chromium | %s", title)
-		return "chromium", title
-	}
-
-	if cls, title := detectByShell(); cls != "" {
-		log.Printf("win detect: Shell → %s | %s", cls, title)
+	cls, title := detectByDBusExtension()
+	if cls != "" {
+		log.Printf("win detect: D-Bus extension → %s | %s", cls, title)
 		return cls, title
 	}
 
-	if cls, title := detectByXdotool(); cls != "" {
-		log.Printf("win detect: xdotool → %s | %s", cls, title)
-		return cls, title
-	}
-
-	cls, _ := detectByProcessList()
+	cls, _ = detectByProcessList()
 	log.Printf("win detect: process list → %s", cls)
 	return cls, cls
 }
 
-func detectByShell() (string, string) {
+func detectByDBusExtension() (string, string) {
 	out, err := exec.Command("gdbus", "call", "--session",
-		"--dest", "org.gnome.Shell",
-		"--object-path", "/org/gnome/Shell",
-		"--method", "org.gnome.Shell.Eval",
-		"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
-			".meta_window.get_wm_class()||''").CombinedOutput()
+		"--dest", "com.github.WindowFocus",
+		"--object-path", "/com/github/WindowFocus",
+		"--method", "com.github.WindowFocus.GetFocusedWindow").CombinedOutput()
 	if err != nil {
 		return "", ""
 	}
 	s := strings.TrimSpace(string(out))
-	if !strings.HasPrefix(s, "(true, '") || strings.Count(s, "'") < 2 {
+	if !strings.HasPrefix(s, "(") || !strings.HasSuffix(s, ")") {
 		return "", ""
 	}
-	cls := strings.Split(s, "'")[1]
+	inner := strings.TrimPrefix(s, "(")
+	inner = strings.TrimSuffix(inner, ")")
+	parts := strings.Split(inner, ", ")
+	if len(parts) < 2 {
+		return "", ""
+	}
+	cls := strings.Trim(parts[0], "' ")
+	title := strings.Trim(parts[1], "' ")
 	if cls == "" {
 		return "", ""
 	}
-
-	out2, _ := exec.Command("gdbus", "call", "--session",
-		"--dest", "org.gnome.Shell",
-		"--object-path", "/org/gnome/Shell",
-		"--method", "org.gnome.Shell.Eval",
-		"global.get_window_actors().find(a=>a.meta_window.has_focus())?"+
-			".meta_window.get_title()||''").CombinedOutput()
-	s2 := strings.TrimSpace(string(out2))
-	title := ""
-	if strings.HasPrefix(s2, "(true, '") && strings.Count(s2, "'") >= 2 {
-		title = strings.Split(s2, "'")[1]
-	}
-	return cls, title
-}
-
-func detectByXdotool() (string, string) {
-	out, err := exec.Command("xdotool", "getactivewindow", "getwindowclassname").CombinedOutput()
-	if err != nil {
-		return "", ""
-	}
-	cls := strings.TrimSpace(string(out))
-	if cls == "" {
-		return "", ""
-	}
-	out2, _ := exec.Command("xdotool", "getactivewindow", "getwindowname").CombinedOutput()
-	title := strings.TrimSpace(string(out2))
 	return cls, title
 }
 
 func detectByProcessList() (string, string) {
-	procs := map[string]string{
-		"chromium": "chromium", "chrome": "chromium", "firefox": "firefox",
-		"brave": "brave", "vlc": "vlc", "mpv": "mpv",
-		"gnome-terminal": "gnome-terminal", "kitty": "kitty",
-		"alacritty": "alacritty", "termite": "termite", "foot": "foot",
-		"wezterm": "wezterm", "konsole": "konsole", "windows-terminal": "windows-terminal",
-		"code": "code", "code-oss": "code",
-	}
-	score := map[string]int{
-		"chromium": 1, "chrome": 1, "firefox": 1, "brave": 1,
-		"vlc": 2, "mpv": 2,
-		"gnome-terminal": 4, "kitty": 4, "alacritty": 4, "termite": 4,
-		"foot": 4, "wezterm": 4, "konsole": 4,
-		"code": 3, "code-oss": 3,
+	knownProcs := []struct {
+		pattern string
+		wmClass string
+	}{
+		{"chromium-browser", "chromium"},
+		{"chromium", "chromium"},
+		{"google-chrome", "chromium"},
+		{"chrome", "chromium"},
+		{"firefox", "firefox"},
+		{"brave", "brave"},
+		{"vlc", "vlc"},
+		{"mpv", "mpv"},
+		{"gnome-terminal", "gnome-terminal"},
+		{"kitty", "kitty"},
+		{"alacritty", "alacritty"},
+		{"cool-retro-term", "cool-retro-term"},
+		{"code-oss", "code"},
+		{"code", "code"},
+		{"jetbrains", "jetbrains"},
 	}
 
-	out, err := exec.Command("ps", "aux", "--sort=-start_time").CombinedOutput()
+	out, err := exec.Command("ps", "-eo", "comm", "--sort=-start_time").CombinedOutput()
 	if err != nil {
 		return "", ""
 	}
 	lines := strings.Split(string(out), "\n")
 
-	bestCls := ""
-	bestPrio := 0
-
 	for _, line := range lines {
-		lower := strings.ToLower(line)
-		for proc, wmClass := range procs {
-			if strings.Contains(lower, proc) {
-				p := score[proc]
-				if p > bestPrio {
-					bestPrio = p
-					bestCls = wmClass
-				}
+		name := strings.TrimSpace(line)
+		if name == "" || name == "COMMAND" {
+			continue
+		}
+		lower := strings.ToLower(name)
+		for _, p := range knownProcs {
+			if strings.Contains(lower, p.pattern) {
+				return p.wmClass, p.wmClass
 			}
 		}
 	}
-	return bestCls, bestCls
+	return "", ""
+}
+
+// classifyApp maps a wm_class + title to one of: youtube, browser, vscode, terminal, default
+func classifyApp(wmClass, title string) (string, string) {
+	cls := strings.ToLower(wmClass)
+	t := strings.ToLower(title)
+
+	for _, b := range browserWmClasses {
+		if strings.Contains(cls, b) {
+			if strings.Contains(t, " - youtube") || strings.Contains(t, " - youtube music") {
+				ytTitle := enrichYouTubeTitle(title)
+				if ytTitle != "" {
+					return "youtube", ytTitle
+				}
+				return "youtube", title
+			}
+			return "browser", title
+		}
+	}
+	for _, i := range ideWmClasses {
+		if strings.Contains(cls, i) {
+			return "vscode", title
+		}
+	}
+	for _, t := range terminalWmClasses {
+		if strings.Contains(cls, t) {
+			return "terminal", title
+		}
+	}
+	for _, v := range videoWmClasses {
+		if strings.Contains(cls, v) {
+			return "video", title
+		}
+	}
+	return "default", title
+}
+
+func enrichYouTubeTitle(windowTitle string) string {
+	p := findBestPlayer()
+	if p == "" {
+		return ""
+	}
+	out, err := runCmd("playerctl", "--player", p, "metadata", "xesam:title")
+	if err != nil || out == "" {
+		return ""
+	}
+	lower := strings.ToLower(out)
+	if strings.Contains(lower, "youtube") {
+		return out
+	}
+	return ""
 }
 
 func startWindowWatcher() {
-	ticker := time.NewTicker(300 * time.Millisecond)
+	go startDBusSignalListener()
+
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		cls, title := detectFocusedWindow()
+		cls, rawTitle := detectFocusedWindow()
 		if cls == "" {
 			continue
 		}
-		windowMu.Lock()
-		changed := cls != lastWMClass || title != lastTitle
-		if changed {
-			lastWMClass = cls
-			lastTitle = title
-		}
-		windowMu.Unlock()
-		if changed {
-			log.Printf("win focus changed: %s | %s", cls, title)
-			broadcastWindowFocus(cls, title)
-		}
+		app, title := classifyApp(cls, rawTitle)
+		triggerFocusChange(app, title, cls)
 	}
 }
 
-func broadcastWindowFocus(cls, title string) {
+func startDBusSignalListener() {
+	conn, err := dbus.ConnectSessionBus()
+	if err != nil {
+		log.Printf("dbus signal: connect failed: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	c := make(chan *dbus.Signal, 16)
+	conn.Signal(c)
+
+	match := "type='signal',interface='com.github.WindowFocus',member='FocusedWindowChanged'"
+	call := conn.BusObject().Call("org.freedesktop.DBus.AddMatch", 0, match)
+	if call.Err != nil {
+		log.Printf("dbus signal: add match failed: %v", call.Err)
+		return
+	}
+
+	log.Printf("dbus signal: listening for FocusedWindowChanged")
+
+	for sig := range c {
+		if len(sig.Body) < 2 {
+			continue
+		}
+		cls, _ := sig.Body[0].(string)
+		title, _ := sig.Body[1].(string)
+		if cls == "" {
+			continue
+		}
+		app, label := classifyApp(cls, title)
+		log.Printf("dbus signal: %s | %s", app, label)
+		triggerFocusChange(app, label, cls)
+	}
+}
+
+func triggerFocusChange(app, title, wmClass string) {
+	windowMu.Lock()
+	changed := app != lastWMClass || title != lastTitle
+	if changed {
+		lastWMClass = app
+		lastTitle = title
+	}
+	windowMu.Unlock()
+	if changed {
+		log.Printf("app focus changed: %s | %s (wm_class=%s)", app, title, wmClass)
+		broadcastAppFocus(app, title)
+	}
+}
+
+func broadcastAppFocus(app, title string) {
 	evt := WindowFocusEvent{
-		Event:    "WINDOW_FOCUS_CHANGED",
-		AppClass: cls,
-		Title:    title,
+		Event: "APP_FOCUS_CHANGED",
+		App:   app,
+		Title: title,
 	}
 	data, err := json.Marshal(evt)
 	if err != nil {
@@ -947,17 +1011,20 @@ func handleWindowSSE(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	windowMu.Lock()
-	if lastWMClass != "" {
+	lastApp := lastWMClass
+	lastT := lastTitle
+	windowMu.Unlock()
+
+	if lastApp != "" {
 		evt := WindowFocusEvent{
-			Event:    "WINDOW_FOCUS_CHANGED",
-			AppClass: lastWMClass,
-			Title:    lastTitle,
+			Event: "APP_FOCUS_CHANGED",
+			App:   lastApp,
+			Title: lastT,
 		}
 		if d, e := json.Marshal(evt); e == nil {
 			ch <- string(d)
 		}
 	}
-	windowMu.Unlock()
 
 	speedMu.RLock()
 	initSpeed := speedSteps[currentSpeedIdx]
