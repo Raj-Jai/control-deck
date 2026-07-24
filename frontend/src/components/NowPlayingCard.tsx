@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import {
   Music,
   SkipBack,
@@ -22,6 +22,7 @@ function formatTime(seconds: number): string {
 
 export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const dragging = useRef(false);
+  const commitRef = useRef<number | null>(null);
   const [localPos, setLocalPos] = useState<number | null>(null);
   const [artError, setArtError] = useState(false);
 
@@ -33,6 +34,22 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
   const artUrl = player?.art_url ?? null;
   const playerId = player?.id;
 
+  useEffect(() => {
+    if (commitRef.current !== null && Math.abs(pos - commitRef.current) < 1.5) {
+      commitRef.current = null;
+      setLocalPos(null);
+    }
+  }, [pos]);
+
+  useEffect(() => {
+    if (commitRef.current === null) return;
+    const t = setTimeout(() => {
+      commitRef.current = null;
+      setLocalPos(null);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [localPos]);
+
   const displayVal = localPos !== null ? localPos : Math.floor(pos);
 
   const displayTitle = isOffline ? 'No Track' : (player.title || 'Idle');
@@ -40,7 +57,7 @@ export default function NowPlayingCard({ player }: NowPlayingCardProps) {
 
   const commitSeek = (v: number) => {
     dragging.current = false;
-    setLocalPos(null);
+    commitRef.current = v;
     seekTo(v, playerId);
   };
 
