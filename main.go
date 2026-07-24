@@ -300,7 +300,6 @@ func main() {
 	http.HandleFunc("/api/audio/app-streams", handleGetAppStreams)
 	http.HandleFunc("/api/audio/set-app-stream", handleSetAppStream)
 
-	http.HandleFunc("/api/audio-stream/stream", handleStreamPlay)
 	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
 	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
 	http.HandleFunc("/api/window-stream", handleWindowSSE)

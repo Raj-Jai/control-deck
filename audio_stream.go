@@ -1,8 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"context"
+	"encoding/binary"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os/exec"
@@ -12,6 +14,17 @@ import (
 	"github.com/coder/websocket"
 )
 
+const (
+	frameTypeInit  = 0x01
+	frameTypeAudio = 0x02
+
+	frameSamples   = 2048
+	sampleRate     = 44100
+	channels       = 2
+	bytesPerSample = 2
+	frameBytes     = frameSamples * channels * bytesPerSample
+)
+
 var streamMgr = &StreamManager{
 	listeners: make(map[chan []byte]bool),
 }
@@ -19,10 +32,9 @@ var streamMgr = &StreamManager{
 type StreamManager struct {
 	mu        sync.Mutex
 	ffCmd     *exec.Cmd
-	stdout    *bufio.Reader
+	stdout    io.ReadCloser
 	listeners map[chan []byte]bool
 	stopCh    chan struct{}
-	startedAt time.Time
 }
 
 func (m *StreamManager) start() error {
@@ -33,27 +45,27 @@ func (m *StreamManager) start() error {
 		return nil
 	}
 
-	m.startedAt = time.Now()
-
 	cmd := exec.Command("ffmpeg", "-hide_banner", "-loglevel", "error",
 		"-f", "pulse", "-i", "@DEFAULT_MONITOR@",
-		"-c:a", "mp3", "-b:a", "128k",
-		"-f", "mp3", "pipe:1")
+		"-f", "s16le",
+		"-ac", "2",
+		"-ar", "44100",
+		"-acodec", "pcm_s16le",
+		"pipe:1")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
-
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
 	m.ffCmd = cmd
-	m.stdout = bufio.NewReader(stdout)
+	m.stdout = stdout
 	m.stopCh = make(chan struct{})
 
 	go m.readLoop()
-	log.Println("audio-stream: started (MP3 128k)")
+	log.Println("audio-stream: started (PCM s16le 44100Hz stereo)")
 	return nil
 }
 
@@ -62,7 +74,6 @@ func (m *StreamManager) stopLocked() {
 		return
 	}
 	close(m.stopCh)
-	m.stopCh = nil
 	m.ffCmd.Process.Kill()
 	m.ffCmd.Wait()
 	m.ffCmd = nil
@@ -71,7 +82,7 @@ func (m *StreamManager) stopLocked() {
 }
 
 func (m *StreamManager) readLoop() {
-	buf := make([]byte, 8192)
+	buf := make([]byte, frameBytes)
 	for {
 		select {
 		case <-m.stopCh:
@@ -79,11 +90,11 @@ func (m *StreamManager) readLoop() {
 		default:
 		}
 
-		n, err := m.stdout.Read(buf)
+		_, err := io.ReadFull(m.stdout, buf)
 		if err != nil {
 			m.mu.Lock()
 			if m.ffCmd != nil {
-				log.Printf("audio-stream: ffmpeg pipe closed")
+				log.Printf("audio-stream: ffmpeg pipe closed: %v", err)
 				m.ffCmd = nil
 				m.stdout = nil
 			}
@@ -91,21 +102,24 @@ func (m *StreamManager) readLoop() {
 			return
 		}
 
-		data := make([]byte, n)
-		copy(data, buf[:n])
+		pts := time.Now().UnixMilli()
+
+		frame := make([]byte, 1+8+frameBytes)
+		frame[0] = frameTypeAudio
+		binary.BigEndian.PutUint64(frame[1:], uint64(pts))
+		copy(frame[9:], buf)
 
 		m.mu.Lock()
 		for ch := range m.listeners {
 			select {
-			case ch <- data:
+			case ch <- frame:
 			default:
 				go func(c chan []byte, d []byte) {
 					select {
 					case c <- d:
 					case <-time.After(3 * time.Second):
-						log.Println("audio-stream: dropping data for slow client")
 					}
-				}(ch, data)
+				}(ch, frame)
 			}
 		}
 		m.mu.Unlock()
@@ -136,7 +150,25 @@ func (m *StreamManager) removeListener(ch chan []byte) {
 	}
 }
 
-// --- WebSocket handler ---
+type ntpPing struct {
+	Type string `json:"type"`
+	T1   int64  `json:"t1"`
+}
+
+type ntpPong struct {
+	Type string `json:"type"`
+	T1   int64  `json:"t1"`
+	T2   int64  `json:"t2"`
+}
+
+func sendInitFrame(conn *websocket.Conn, ctx context.Context) error {
+	frame := make([]byte, 7)
+	frame[0] = frameTypeInit
+	binary.BigEndian.PutUint32(frame[1:], sampleRate)
+	frame[5] = channels
+	frame[6] = bytesPerSample
+	return conn.Write(ctx, websocket.MessageBinary, frame)
+}
 
 func handleStreamWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -155,57 +187,33 @@ func handleStreamWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer streamMgr.removeListener(ch)
 
-	// Send start timestamp as first frame for cross-device sync
-	streamMgr.mu.Lock()
-	t0 := streamMgr.startedAt.UnixNano()
-	streamMgr.mu.Unlock()
-	syncMsg, _ := json.Marshal(map[string]int64{"startedAt": t0})
 	ctx := r.Context()
-	if err := conn.Write(ctx, websocket.MessageText, syncMsg); err != nil {
+
+	if err := sendInitFrame(conn, ctx); err != nil {
 		return
 	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case data, ok := <-ch:
-			if !ok {
-				return
-			}
-			err := conn.Write(ctx, websocket.MessageBinary, data)
+
+	go func() {
+		for {
+			_, msg, err := conn.Read(ctx)
 			if err != nil {
 				return
 			}
+			var ping ntpPing
+			if json.Unmarshal(msg, &ping) == nil && ping.Type == "ntp_ping" {
+				pong := ntpPong{
+					Type: "ntp_pong",
+					T1:   ping.T1,
+					T2:   time.Now().UnixMilli(),
+				}
+				data, _ := json.Marshal(pong)
+				if conn.Write(ctx, websocket.MessageText, data) != nil {
+					return
+				}
+			}
 		}
-	}
-}
+	}()
 
-// --- HTTP handler (MP3 via chunked transfer) ---
-
-func handleStreamPlay(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	ch, err := streamMgr.addListener()
-	if err != nil {
-		log.Printf("audio-stream: start error: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer streamMgr.removeListener(ch)
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-
-	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done():
@@ -214,10 +222,9 @@ func handleStreamPlay(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if _, err := w.Write(data); err != nil {
+			if err := conn.Write(ctx, websocket.MessageBinary, data); err != nil {
 				return
 			}
-			flusher.Flush()
 		}
 	}
 }
