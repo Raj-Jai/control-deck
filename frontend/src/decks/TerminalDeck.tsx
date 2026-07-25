@@ -16,6 +16,12 @@ export default function TerminalDeck({ state, caps }: Props) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [connected, setConnected] = useState(false);
 
+  const sendToTerminal = (data: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(new TextEncoder().encode(data));
+    }
+  };
+
   useEffect(() => {
     if (!termRef.current) return;
 
@@ -161,6 +167,126 @@ export default function TerminalDeck({ state, caps }: Props) {
         }`}>
           {connected ? 'connected' : 'disconnected'}
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="deck-card p-3">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Quick Actions</span>
+          <div className="flex-1 h-px bg-white/[0.04]" />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => sendToTerminal('tmux attach -t oc\r')}
+            className="px-3 py-2 text-[12px] rounded-md bg-deck-accent/15 border border-deck-accent/20
+              text-deck-accent hover:bg-deck-accent/25 active:scale-90 font-mono">
+            tmux attach -t oc
+          </button>
+          <button onClick={() => sendToTerminal('clear\r')}
+            className="px-3 py-2 text-[12px] rounded-md bg-white/5 border border-white/5
+              text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
+            clear
+          </button>
+          <button onClick={() => sendToTerminal('ll\r')}
+            className="px-3 py-2 text-[12px] rounded-md bg-white/5 border border-white/5
+              text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
+            ll
+          </button>
+          <button onClick={() => sendToTerminal('cd ~/Data/Code/Assited/tab-dashboard\r')}
+            className="px-3 py-2 text-[12px] rounded-md bg-white/5 border border-white/5
+              text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
+            cd tab-dashboard
+          </button>
+          <button onClick={() => sendToTerminal('cd ~/Data/Code/Assited/tab-dashboard && go build -o tab-dashboard .\r')}
+            className="px-3 py-2 text-[12px] rounded-md bg-white/5 border border-white/5
+              text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
+            rebuild
+          </button>
+          <button onClick={() => sendToTerminal('\x03')}
+            className="px-3 py-2 text-[12px] rounded-md bg-red-500/10 border border-red-500/20
+              text-red-400 hover:bg-red-500/20 active:scale-90 font-mono">
+            Ctrl+C
+          </button>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="deck-card p-3">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Navigation</span>
+          <div className="flex-1 h-px bg-white/[0.04]" />
+        </div>
+        <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
+          <div />
+          <button onClick={() => sendToTerminal('\x1b[A')}
+            className="px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">↑</button>
+          <div />
+          <button onClick={() => sendToTerminal('\x1b[D')}
+            className="px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">←</button>
+          <button onClick={() => sendToTerminal('\x1b[B')}
+            className="px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">↓</button>
+          <button onClick={() => sendToTerminal('\x1b[C')}
+            className="px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">→</button>
+        </div>
+      </div>
+
+      {/* Modifiers */}
+      <div className="deck-card p-3">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Modifiers</span>
+          <div className="flex-1 h-px bg-white/[0.04]" />
+        </div>
+        <div className="flex flex-wrap gap-1.5 justify-center">
+          {[
+            { label: 'ESC', cmd: '\x1b' },
+            { label: 'TAB', cmd: '\t' },
+            { label: 'Ctrl+C', cmd: '\x03' },
+            { label: 'Ctrl+Z', cmd: '\x1a' },
+            { label: 'Ctrl+D', cmd: '\x04' },
+            { label: 'Ctrl+L', cmd: '\x0c' },
+            { label: 'Ctrl+A', cmd: '\x01' },
+            { label: 'Ctrl+E', cmd: '\x05' },
+            { label: 'Ctrl+W', cmd: '\x17' },
+            { label: 'Ctrl+U', cmd: '\x15' },
+          ].map(b => (
+            <button key={b.label} onClick={() => sendToTerminal(b.cmd)}
+              className="px-2.5 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5
+                text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tmux */}
+      <div className="deck-card p-3">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Tmux</span>
+          <div className="flex-1 h-px bg-white/[0.04]" />
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: '◀ Pane', cmd: '\x02\x1b[A' },
+            { label: '▶ Pane', cmd: '\x02\x1b[B' },
+            { label: '▲ Pane', cmd: '\x02\x1b[C' },
+            { label: '▼ Pane', cmd: '\x02\x1b[D' },
+            { label: '⟲ Split H', cmd: '\x02"' },
+            { label: '⟳ Split V', cmd: '\x02%' },
+            { label: '✦ New Win', cmd: '\x02c' },
+            { label: '◀ Win', cmd: '\x02p' },
+            { label: '▶ Win', cmd: '\x02n' },
+          ].map(b => (
+            <button key={b.label} onClick={() => sendToTerminal(b.cmd)}
+              className="px-2 py-2 text-[11px] rounded-md bg-white/5 border border-white/5
+                text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90">
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-deck-muted/50 text-center mt-2">Sends prefix (Ctrl+B) then command</p>
       </div>
     </div>
   );
