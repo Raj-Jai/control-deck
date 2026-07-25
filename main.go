@@ -312,6 +312,7 @@ func main() {
 	http.HandleFunc("/api/video/status", handleVideoStatus)
 	http.HandleFunc("/api/video/command", handleVideoCommand)
 	http.HandleFunc("/api/service-stats", handleServiceStats)
+	http.HandleFunc("/ws/terminal", handleTerminalWS)
 
 	// Background tickers
 	go startMediaBroadcaster()
