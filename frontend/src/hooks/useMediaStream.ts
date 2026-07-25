@@ -40,6 +40,13 @@ export interface PlayerState {
   length: number;
 }
 
+export interface LyricData {
+  track_id: string;
+  instrumental: boolean;
+  plain_lyrics: string;
+  synced_lyrics: string;
+}
+
 export interface CmdLogEntry {
   time: string;
   command: string;
@@ -63,6 +70,7 @@ export interface MediaState {
   bt_sink_on: boolean;
   warp_on: boolean;
   audio_stream_active: boolean;
+  lyrics: LyricData | null;
   players: PlayerState[];
   sinks: SinkInfo[];
   app_streams: AppStreamInfo[];

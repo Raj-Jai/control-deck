@@ -196,6 +196,7 @@ type MediaState struct {
 	ArtURL   string  `json:"art_url"`
 	Position float64 `json:"position"`
 	Length   float64 `json:"length"`
+	Lyrics   *LyricData `json:"lyrics,omitempty"`
 	Volume     float64 `json:"volume"`
 	Muted      bool    `json:"muted"`
 	Brightness float64 `json:"brightness"`
@@ -1523,10 +1524,17 @@ func fetchMPRISState() MediaState {
 	copy(logCopy, cmdLog)
 	cmdLogMu.Unlock()
 
+	lyricsTrackID := lyricsCacheKey(artist, title)
+	lyrics := fetchCachedLyrics(lyricsTrackID)
+	if lyrics == nil && title != "" && artist != "" {
+		lyrics = fetchLyrics(artist, title, length)
+	}
+
 	return MediaState{
 		Title:       title,
 		Artist:      artist,
 		Status:      status,
+		Lyrics:      lyrics,
 		ArtURL:      resolveArtURL(artStr),
 		Position:    posSeconds,
 		Length:      length,
