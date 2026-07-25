@@ -280,6 +280,7 @@ func addLog(cmd string) {
 
 func main() {
 	initConfig()
+	initVideoPlayerConfig()
 	buildCommandMap()
 	buildProfileCommandMap()
 	initVideoPlayerConfig()
@@ -305,6 +306,8 @@ func main() {
 	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
 	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
 	http.HandleFunc("/api/window-stream", handleWindowSSE)
+	http.HandleFunc("/api/video/status", handleVideoStatus)
+	http.HandleFunc("/api/video/command", handleVideoCommand)
 
 	http.HandleFunc("/api/video/status", handleVideoStatus)
 	http.HandleFunc("/api/video/command", handleVideoCommand)
