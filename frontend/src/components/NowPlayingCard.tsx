@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Music,
   SkipBack,
@@ -326,11 +327,10 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         {state && <AudioStreamCard state={state} compact />}
       </div>
 
-      {/* Fullscreen lyrics modal */}
-      {showFullLyrics && (
+      {/* Fullscreen lyrics modal — portal to body to escape deck-card stacking context */}
+      {showFullLyrics && createPortal(
         <div
-          ref={modalRef}
-          className="fixed inset-0 z-50 flex flex-col md:flex-row"
+          className="fixed inset-0 z-[9999] flex flex-col md:flex-row"
           style={{
             background: 'rgba(15, 23, 42, 0.92)',
             backdropFilter: 'blur(24px)',
@@ -445,7 +445,8 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
