@@ -309,9 +309,6 @@ func main() {
 	http.HandleFunc("/api/video/status", handleVideoStatus)
 	http.HandleFunc("/api/video/command", handleVideoCommand)
 
-	http.HandleFunc("/api/video/status", handleVideoStatus)
-	http.HandleFunc("/api/video/command", handleVideoCommand)
-
 	// Background tickers
 	go startMediaBroadcaster()
 	go startPingChecker()
