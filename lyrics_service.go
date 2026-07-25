@@ -20,11 +20,12 @@ type LyricData struct {
 }
 
 type lrclibResult struct {
-	SyncedLyrics string `json:"syncedLyrics"`
-	PlainLyrics  string `json:"plainLyrics"`
-	Instrumental bool   `json:"instrumental"`
-	TrackName    string `json:"trackName"`
-	ArtistName   string `json:"artistName"`
+	SyncedLyrics string  `json:"syncedLyrics"`
+	PlainLyrics  string  `json:"plainLyrics"`
+	Instrumental bool    `json:"instrumental"`
+	TrackName    string  `json:"trackName"`
+	ArtistName   string  `json:"artistName"`
+	Duration     float64 `json:"duration"`
 }
 
 var (
@@ -200,7 +201,7 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 
 	// Search with cleaned artist + title
 	if results := doLRCLIBSearch(searchArtist + " " + searchTitle); len(results) > 0 {
-		if best := fuzzyPickBest(results, searchArtist, searchTitle); best != nil {
+		if best := fuzzyPickBest(results, searchArtist, searchTitle, duration); best != nil {
 			if data := responseToLyricData(best, searchArtist, best.TrackName); data != nil {
 				log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
 				lyricsCacheMu.Lock()
@@ -213,7 +214,7 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 
 	// Search by track name only
 	if results := doLRCLIBSearch(searchTitle); len(results) > 0 {
-		if best := fuzzyPickBest(results, searchArtist, searchTitle); best != nil {
+		if best := fuzzyPickBest(results, searchArtist, searchTitle, duration); best != nil {
 			if data := responseToLyricData(best, searchArtist, best.TrackName); data != nil {
 				log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
 				lyricsCacheMu.Lock()
@@ -227,7 +228,7 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 	// Broader search with original (uncleaned) artist + track
 	if searchTitle != track || searchArtist != artist {
 		if results := doLRCLIBSearch(artist + " " + cleanYouTubeTitle(track, artist).Title); len(results) > 0 {
-			if best := fuzzyPickBest(results, artist, cleanYouTubeTitle(track, artist).Title); best != nil {
+			if best := fuzzyPickBest(results, artist, cleanYouTubeTitle(track, artist).Title, duration); best != nil {
 				if data := responseToLyricData(best, artist, best.TrackName); data != nil {
 					log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
 					lyricsCacheMu.Lock()
@@ -297,7 +298,7 @@ func doLRCLIBSearch(query string) []lrclibResult {
 	return results
 }
 
-func fuzzyPickBest(results []lrclibResult, artist, title string) *lrclibResult {
+func fuzzyPickBest(results []lrclibResult, artist, title string, duration float64) *lrclibResult {
 	if len(results) == 0 {
 		return nil
 	}
@@ -308,7 +309,19 @@ func fuzzyPickBest(results []lrclibResult, artist, title string) *lrclibResult {
 	score := func(r lrclibResult) float64 {
 		titleSim := jaroWinkler(strings.ToLower(r.TrackName), tLower)
 		artistSim := jaroWinkler(strings.ToLower(r.ArtistName), aLower)
-		return titleSim*0.6 + artistSim*0.4
+		s := titleSim*0.6 + artistSim*0.4
+		if duration > 0 && r.Duration > 0 {
+			diff := duration - r.Duration
+			if diff < 0 {
+				diff = -diff
+			}
+			durSim := 1.0 - diff/30.0
+			if durSim < 0 {
+				durSim = 0
+			}
+			s += durSim * 0.1
+		}
+		return s
 	}
 
 	bestSynced := -1
