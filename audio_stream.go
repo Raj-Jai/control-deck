@@ -18,12 +18,36 @@ const (
 	frameTypeInit  = 0x01
 	frameTypeAudio = 0x02
 
-	frameSamples   = 2048
-	sampleRate     = 48000
-	channels       = 2
-	bytesPerSample = 2
-	frameBytes     = frameSamples * channels * bytesPerSample
+	frameSamples    = 2048
+	sampleRate      = 48000
+	channels        = 2
+	bytesPerSample  = 2
+	frameBytes      = frameSamples * channels * bytesPerSample
+	frameDurationMs = 2048.0 * 1000.0 / 48000.0
+	emaAlpha        = 0.02
 )
+
+type PTSTracker struct {
+	smoothedPTS float64
+	initialized bool
+	alpha       float64
+}
+
+func NewPTSTracker(alpha float64) *PTSTracker {
+	return &PTSTracker{alpha: alpha}
+}
+
+func (p *PTSTracker) GetPTS(readTime time.Time) uint64 {
+	readTimeMs := float64(readTime.UnixMilli())
+	if !p.initialized {
+		p.smoothedPTS = readTimeMs
+		p.initialized = true
+		return uint64(readTimeMs)
+	}
+	nominalPTS := p.smoothedPTS + frameDurationMs
+	p.smoothedPTS = (1.0-p.alpha)*nominalPTS + p.alpha*readTimeMs
+	return uint64(p.smoothedPTS)
+}
 
 var streamMgr = &StreamManager{
 	listeners: make(map[chan []byte]bool),
@@ -83,8 +107,7 @@ func (m *StreamManager) stopLocked() {
 
 func (m *StreamManager) readLoop() {
 	buf := make([]byte, frameBytes)
-	var sampleCount int64
-	firstPTS := time.Now().UnixMilli()
+	ptsTracker := NewPTSTracker(emaAlpha)
 	for {
 		select {
 		case <-m.stopCh:
@@ -104,8 +127,7 @@ func (m *StreamManager) readLoop() {
 			return
 		}
 
-		pts := firstPTS + (sampleCount * 1000 / int64(sampleRate))
-		sampleCount += int64(frameSamples)
+		pts := ptsTracker.GetPTS(time.Now())
 
 		frame := make([]byte, 1+8+frameBytes)
 		frame[0] = frameTypeAudio
