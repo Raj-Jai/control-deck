@@ -4,6 +4,8 @@ import { DECK_CONFIG } from '../config/deckConfig';
 export interface SystemStats {
   cpu: number;
   ram: number;
+  ram_used: number;
+  ram_total: number;
   battery: number;
   charging: boolean;
   temp: number;

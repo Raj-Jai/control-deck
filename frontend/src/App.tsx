@@ -7,6 +7,7 @@ import { useArtTheming } from './hooks/useArtTheming';
 import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
 import PlayerCarousel from './components/PlayerCarousel';
 import SystemStatsCard from './components/SystemStatsCard';
+import ServiceStatsBar from './components/ServiceStatsBar';
 import StepperControls from './components/StepperControls';
 import ToggleGrid from './components/ToggleGrid';
 import CaffeineCard from './components/CaffeineCard';
@@ -76,7 +77,7 @@ export default function App() {
       <div className="min-h-[100dvh] flex flex-col relative pb-14">
         <button
           onClick={toggleFull}
-          className="fixed top-3 right-3 z-50 w-8 h-8 rounded-lg flex items-center justify-center
+          className="fixed top-[30px] right-3 z-50 w-8 h-8 rounded-lg flex items-center justify-center
             bg-black/40 backdrop-blur border border-white/10 text-deck-dim
             hover:bg-deck-accent/20 hover:text-deck-accent hover:border-deck-accent/30
             transition-all duration-100 active:scale-90"
@@ -85,8 +86,15 @@ export default function App() {
           {full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
 
+        {/* Service process stats bar */}
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06]">
+          <div className="w-full max-w-6xl mx-auto px-3 sm:px-4">
+            <ServiceStatsBar />
+          </div>
+        </div>
+
         {/* Page indicator */}
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5">
           {pages.map((p, i) => (
             <button
               key={p.id}

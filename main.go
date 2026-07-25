@@ -177,14 +177,16 @@ func buildProfileCommandMap() {
 }
 
 type SystemStats struct {
-	CPU      float64 `json:"cpu"`
-	RAM      float64 `json:"ram"`
-	Battery  float64 `json:"battery"`
-	Charging bool    `json:"charging"`
-	Temp     float64 `json:"temp"`
-	SSID     string  `json:"ssid"`
-	IP       string  `json:"ip"`
-	PingOK   bool    `json:"ping_ok"`
+	CPU       float64 `json:"cpu"`
+	RAM       float64 `json:"ram"`
+	RAMUsed   float64 `json:"ram_used"`
+	RAMTotal  float64 `json:"ram_total"`
+	Battery   float64 `json:"battery"`
+	Charging  bool    `json:"charging"`
+	Temp      float64 `json:"temp"`
+	SSID      string  `json:"ssid"`
+	IP        string  `json:"ip"`
+	PingOK    bool    `json:"ping_ok"`
 }
 
 type MediaState struct {
@@ -308,6 +310,7 @@ func main() {
 	http.HandleFunc("/api/window-stream", handleWindowSSE)
 	http.HandleFunc("/api/video/status", handleVideoStatus)
 	http.HandleFunc("/api/video/command", handleVideoCommand)
+	http.HandleFunc("/api/service-stats", handleServiceStats)
 
 	// Background tickers
 	go startMediaBroadcaster()
@@ -1257,10 +1260,10 @@ func getCPUPercent() float64 {
 	return float64(deltaTotal-deltaIdle) / float64(deltaTotal) * 100
 }
 
-func getRAMPercent() float64 {
+func getRAMStats() (pct, usedKB, totalKB float64) {
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
-		return -1
+		return -1, -1, -1
 	}
 	var total, available float64
 	for _, line := range strings.Split(string(data), "\n") {
@@ -1278,9 +1281,10 @@ func getRAMPercent() float64 {
 		}
 	}
 	if total == 0 {
-		return -1
+		return -1, -1, -1
 	}
-	return (total - available) / total * 100
+	used := total - available
+	return used / total * 100, used, total
 }
 
 func getBattery() (percent float64, charging bool) {
@@ -1335,7 +1339,7 @@ func getIP() string {
 
 func fetchSystemStats() *SystemStats {
 	cpu := getCPUPercent()
-	ram := getRAMPercent()
+	ramPct, ramUsed, ramTotal := getRAMStats()
 	bat, charging := getBattery()
 	temp := getTemp()
 	ssid := getSSID()
@@ -1344,12 +1348,14 @@ func fetchSystemStats() *SystemStats {
 	pOK := pingOK
 	pingMu.RUnlock()
 
-	if cpu < 0 && ram < 0 && bat < 0 && temp < 0 && ssid == "" && ip == "" {
+	if cpu < 0 && ramPct < 0 && bat < 0 && temp < 0 && ssid == "" && ip == "" {
 		return nil
 	}
 	return &SystemStats{
 		CPU:      cpu,
-		RAM:      ram,
+		RAM:      ramPct,
+		RAMUsed:  ramUsed,
+		RAMTotal: ramTotal,
 		Battery:  bat,
 		Charging: charging,
 		Temp:     temp,
