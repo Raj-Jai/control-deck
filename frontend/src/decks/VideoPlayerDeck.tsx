@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import PlayerCarousel from '../components/PlayerCarousel';
-import { fetchVideoStatus, sendVideoCommand } from '../services/apiService';
-import type { MediaState } from '../hooks/useMediaStream';
+import { fetchVideoStatus, sendVideoCommand, triggerCommand, setVolume } from '../services/apiService';
+import type { MediaState, PlayerState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
+import { Volume2, VolumeX } from 'lucide-react';
 
 interface Props { state: MediaState | null; caps: Capabilities }
 
@@ -61,6 +62,27 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
 
   const player = vs?.active_player ?? 'unknown';
 
+  // Prioritize video players in carousel
+  const rawPlayers = state?.players ?? [];
+  const sortedPlayers = [...rawPlayers].sort((a: PlayerState, b: PlayerState) => {
+    const isVideoA = /vlc|mpv|celluloid|totem|mplayer/i.test(a.id);
+    const isVideoB = /vlc|mpv|celluloid|totem|mplayer/i.test(b.id);
+    if (isVideoA && !isVideoB) return -1;
+    if (!isVideoA && isVideoB) return 1;
+    return 0;
+  });
+
+  const draggingVol = useRef(false);
+  const lastVolSend = useRef(0);
+  const [localVol, setLocalVol] = useState(100);
+
+  const vol = state?.volume ?? -1;
+  const muted = state?.muted ?? false;
+
+  const showVol = draggingVol.current
+    ? localVol
+    : (vol >= 0 ? Math.round(vol * 100) : localVol);
+
   return (
     <div className="flex flex-col gap-4">
       {caps.playerctl && (
@@ -70,7 +92,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
             <div className="flex-1 h-px bg-white/[0.04]" />
           </div>
-          <PlayerCarousel players={state?.players ?? []} state={state} />
+          <PlayerCarousel players={sortedPlayers} state={state} />
         </div>
       )}
 
@@ -83,6 +105,51 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
         }`}>
           {player === 'unknown' ? 'Not detected' : player}
         </span>
+      </div>
+
+      {/* Volume Slider Card */}
+      <div className="deck-card p-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim mb-2">
+          Volume
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            className={`icon-btn w-9 h-9 text-base flex-shrink-0 ${
+              muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : 'text-deck-text'
+            }`}
+            onClick={() => triggerCommand('mute')}
+          >
+            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={showVol}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setLocalVol(v);
+              draggingVol.current = true;
+              const now = Date.now();
+              if (now - lastVolSend.current >= 80) {
+                lastVolSend.current = now;
+                setVolume(v / 100);
+              }
+            }}
+            onMouseUp={() => {
+              draggingVol.current = false;
+              setVolume(localVol / 100);
+            }}
+            onTouchEnd={() => {
+              draggingVol.current = false;
+              setVolume(localVol / 100);
+            }}
+            className="flex-1 accent-deck-accent"
+          />
+          <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
+            {showVol}%
+          </span>
+        </div>
       </div>
 
       <div className="deck-card p-3">
