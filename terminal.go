@@ -33,7 +33,7 @@ func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmd := exec.Command(shell)
-	cmd.Env = os.Environ()
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 30, Cols: 120})
 	if err != nil {

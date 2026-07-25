@@ -57,9 +57,21 @@ export default function TerminalDeck({ state, caps }: Props) {
     termInstance.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Fit after open and on resize
+    // Fit after open and on resize — also send resize to PTY
     const doFit = () => {
-      try { fitAddon.fit(); } catch { /* ignore */ }
+      try {
+        fitAddon.fit();
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          const dims = fitAddon.proposeDimensions();
+          if (dims) {
+            wsRef.current.send(JSON.stringify({
+              type: 'resize',
+              rows: dims.rows,
+              cols: dims.cols,
+            }));
+          }
+        }
+      } catch { /* ignore */ }
     };
     doFit();
     const ro = new ResizeObserver(doFit);
@@ -80,6 +92,15 @@ export default function TerminalDeck({ state, caps }: Props) {
         term.clear();
         term.focus();
         doFit();
+        // Send initial resize after connection established
+        const dims = fitAddon.proposeDimensions();
+        if (dims) {
+          ws.send(JSON.stringify({
+            type: 'resize',
+            rows: dims.rows,
+            cols: dims.cols,
+          }));
+        }
         term.onData((data) => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(new TextEncoder().encode(data));
