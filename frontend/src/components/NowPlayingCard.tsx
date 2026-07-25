@@ -377,6 +377,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             {/* Play controls */}
             <div className="flex justify-center items-center gap-3">
               {playControls(true)}
+              {state && <AudioStreamCard state={state} compact />}
             </div>
 
             {/* Volume */}
