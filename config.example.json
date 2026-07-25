@@ -1,6 +1,6 @@
 {
-  "pin": "0616",
-  "bt_mac": "88:D0:39:7D:66:CC",
+  "pin": "0000",
+  "bt_mac": "",
   "ping_target": "8.8.8.8",
   "http_port": 8080,
   "https_port": 8443,

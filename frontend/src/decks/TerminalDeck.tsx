@@ -192,12 +192,12 @@ export default function TerminalDeck({ state, caps }: Props) {
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
             ll
           </button>
-          <button onClick={() => sendToTerminal('cd ~/Data/Code/Assited/tab-dashboard\r')}
+          <button onClick={() => sendToTerminal('cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"\r')}
             className="px-3 py-2 text-[12px] rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
-            cd tab-dashboard
+            cd repo root
           </button>
-          <button onClick={() => sendToTerminal('cd ~/Data/Code/Assited/tab-dashboard && go build -o tab-dashboard .\r')}
+          <button onClick={() => sendToTerminal('cd "$(git rev-parse --show-toplevel 2>/dev/null)" && go build -o tab-dashboard .\r')}
             className="px-3 py-2 text-[12px] rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90 font-mono">
             rebuild
