@@ -4,8 +4,9 @@ A web-based local network dashboard for a Linux workstation, served to tablets a
 
 ## Features
 
-- **Multi-Deck Touch UI** — 5 swipeable pages (Home / Media / Video / Code / Terminal) with `scroll-snap` carousel, dot indicators, and fixed bottom nav bar
-- **Now Playing** — MPRIS media controls across all active players: play/pause, next/prev, seek, volume, album art. Swipeable carousel when multiple players are active
+- **Multi-Deck Touch UI** — 5 swipeable pages (Home / Media / Video / Code / Terminal) with `scroll-snap` carousel, dot indicators, fixed bottom nav bar, and a floating navigation bubble for quick deck switching
+- **Now Playing** — MPRIS media controls fixed across all decks, showing the active player with play/pause, next/prev, seek, volume, album art, and synced lyrics. Swipeable carousel when multiple players are active
+- **Auto-Focus Toggle** — disable automatic page switching when changing focused windows, letting you stay on your current deck
 - **Synchronized Audio Stream** — real-time PCM audio from the host's audio output (`@DEFAULT_MONITOR@`) broadcast to every connected device via WebSocket, with NTP-based clock sync and Web Audio API scheduling for sample-accurate multi-device alignment
 - **Per-App Audio Mixer** — view and control volume/mute of individual PulseAudio sink-inputs
 - **Volume & Brightness** — sliders, night-light toggle, audio output sink switching

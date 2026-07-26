@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import PlayerCarousel from '../components/PlayerCarousel';
 import { fetchVideoStatus, sendVideoCommand, triggerCommand, setVolume } from '../services/apiService';
-import type { MediaState, PlayerState } from '../hooks/useMediaStream';
+import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
 import { Volume2, VolumeX } from 'lucide-react';
 
@@ -62,16 +61,6 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
 
   const player = vs?.active_player ?? 'unknown';
 
-  // Prioritize video players in carousel
-  const rawPlayers = state?.players ?? [];
-  const sortedPlayers = [...rawPlayers].sort((a: PlayerState, b: PlayerState) => {
-    const isVideoA = /vlc|mpv|celluloid|totem|mplayer/i.test(a.id);
-    const isVideoB = /vlc|mpv|celluloid|totem|mplayer/i.test(b.id);
-    if (isVideoA && !isVideoB) return -1;
-    if (!isVideoA && isVideoB) return 1;
-    return 0;
-  });
-
   const draggingVol = useRef(false);
   const lastVolSend = useRef(0);
   const [localVol, setLocalVol] = useState(100);
@@ -85,17 +74,6 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {caps.playerctl && (
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
-            <div className="flex-1 h-px bg-white/[0.04]" />
-          </div>
-          <PlayerCarousel players={sortedPlayers} state={state} />
-        </div>
-      )}
-
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-deck-muted/50 uppercase tracking-wider">Player:</span>
         <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${

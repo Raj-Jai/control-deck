@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import { Monitor, Captions, VolumeX, Volume2, Play, ChevronUp, ChevronDown, Tv } from 'lucide-react';
-import PlayerCarousel from '../components/PlayerCarousel';
 import { triggerCommand, setVolume } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
@@ -28,18 +27,6 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* CARD 1: Now Playing */}
-      {caps.playerctl && (
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted">Now Playing</span>
-            <div className="flex-1 h-px bg-white/[0.04]" />
-          </div>
-          <PlayerCarousel players={state?.players ?? []} state={state} />
-        </div>
-      )}
-
       {/* Volume Slider */}
       <div>
         <div className="flex items-center gap-2.5 mb-1">

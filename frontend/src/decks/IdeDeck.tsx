@@ -1,23 +1,11 @@
-import PlayerCarousel from '../components/PlayerCarousel';
 import { triggerCommand } from '../services/apiService';
-import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
 
-interface Props { state: MediaState | null; caps: Capabilities }
+interface Props { caps: Capabilities }
 
-export default function IdeDeck({ state, caps }: Props) {
+export default function IdeDeck({ caps }: Props) {
   return (
     <div className="flex flex-col gap-4">
-      {caps.playerctl && (
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
-            <div className="flex-1 h-px bg-white/[0.04]" />
-          </div>
-          <PlayerCarousel players={state?.players ?? []} state={state} />
-        </div>
-      )}
       <div className="deck-card p-3">
         <div className="flex items-center gap-2.5 mb-3">
           <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />

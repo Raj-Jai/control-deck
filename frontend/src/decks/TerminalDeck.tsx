@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import PlayerCarousel from '../components/PlayerCarousel';
-import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
 
 import '@xterm/xterm/css/xterm.css';
 
-interface Props { state: MediaState | null; caps: Capabilities }
+interface Props { caps: Capabilities }
 
-export default function TerminalDeck({ state, caps }: Props) {
+export default function TerminalDeck({ caps }: Props) {
   const termRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const termInstance = useRef<Terminal | null>(null);
@@ -147,17 +145,6 @@ export default function TerminalDeck({ state, caps }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {caps.playerctl && (
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
-            <div className="flex-1 h-px bg-white/[0.04]" />
-          </div>
-          <PlayerCarousel players={state?.players ?? []} state={state} />
-        </div>
-      )}
-
       <div className="deck-card !p-0 overflow-hidden relative">
         <div ref={termRef} className="w-full h-[360px] md:h-[480px]" />
         <div className={`absolute top-2 right-3 text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${

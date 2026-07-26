@@ -14,6 +14,7 @@ import CaffeineCard from './components/CaffeineCard';
 import AppMixerCard from './components/AppMixerCard';
 import CommandLogCard from './components/CommandLogCard';
 import ClipboardCard from './components/ClipboardCard';
+import FloatingNav from './components/FloatingNav';
 import MediaBrowserDeck from './decks/MediaBrowserDeck';
 import VideoPlayerDeck from './decks/VideoPlayerDeck';
 import IdeDeck from './decks/IdeDeck';
@@ -34,6 +35,7 @@ export default function App() {
   useArtTheming(state?.art_url);
   const [full, setFull] = useState(false);
   const [page, setPage] = useState(0);
+  const [autoFocus, setAutoFocus] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,10 +62,10 @@ export default function App() {
 
   // Auto-navigate based on active window focus
   useEffect(() => {
-    if (!appType) return;
+    if (!autoFocus || !appType) return;
     const target = appToPageIndex(appType);
     if (target !== page) scrollTo(target);
-  }, [appType]);
+  }, [appType, autoFocus]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -117,6 +119,18 @@ export default function App() {
             <div className="text-center text-red-400 text-sm py-2 mb-2">{error} — retrying…</div>
           )}
 
+          {/* Global Now Playing — fixed above all decks */}
+          {state && caps.playerctl && (
+            <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-3 pb-2">
+              <div className="flex items-center gap-2.5 mb-1">
+                <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
+                <div className="flex-1 h-px bg-white/[0.06]" />
+              </div>
+              <PlayerCarousel players={state?.players ?? []} state={state} />
+            </div>
+          )}
+
           {/* Swipeable pages */}
           <div
             ref={scrollRef}
@@ -130,16 +144,6 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 {/* LEFT */}
                 <div className="flex flex-col gap-4 min-w-0">
-                  {caps.playerctl && (
-                    <div>
-                      <div className="flex items-center gap-2.5 mb-1">
-                        <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
-                        <div className="flex-1 h-px bg-white/[0.04]" />
-                      </div>
-                      <PlayerCarousel players={state?.players ?? []} state={state} />
-                    </div>
-                  )}
                   {state && (
                     <div>
                       <div className="flex items-center gap-2.5 mb-1">
@@ -186,12 +190,12 @@ export default function App() {
 
             {/* Page 3: IDE */}
             <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
-              <IdeDeck state={state} caps={caps} />
+              <IdeDeck caps={caps} />
             </div>
 
             {/* Page 4: Terminal */}
             <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
-              <TerminalDeck state={state} caps={caps} />
+              <TerminalDeck caps={caps} />
             </div>
           </div>
         </div>
@@ -228,6 +232,14 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      <FloatingNav
+        pages={pages}
+        currentPage={page}
+        scrollTo={scrollTo}
+        autoFocus={autoFocus}
+        onToggleAutoFocus={() => setAutoFocus(prev => !prev)}
+      />
     </LockScreen>
   );
 }
