@@ -193,6 +193,15 @@
   --art-accent: #06b6d4;
 }
 
+/* Ambient background gradient from album art */
+.art-themed body,
+.art-themed #root {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 20%, color-mix(in srgb, var(--art-primary) 6%, transparent), transparent) no-repeat fixed,
+    radial-gradient(ellipse 60% 70% at 80% 80%, color-mix(in srgb, var(--art-accent) 4%, transparent), transparent) no-repeat fixed,
+    #0b0d12;
+}
+
 .art-themed input[type='range']::-webkit-slider-thumb {
   background: var(--art-accent) !important;
   box-shadow: 0 0 16px color-mix(in srgb, var(--art-accent) 50%, transparent),

@@ -6,12 +6,11 @@ import { useCapabilities } from './hooks/useCapabilities';
 import { useArtTheming } from './hooks/useArtTheming';
 import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
 import PlayerCarousel from './components/PlayerCarousel';
+import MiniPlayer from './components/MiniPlayer';
 import SystemStatsCard from './components/SystemStatsCard';
 import ServiceStatsBar from './components/ServiceStatsBar';
-import StepperControls from './components/StepperControls';
-import ToggleGrid from './components/ToggleGrid';
-import CaffeineCard from './components/CaffeineCard';
-import AppMixerCard from './components/AppMixerCard';
+import MixerCard from './components/MixerCard';
+import QuickSettings from './components/QuickSettings';
 import CommandLogCard from './components/CommandLogCard';
 import ClipboardCard from './components/ClipboardCard';
 import FloatingNav from './components/FloatingNav';
@@ -74,9 +73,11 @@ export default function App() {
     setPage(idx);
   };
 
+  const showMini = page >= 3;
+
   return (
     <LockScreen>
-      <div className="min-h-[100dvh] flex flex-col relative pb-14">
+      <div className={`min-h-[100dvh] flex flex-col relative ${showMini ? 'pb-[6.5rem]' : 'pb-14'}`}>
         <button
           onClick={toggleFull}
           className="fixed top-[30px] right-3 z-50 w-8 h-8 rounded-lg flex items-center justify-center
@@ -119,8 +120,8 @@ export default function App() {
             <div className="text-center text-red-400 text-sm py-2 mb-2">{error} — retrying…</div>
           )}
 
-          {/* Global Now Playing — fixed above all decks */}
-          {state && caps.playerctl && (
+          {/* Now Playing — full on Home/Media/Video, mini on Code/Terminal */}
+          {state && caps.playerctl && !showMini && (
             <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-3 pb-2">
               <div className="flex items-center gap-2.5 mb-1">
                 <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
@@ -144,30 +145,12 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 {/* LEFT */}
                 <div className="flex flex-col gap-4 min-w-0">
-                  {state && (
-                    <div>
-                      <div className="flex items-center gap-2.5 mb-1">
-                        <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Audio</span>
-                        <div className="flex-1 h-px bg-white/[0.04]" />
-                      </div>
-                      <StepperControls state={state} caps={caps} />
-                    </div>
-                  )}
-                  <AppMixerCard streams={state?.app_streams ?? []} />
+                  <MixerCard state={state} caps={caps} />
                 </div>
 
                 {/* RIGHT */}
                 <div className="flex flex-col gap-4 min-w-0">
-                  {caps.caffeine && <CaffeineCard state={state} />}
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-1">
-                      <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Quick Actions</span>
-                      <div className="flex-1 h-px bg-white/[0.04]" />
-                    </div>
-                    <ToggleGrid state={state} />
-                  </div>
+                  <QuickSettings state={state} />
                   <ClipboardCard />
                   <CommandLogCard log={state?.cmd_log ?? []} />
                 </div>
@@ -201,6 +184,9 @@ export default function App() {
         </div>
 
       </div>
+
+      {/* Mini player — docked above nav strip on Code/Terminal decks */}
+      {showMini && state && caps.playerctl && <MiniPlayer state={state} />}
 
       {/* Bottom strip — fixed to bottom of screen */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04]">
