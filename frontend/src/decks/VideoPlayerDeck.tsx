@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchVideoStatus, sendVideoCommand, triggerCommand, setVolume } from '../services/apiService';
+import { fetchVideoStatus, sendVideoCommand, triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -70,7 +70,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
 
   const showVol = draggingVol.current
     ? localVol
-    : (vol >= 0 ? Math.round(vol * 100) : localVol);
+    : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,16 +111,16 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
               const now = Date.now();
               if (now - lastVolSend.current >= 80) {
                 lastVolSend.current = now;
-                setVolume(v / 100);
+                setVolume(sliderToValue(v / 100, 1));
               }
             }}
             onMouseUp={() => {
               draggingVol.current = false;
-              setVolume(localVol / 100);
+              setVolume(sliderToValue(localVol / 100, 1));
             }}
             onTouchEnd={() => {
               draggingVol.current = false;
-              setVolume(localVol / 100);
+              setVolume(sliderToValue(localVol / 100, 1));
             }}
             className="flex-1 accent-deck-accent"
           />

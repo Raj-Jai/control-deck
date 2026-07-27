@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Monitor, Captions, VolumeX, Volume2, Play, ChevronUp, ChevronDown, Tv } from 'lucide-react';
-import { triggerCommand, setVolume } from '../services/apiService';
+import { triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
 
@@ -23,7 +23,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
 
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
-  const showVol = draggingVol.current ? localVol.current : (vol >= 0 ? Math.round(vol * 100) : localVol.current);
+  const showVol = draggingVol.current ? localVol.current : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol.current);
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,16 +52,16 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
               const now = Date.now();
               if (now - lastVolSend.current >= 80) {
                 lastVolSend.current = now;
-                setVolume(v / 100);
+                setVolume(sliderToValue(v / 100, 1));
               }
             }}
             onMouseUp={() => {
               draggingVol.current = false;
-              setVolume(localVol.current / 100);
+              setVolume(sliderToValue(localVol.current / 100, 1));
             }}
             onTouchEnd={() => {
               draggingVol.current = false;
-              setVolume(localVol.current / 100);
+              setVolume(sliderToValue(localVol.current / 100, 1));
             }}
             className="w-full"
           />
