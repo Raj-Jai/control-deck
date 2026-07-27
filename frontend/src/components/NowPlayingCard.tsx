@@ -397,8 +397,13 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
 
           {/* Right panel: full scrollable lyrics */}
           <div className="flex-1 flex flex-col min-h-0 p-4 md:p-8 overflow-hidden">
-            <div className="text-center mb-4">
+            <div className="text-center mb-1">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-deck-muted/50">Lyrics</h3>
+              {lyricsData?.track_id && (
+                <div className="text-[9px] text-deck-muted/20 tracking-wider mt-0.5 select-none">
+                  {lyricsData.track_id}
+                </div>
+              )}
             </div>
             <div
               ref={lyricsContainerRef}
