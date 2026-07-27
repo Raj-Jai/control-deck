@@ -44,6 +44,7 @@ export default function CaffeineCard({ state }: CaffeineCardProps) {
     return (
       <button
         onClick={() => handleClick(d)}
+        aria-pressed={isActive}
         className={`flex-1 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider
           border transition-all duration-100
           ${isActive

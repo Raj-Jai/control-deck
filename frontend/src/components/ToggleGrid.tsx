@@ -86,6 +86,9 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
           <div
             key={cfg.id}
             className={`toggle-card ${active ? 'active' : ''}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
             onMouseDown={(e) => createRipple(e, e.currentTarget)}
             onTouchStart={(e) => createRipple(e, e.currentTarget)}
             onClick={() => {

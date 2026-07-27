@@ -20,7 +20,6 @@
       'Helvetica Neue', Arial, sans-serif;
     padding: env(safe-area-inset-top) env(safe-area-inset-right)
       env(safe-area-inset-bottom) env(safe-area-inset-left);
-    touch-action: manipulation;
   }
 
   /* Large touch-friendly range slider */

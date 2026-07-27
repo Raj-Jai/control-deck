@@ -139,6 +139,9 @@ function QuickToggle({ icon: Icon, label, active, pulse, onClick, badge, customC
     <div
       className={`toggle-card relative ${active ? 'active' : ''} ${customClass || ''}`}
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      aria-pressed={active ?? false}
     >
       <span className={`text-[22px] leading-none ${pulse ? 'animate-pulse' : ''}`}>
         {Icon ? <Icon size={22} /> : null}
