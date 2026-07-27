@@ -49,6 +49,9 @@ class SyncedAudioPlayer {
   private currentRate = 1.0;
   private integralError = 0;
 
+  private bufferAheadMs = 0;
+  private latencyInterval: ReturnType<typeof setInterval> | null = null;
+
   hostTimeMs(): number {
     return (performance.now() - this.perfBase) + this.dateBase + this.clockOffset;
   }
@@ -97,6 +100,7 @@ class SyncedAudioPlayer {
       duration = totalFrames / this.sampleRate;
     } else {
       const bufferAheadMs = (this.scheduledEnd - this.ctx.currentTime) * 1000;
+      this.bufferAheadMs = bufferAheadMs;
       const error = bufferAheadMs - TARGET_BUFFER;
       this.integralError = Math.max(-PI_INTEGRAL_LIMIT,
         Math.min(PI_INTEGRAL_LIMIT,
@@ -178,6 +182,14 @@ class SyncedAudioPlayer {
 
     try {
       await this.handleConnection(w, ctx);
+      this.latencyInterval = setInterval(() => {
+        const estimated = Math.round(TARGET_DELAY + this.bufferAheadMs);
+        fetch('/api/stream/latency', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latency_ms: estimated }),
+        }).catch(() => {});
+      }, 3000);
     } catch {
       this.stop();
     }
@@ -285,6 +297,10 @@ class SyncedAudioPlayer {
   }
 
   stop() {
+    if (this.latencyInterval) {
+      clearInterval(this.latencyInterval);
+      this.latencyInterval = null;
+    }
     if (this.accFrames > 0) {
       this.flushBatch();
     }

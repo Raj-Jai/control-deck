@@ -283,6 +283,9 @@ var (
 	syncNullModule   uint32
 	syncLoopModule   uint32
 	syncRealSink     string
+
+	streamLatencyMs   int64
+	streamLatencyMu   sync.RWMutex
 )
 
 type ConnectedClient struct {
@@ -370,6 +373,7 @@ func main() {
 	http.HandleFunc("/api/clients", handleClients)
 	http.HandleFunc("/api/stream/control", handleStreamControl)
 	http.HandleFunc("/api/stream/broadcast", handleStreamBroadcast)
+	http.HandleFunc("/api/stream/latency", handleStreamLatency)
 	http.HandleFunc("/seek", handleSeek)
 	http.HandleFunc("/api/set-volume", handleSetVolume)
 	http.HandleFunc("/api/set-brightness", handleSetBrightness)
@@ -944,10 +948,16 @@ func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "failed to create null sink", http.StatusInternalServerError)
 				return
 			}
+			streamLatencyMu.RLock()
+			latencyMs := streamLatencyMs
+			streamLatencyMu.RUnlock()
+			if latencyMs < 100 {
+				latencyMs = 600
+			}
 			loopMod, err := runPactl("load-module", "module-loopback",
 				"source=sync_broadcast.monitor",
 				"sink="+realSink,
-				"latency_msec=400")
+				fmt.Sprintf("latency_msec=%d", latencyMs))
 			if err != nil {
 				pactlUnload(nullMod)
 				syncBroadcastMu.Unlock()
@@ -1055,6 +1065,30 @@ func disableSyncBroadcast() {
 	syncNullModule = 0
 	syncLoopModule = 0
 	syncRealSink = ""
+}
+
+func handleStreamLatency(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		LatencyMs int64 `json:"latency_ms"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.LatencyMs < 50 {
+		req.LatencyMs = 50
+	}
+	if req.LatencyMs > 3000 {
+		req.LatencyMs = 3000
+	}
+	streamLatencyMu.Lock()
+	streamLatencyMs = req.LatencyMs
+	streamLatencyMu.Unlock()
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func broadcastState() {
