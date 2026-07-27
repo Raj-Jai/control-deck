@@ -24,6 +24,7 @@ const PI_MAX = 0.003;
 const PI_INTEGRAL_LIMIT = 500;
 
 const FADE_SEC = 0.002;
+const CAPTURE_LATENCY_MS = 120;
 
 class SyncedAudioPlayer {
   private ctx: AudioContext | null = null;
@@ -183,7 +184,7 @@ class SyncedAudioPlayer {
     try {
       await this.handleConnection(w, ctx);
       this.latencyInterval = setInterval(() => {
-        const estimated = Math.round(TARGET_DELAY + this.bufferAheadMs);
+        const estimated = Math.round(TARGET_DELAY + this.bufferAheadMs + CAPTURE_LATENCY_MS);
         fetch('/api/stream/latency', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
