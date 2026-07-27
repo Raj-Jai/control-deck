@@ -92,19 +92,29 @@ interface UseMediaStreamResult {
   error: string | null;
 }
 
-export function useMediaStream(): UseMediaStreamResult {
+export function useMediaStream(deviceId?: string): UseMediaStreamResult {
   const [state, setState] = useState<MediaState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    let es = new EventSource(DECK_CONFIG.api.stream);
+    const streamUrl = DECK_CONFIG.api.stream + (deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '');
+    let es = new EventSource(streamUrl);
 
     es.onmessage = (e) => {
       try {
-        const data: MediaState = JSON.parse(e.data);
-        setState(data);
+        const data = JSON.parse(e.data);
+        if (data.type === 'stream_command') {
+          console.log('SSE stream_command:', data.action);
+          if (data.action === 'start') {
+            import('../lib/streamManager').then(m => m.start());
+          } else if (data.action === 'stop') {
+            import('../lib/streamManager').then(m => m.stop());
+          }
+          return;
+        }
+        setState(data as MediaState);
         setLoading(false);
         setError(null);
       } catch {
@@ -118,11 +128,19 @@ export function useMediaStream(): UseMediaStreamResult {
       es.close();
       // attempt reconnect after 3s
       const timer = setTimeout(() => {
-        es = new EventSource(DECK_CONFIG.api.stream);
+        es = new EventSource(streamUrl);
         es.onmessage = (ev) => {
           try {
-            const data: MediaState = JSON.parse(ev.data);
-            setState(data);
+            const data = JSON.parse(ev.data);
+            if (data.type === 'stream_command') {
+              if (data.action === 'start') {
+                import('../lib/streamManager').then(m => m.start());
+              } else if (data.action === 'stop') {
+                import('../lib/streamManager').then(m => m.stop());
+              }
+              return;
+            }
+            setState(data as MediaState);
             setLoading(false);
             setError(null);
           } catch {

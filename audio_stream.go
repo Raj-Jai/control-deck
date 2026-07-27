@@ -53,6 +53,32 @@ var streamMgr = &StreamManager{
 	listeners: make(map[chan []byte]bool),
 }
 
+var (
+	deviceAudioWS   = make(map[string]*websocket.Conn)
+	deviceAudioWSMu sync.Mutex
+)
+
+func remoteStopStream(deviceID string) bool {
+	deviceAudioWSMu.Lock()
+	conn, ok := deviceAudioWS[deviceID]
+	if ok {
+		delete(deviceAudioWS, deviceID)
+	}
+	deviceAudioWSMu.Unlock()
+	if ok {
+		conn.Close(websocket.StatusNormalClosure, "remote stop")
+		return true
+	}
+	return false
+}
+
+func remoteStartStream(deviceID string) bool {
+	deviceAudioWSMu.Lock()
+	_, ok := deviceAudioWS[deviceID]
+	deviceAudioWSMu.Unlock()
+	return !ok // device is not already streaming
+}
+
 type StreamManager struct {
 	mu        sync.Mutex
 	ffCmd     *exec.Cmd
@@ -205,6 +231,20 @@ func handleStreamWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	deviceID := r.URL.Query().Get("device_id")
+	if deviceID != "" {
+		deviceAudioWSMu.Lock()
+		deviceAudioWS[deviceID] = conn
+		deviceAudioWSMu.Unlock()
+		defer func() {
+			deviceAudioWSMu.Lock()
+			if deviceAudioWS[deviceID] == conn {
+				delete(deviceAudioWS, deviceID)
+			}
+			deviceAudioWSMu.Unlock()
+		}()
+	}
 
 	ch, err := streamMgr.addListener()
 	if err != nil {

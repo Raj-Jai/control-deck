@@ -251,6 +251,12 @@ var (
 	winClients   = make(map[chan string]bool)
 	winClientsMu sync.Mutex
 
+	connectedClients   = make(map[string]*ConnectedClient)
+	connectedClientsMu sync.RWMutex
+
+	sseDeviceChans   = make(map[string]chan string)
+	sseDeviceChansMu sync.RWMutex
+
 	cmdLog   []LogEntry
 	cmdLogMu sync.Mutex
 
@@ -269,6 +275,62 @@ var (
 	mediaPlayingPlayer string
 	mediaPlayingMu     sync.RWMutex
 )
+
+type ConnectedClient struct {
+	IP        string    `json:"ip"`
+	UA        string    `json:"ua"`
+	Connected time.Time `json:"connected"`
+	LastSeen  time.Time `json:"last_seen"`
+	Path      string    `json:"path"`
+	DeviceID  string    `json:"device_id"`
+	Streaming bool      `json:"streaming"`
+}
+
+const clientTTL = 3 * time.Second
+
+func trackClient(r *http.Request, deviceID string) {
+	ip := r.RemoteAddr
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		ip = strings.Split(fwd, ",")[0]
+	}
+	key := ip + "|" + r.UserAgent()
+	now := time.Now()
+	deviceAudioWSMu.Lock()
+	_, streaming := deviceAudioWS[deviceID]
+	deviceAudioWSMu.Unlock()
+	connectedClientsMu.Lock()
+	if existing, ok := connectedClients[key]; ok {
+		existing.LastSeen = now
+		existing.DeviceID = deviceID
+		existing.Path = r.URL.Path
+		existing.Streaming = streaming
+	} else {
+		connectedClients[key] = &ConnectedClient{
+			IP:        ip,
+			UA:        r.UserAgent(),
+			Connected: now,
+			LastSeen:  now,
+			Path:      r.URL.Path,
+			DeviceID:  deviceID,
+			Streaming: streaming,
+		}
+	}
+	connectedClientsMu.Unlock()
+}
+
+func cleanupClients() {
+	for {
+		time.Sleep(15 * time.Second)
+		now := time.Now()
+		connectedClientsMu.Lock()
+		for k, c := range connectedClients {
+			if now.Sub(c.LastSeen) > clientTTL {
+				delete(connectedClients, k)
+			}
+		}
+		connectedClientsMu.Unlock()
+	}
+}
 
 func addLog(cmd string) {
 	cmdLogMu.Lock()
@@ -290,12 +352,14 @@ func main() {
 	initVideoPlayerConfig()
 
 	// Serve frontend assets
-	http.Handle("/", http.FileServer(http.Dir(".")))
+	http.Handle("/", trackMiddleware(http.FileServer(http.Dir("."))))
 
 	// API Routes
 	http.HandleFunc("/api/capabilities", handleCapabilities)
 	http.HandleFunc("/api/auth", handleAuth)
 	http.HandleFunc("/api/command", handleCommand)
+	http.HandleFunc("/api/clients", handleClients)
+	http.HandleFunc("/api/stream/control", handleStreamControl)
 	http.HandleFunc("/seek", handleSeek)
 	http.HandleFunc("/api/set-volume", handleSetVolume)
 	http.HandleFunc("/api/set-brightness", handleSetBrightness)
@@ -317,6 +381,7 @@ func main() {
 
 	// Background tickers
 	go startMediaBroadcaster()
+	go cleanupClients()
 	go startPingChecker()
 	go startWindowWatcher()
 
@@ -691,16 +756,31 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
+	deviceID := r.URL.Query().Get("device_id")
+	trackClient(r, deviceID)
 	messageChan := make(chan string)
 
 	clientsMu.Lock()
 	clients[messageChan] = true
 	clientsMu.Unlock()
 
+	if deviceID != "" {
+		sseDeviceChansMu.Lock()
+		sseDeviceChans[deviceID] = messageChan
+		sseDeviceChansMu.Unlock()
+	}
+
 	defer func() {
 		clientsMu.Lock()
 		delete(clients, messageChan)
 		clientsMu.Unlock()
+		if deviceID != "" {
+			sseDeviceChansMu.Lock()
+			if sseDeviceChans[deviceID] == messageChan {
+				delete(sseDeviceChans, deviceID)
+			}
+			sseDeviceChansMu.Unlock()
+		}
 		close(messageChan)
 	}()
 
@@ -715,6 +795,85 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 				flusher.Flush()
 			}
 		}
+	}
+}
+
+func trackMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
+			trackClient(r, r.URL.Query().Get("device_id"))
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func handleClients(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	trackClient(r, r.URL.Query().Get("device_id"))
+	connectedClientsMu.RLock()
+	list := make([]*ConnectedClient, 0, len(connectedClients))
+	deviceAudioWSMu.Lock()
+	for _, c := range connectedClients {
+		_, c.Streaming = deviceAudioWS[c.DeviceID]
+		list = append(list, c)
+	}
+	deviceAudioWSMu.Unlock()
+	connectedClientsMu.RUnlock()
+	json.NewEncoder(w).Encode(map[string]any{
+		"count":   len(list),
+		"clients": list,
+	})
+}
+
+func handleStreamControl(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Target string `json:"target"`
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	log.Printf("stream/control: action=%s target=%s", req.Action, req.Target)
+	sseDeviceChansMu.RLock()
+	ch, ok := sseDeviceChans[req.Target]
+	sseDeviceChansMu.RUnlock()
+	log.Printf("stream/control: sse channel found=%v (total channels=%d)", ok, len(sseDeviceChans))
+	switch req.Action {
+	case "start":
+		if !ok {
+			http.Error(w, "device not connected", http.StatusNotFound)
+			return
+		}
+		select {
+		case ch <- `{"type":"stream_command","action":"start"}`:
+			log.Printf("stream/control: sent start to %s", req.Target)
+		default:
+			log.Printf("stream/control: channel full for %s", req.Target)
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	case "stop":
+		stopped := remoteStopStream(req.Target)
+		sseDeviceChansMu.RLock()
+		ch, hasSSE := sseDeviceChans[req.Target]
+		sseDeviceChansMu.RUnlock()
+		if hasSSE {
+			select {
+			case ch <- `{"type":"stream_command","action":"stop"}`:
+			default:
+			}
+		}
+		if stopped || hasSSE {
+			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		} else {
+			http.Error(w, "device not found", http.StatusNotFound)
+		}
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
 	}
 }
 

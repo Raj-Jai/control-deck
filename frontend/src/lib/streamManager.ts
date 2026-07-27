@@ -1,6 +1,11 @@
 type Listener = (active: boolean) => void;
 
 const listeners = new Set<Listener>();
+let deviceId = '';
+
+export function setDeviceId(id: string) {
+  deviceId = id;
+}
 
 function readUint64BE(dv: DataView, offset: number): number {
   const hi = dv.getUint32(offset);
@@ -150,7 +155,8 @@ class SyncedAudioPlayer {
   }
 
   async start() {
-    if (this.active) return;
+    if (this.active) { console.log('streamManager: already active'); return; }
+    console.log('streamManager: starting...');
 
     let ctx: AudioContext;
     try {
@@ -165,7 +171,8 @@ class SyncedAudioPlayer {
     this.integralError = 0;
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const w = new WebSocket(`${proto}//${location.host}/api/audio-stream/ws`);
+    const url = `${proto}//${location.host}/api/audio-stream/ws${deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : ''}`;
+    const w = new WebSocket(url);
     w.binaryType = 'arraybuffer';
     this.ws = w;
 

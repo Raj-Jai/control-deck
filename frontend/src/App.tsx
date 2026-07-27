@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Monitor } from 'lucide-react';
 import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
 import { useArtTheming } from './hooks/useArtTheming';
 import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
+import { setDeviceId } from './lib/streamManager';
 import PlayerCarousel from './components/PlayerCarousel';
 import MiniPlayer from './components/MiniPlayer';
 import SystemStatsCard from './components/SystemStatsCard';
@@ -14,6 +15,7 @@ import QuickSettings from './components/QuickSettings';
 import WeatherCard from './components/WeatherCard';
 import CommandLogCard from './components/CommandLogCard';
 import ClipboardCard from './components/ClipboardCard';
+import ConnectedDevicesCard from './components/ConnectedDevicesCard';
 import FloatingNav from './components/FloatingNav';
 import MediaBrowserDeck from './decks/MediaBrowserDeck';
 import VideoPlayerDeck from './decks/VideoPlayerDeck';
@@ -30,8 +32,23 @@ const pages = [
 
 const PX_PER_PAGE = 36;
 
+function getDeviceId(): string {
+  try {
+    let id = sessionStorage.getItem('dash_device_id');
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem('dash_device_id', id);
+    }
+    return id;
+  } catch {
+    return '';
+  }
+}
+const deviceId = getDeviceId();
+if (deviceId) setDeviceId(deviceId);
+
 export default function App() {
-  const { state, loading, error } = useMediaStream();
+  const { state, loading, error } = useMediaStream(deviceId);
   const { appType } = useActiveWindow();
   const caps = useCapabilities();
   useArtTheming(state?.art_url);
@@ -39,6 +56,7 @@ export default function App() {
   const [page, setPage] = useState(0);
   const [autoFocus, setAutoFocus] = useState(true);
   const [dragging, setDragging] = useState(false);
+  const [clientCount, setClientCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef(0);
   const dragStripRef = useRef<HTMLDivElement>(null);
@@ -99,6 +117,19 @@ export default function App() {
   };
 
   const showMini = page >= 3;
+
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`);
+        const data = await res.json();
+        setClientCount(data.count);
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!e.isPrimary) return;
@@ -198,6 +229,7 @@ export default function App() {
                 {/* RIGHT */}
                 <div className="flex flex-col gap-4 min-w-0">
                   <QuickSettings state={state} />
+                  <ConnectedDevicesCard />
                   <WeatherCard />
                   <ClipboardCard />
                   <CommandLogCard log={state?.cmd_log ?? []} />
@@ -238,7 +270,7 @@ export default function App() {
 
       {/* Bottom strip — fixed to bottom of screen */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04] pb-[env(safe-area-inset-bottom)]">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2">
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2 relative">
           {/* Draggable page dots */}
           <div
             ref={dragStripRef}
@@ -262,6 +294,12 @@ export default function App() {
               />
             ))}
           </div>
+          {clientCount > 0 && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-deck-muted/40 select-none pointer-events-none">
+              <Monitor size={10} />
+              {clientCount}
+            </div>
+          )}
         </div>
       </div>
 
