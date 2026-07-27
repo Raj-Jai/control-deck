@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Maximize2, Minimize2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import LockScreen from './components/LockScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
@@ -28,6 +28,8 @@ const pages = [
   { id: 'terminal', label: 'Terminal' },
 ] as const;
 
+const PX_PER_PAGE = 36;
+
 export default function App() {
   const { state, loading, error } = useMediaStream();
   const { appType } = useActiveWindow();
@@ -36,8 +38,12 @@ export default function App() {
   const [full, setFull] = useState(false);
   const [page, setPage] = useState(0);
   const [autoFocus, setAutoFocus] = useState(true);
+  const [dragging, setDragging] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef(0);
+  const dragStripRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef<{ startX: number; startScrollLeft: number } | null>(null);
+  const moveRAF = useRef(0);
 
   useEffect(() => {
     const cb = () => setFull(!!document.fullscreenElement);
@@ -67,15 +73,15 @@ export default function App() {
     }
   };
 
-  const scrollTo = (i: number) => {
+  const scrollTo = (i: number, smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
-    const child = el.children[i] as HTMLElement;
-    if (child) child.scrollIntoView({ behavior: 'auto', inline: 'start' });
+    const child = el.children[i] as HTMLElement | undefined;
+    if (!child) return;
+    child.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', inline: 'start' });
     setPage(i);
   };
 
-  // Auto-navigate based on active window focus
   useEffect(() => {
     if (!autoFocus || !appType) return;
     const target = appToPageIndex(appType);
@@ -93,6 +99,43 @@ export default function App() {
   };
 
   const showMini = page >= 3;
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!e.isPrimary) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    el.style.scrollSnapType = 'none';
+    dragState.current = { startX: e.clientX, startScrollLeft: el.scrollLeft };
+    setDragging(true);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!e.isPrimary) return;
+    const ds = dragState.current;
+    if (!ds) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    cancelAnimationFrame(moveRAF.current);
+    moveRAF.current = requestAnimationFrame(() => {
+      const dx = e.clientX - ds.startX;
+      const pageWidth = el.clientWidth;
+      const scrollDelta = dx * (pageWidth / PX_PER_PAGE);
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = Math.max(0, Math.min(maxScroll, ds.startScrollLeft + scrollDelta));
+    });
+  };
+
+  const onPointerUp = () => {
+    cancelAnimationFrame(moveRAF.current);
+    const el = scrollRef.current;
+    dragState.current = null;
+    setDragging(false);
+    if (!el) return;
+    el.style.scrollSnapType = '';
+    const target = Math.round(el.scrollLeft / el.clientWidth);
+    scrollTo(target, true);
+  };
 
   return (
     <LockScreen>
@@ -113,26 +156,6 @@ export default function App() {
           <div className="w-full max-w-6xl mx-auto px-3 sm:px-4">
             <ServiceStatsBar />
           </div>
-        </div>
-
-        {/* Page indicator */}
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5">
-          {pages.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => scrollTo(i)}
-              className={`p-2 -m-2 rounded-full transition-all duration-200 ${
-                i === page
-                  ? 'text-deck-accent'
-                  : 'text-white/20 hover:text-white/40'
-              }`}
-              aria-label={p.label}
-            >
-              <span className={`block rounded-full transition-all duration-200 ${
-                i === page ? 'w-4 h-1.5 bg-current' : 'w-1.5 h-1.5 bg-current'
-              }`} />
-            </button>
-          ))}
         </div>
 
         <div className="flex-1 w-full max-w-6xl mx-auto relative">
@@ -159,8 +182,9 @@ export default function App() {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth
-              no-scrollbar h-full"
+            className={`flex overflow-x-auto no-scrollbar h-full ${
+              dragging ? '' : 'snap-x snap-mandatory scroll-smooth'
+            }`}
             style={{ scrollbarWidth: 'none' }}
           >
             {/* Page 0: Home */}
@@ -214,31 +238,29 @@ export default function App() {
 
       {/* Bottom strip — fixed to bottom of screen */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04] pb-[env(safe-area-inset-bottom)]">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => scrollTo(page - 1)}
-              disabled={page === 0}
-              className="flex items-center gap-1 text-[10px] text-deck-dim disabled:opacity-0
-                hover:text-deck-accent transition-colors"
-            >
-              <ChevronLeft size={14} />
-              {pages[page - 1]?.label ?? ''}
-            </button>
-
-            <span className="text-[10px] uppercase tracking-wider text-deck-muted/40 font-semibold">
-              {pages[page].label}
-            </span>
-
-            <button
-              onClick={() => scrollTo(page + 1)}
-              disabled={page === pages.length - 1}
-              className="flex items-center gap-1 text-[10px] text-deck-dim disabled:opacity-0
-                hover:text-deck-accent transition-colors"
-            >
-              {pages[page + 1]?.label ?? ''}
-              <ChevronRight size={14} />
-            </button>
+        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2">
+          {/* Draggable page dots */}
+          <div
+            ref={dragStripRef}
+            className="flex items-center justify-center gap-6 select-none touch-none py-2 -my-2 w-full transition-transform duration-100"
+            data-dragging={dragging || undefined}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            {pages.map((p, i) => (
+              <span
+                key={p.id}
+                className={`block rounded-full transition-all duration-200 ${
+                  dragging
+                    ? 'bg-white/40 w-3 h-3'
+                    : i === page
+                      ? 'bg-deck-accent w-6 h-2'
+                      : 'bg-white/20 w-2 h-2'
+                }`}
+              />
+            ))}
           </div>
         </div>
       </div>
