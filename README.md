@@ -7,7 +7,10 @@ A web-based local network dashboard for a Linux workstation, served to tablets a
 - **Multi-Deck Touch UI** — 5 swipeable pages (Home / Media / Video / Code / Terminal) with `scroll-snap` carousel, dot indicators, fixed bottom nav bar, and a floating navigation bubble for quick deck switching
 - **Now Playing** — MPRIS media controls fixed across all decks, showing the active player with play/pause, next/prev, seek, volume, album art, and synced lyrics. Swipeable carousel when multiple players are active
 - **Auto-Focus Toggle** — disable automatic page switching when changing focused windows, letting you stay on your current deck
-- **Synchronized Audio Stream** — real-time PCM audio from the host's audio output (`@DEFAULT_MONITOR@`) broadcast to every connected device via WebSocket, with NTP-based clock sync and Web Audio API scheduling for sample-accurate multi-device alignment
+- **Dashboard Lock** — optional PIN lock with 6-hour session; mode picker for Dashboard (PIN) or Media Streamer (separate PIN)
+- **Media Streamer Mode** — dedicated light-weight page from the lock screen, featuring Now Playing, per-app audio mixers, and device broadcast controls
+- **Synchronized Audio Broadcast** — real-time PCM audio from the host's audio output (`@DEFAULT_MONITOR@`) broadcast to every connected device via WebSocket, with NTP-based clock sync and Web Audio API scheduling for sample-accurate multi-device alignment. Two modes: regular broadcast (mutes laptop speakers) and sync broadcast (creates null-sink with 800ms delayed loopback, no mute)
+- **Logarithmic Volume/Brightness Sliders** — sliders use a quadratic curve (`p²`) for natural-feeling control; display values are square-root mapped for linear perception
 - **Per-App Audio Mixer** — view and control volume/mute of individual PulseAudio sink-inputs
 - **Volume & Brightness** — sliders, night-light toggle, audio output sink switching
 - **System Stats** — CPU, RAM, battery, temperature, network info, ping status
@@ -19,7 +22,6 @@ A web-based local network dashboard for a Linux workstation, served to tablets a
 - **Toggles** — Bluetooth, BT Speaker, WARP, Lock Desktop, Caffeine, ERP Login, Night Light, Audio Stream
 - **Command Log** — every action logged with timestamp, displayed in real-time via SSE
 - **Capability Detection** — frontend auto-hides cards whose backend dependencies are missing
-- **Dashboard Lock** — optional PIN lock with 6-hour session
 
 ## Architecture
 
@@ -160,6 +162,7 @@ All user-specific settings in `config.json`:
 | Key | Description |
 |-----|-------------|
 | `pin` | Dashboard lock-screen PIN |
+| `media_pin` | Media streamer lock-screen PIN |
 | `bt_mac` | Bluetooth MAC address for headphone connect |
 | `ping_target` | Host to ping for internet connectivity check |
 | `http_port` / `https_port` | Listen ports |
