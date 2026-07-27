@@ -49,7 +49,7 @@ func buildCommandMap() {
 	}
 	dashPIN = appCfg.PIN
 	if dashPIN == "" {
-		dashPIN = "0616"
+		dashPIN = "3456"
 	}
 
 	commandMap = map[string][]string{
