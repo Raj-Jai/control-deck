@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Maximize2, Minimize2, Monitor } from 'lucide-react';
-import LockScreen from './components/LockScreen';
+import AuthScreen, { getStoredMode, clearAuth } from './components/AuthScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
 import { useArtTheming } from './hooks/useArtTheming';
@@ -21,6 +21,7 @@ import MediaBrowserDeck from './decks/MediaBrowserDeck';
 import VideoPlayerDeck from './decks/VideoPlayerDeck';
 import IdeDeck from './decks/IdeDeck';
 import TerminalDeck from './decks/TerminalDeck';
+import MediaStreamerPage from './components/MediaStreamerPage';
 
 const pages = [
   { id: 'home', label: 'Home' },
@@ -48,6 +49,7 @@ const deviceId = getDeviceId();
 if (deviceId) setDeviceId(deviceId);
 
 export default function App() {
+  const [authMode, setAuthMode] = useState<'dashboard' | 'media' | null>(getStoredMode);
   const { state, loading, error } = useMediaStream(deviceId);
   const { appType } = useActiveWindow();
   const caps = useCapabilities();
@@ -168,8 +170,11 @@ export default function App() {
     scrollTo(target, true);
   };
 
+  if (!authMode) return <AuthScreen onAuth={setAuthMode} />;
+  if (authMode === 'media') return <MediaStreamerPage deviceId={deviceId} />;
+
   return (
-    <LockScreen>
+    <>
       <div className={`min-h-[100dvh] flex flex-col relative ${showMini ? 'pb-[6.5rem]' : 'pb-14'}`}>
         <button
           onClick={toggleFull}
@@ -310,6 +315,6 @@ export default function App() {
         autoFocus={autoFocus}
         onToggleAutoFocus={() => setAutoFocus(prev => !prev)}
       />
-    </LockScreen>
+    </>
   );
 }

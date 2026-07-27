@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	PIN              string              `json:"pin"`
-	BTMAC            string              `json:"bt_mac"`
+	PIN               string              `json:"pin"`
+	MediaPIN          string              `json:"media_pin"`
+	BTMAC             string              `json:"bt_mac"`
 	PingTarget       string              `json:"ping_target"`
 	HTTPPort         int                 `json:"http_port"`
 	HTTPSPort        int                 `json:"https_port"`

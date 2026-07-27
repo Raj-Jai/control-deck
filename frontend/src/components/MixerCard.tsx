@@ -132,7 +132,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   );
 }
 
-function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
+export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
   const [localVol, setLocalVol] = useState<Record<number, number>>({});
   const dragging = useRef<Record<number, boolean>>({});
   const lastSend = useRef<Record<number, number>>({});

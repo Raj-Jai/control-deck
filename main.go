@@ -24,6 +24,7 @@ func isFinite(v float64) bool {
 }
 
 var dashPIN string
+var dashMediaPIN string
 var caffeineSD string
 var commandMap map[string][]string
 var (
@@ -50,6 +51,10 @@ func buildCommandMap() {
 	dashPIN = appCfg.PIN
 	if dashPIN == "" {
 		dashPIN = "3456"
+	}
+	dashMediaPIN = appCfg.MediaPIN
+	if dashMediaPIN == "" {
+		dashMediaPIN = "7890"
 	}
 
 	commandMap = map[string][]string{
@@ -360,6 +365,7 @@ func main() {
 	// API Routes
 	http.HandleFunc("/api/capabilities", handleCapabilities)
 	http.HandleFunc("/api/auth", handleAuth)
+	http.HandleFunc("/api/auth-media", handleAuthMedia)
 	http.HandleFunc("/api/command", handleCommand)
 	http.HandleFunc("/api/clients", handleClients)
 	http.HandleFunc("/api/stream/control", handleStreamControl)
@@ -514,6 +520,22 @@ func handleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"ok": req.PIN == dashPIN})
+}
+
+func handleAuthMedia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		PIN string `json:"pin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"ok": req.PIN == dashMediaPIN})
 }
 
 // Executed when buttons are pressed on the Web Deck
