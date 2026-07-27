@@ -167,10 +167,10 @@ function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
                 </div>
               </div>
               <button
-                className={`icon-btn w-6 h-6 flex-shrink-0 ${s.muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : ''}`}
+                className={`icon-btn w-8 h-8 flex-shrink-0 ${s.muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : ''}`}
                 onClick={() => setStream(s.id, { muted: !s.muted })}
               >
-                {s.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                {s.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
               </button>
               <input
                 type="range" min={0} max={100} value={vol}

@@ -32,7 +32,7 @@ export default function ClipboardCard() {
     } finally {
       setLoading('idle');
     }
-    textareaRef.current?.focus();
+    textareaRef.current?.blur();
   };
 
   const handlePush = async () => {
@@ -46,6 +46,7 @@ export default function ClipboardCard() {
     } finally {
       setLoading('idle');
     }
+    textareaRef.current?.blur();
   };
 
   const handlePushFromClipboard = async () => {
@@ -73,6 +74,7 @@ export default function ClipboardCard() {
     } finally {
       setLoading('idle');
     }
+    textareaRef.current?.blur();
   };
 
   const handleCopy = async () => {
@@ -94,6 +96,7 @@ export default function ClipboardCard() {
         showToast('Copy failed — use HTTPS (port 8443)', 'error');
       }
     }
+    textareaRef.current?.blur();
   };
 
   return (

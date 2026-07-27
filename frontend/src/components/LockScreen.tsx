@@ -66,7 +66,7 @@ export default function LockScreen({ children }: { children: ReactNode }) {
   if (authed) return <>{children}</>;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0b0d12] p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-[#0b0d12] p-4">
       <div className="deck-card w-full max-w-[320px] flex flex-col items-center gap-6 py-8">
         {/* Icon */}
         <div className="w-14 h-14 rounded-2xl bg-deck-accent/10 border border-deck-accent/20 flex items-center justify-center">

@@ -331,6 +331,9 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       {showFullLyrics && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex flex-col md:flex-row"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Fullscreen lyrics"
           style={{
             background: 'rgba(15, 23, 42, 0.92)',
             backdropFilter: 'blur(24px)',

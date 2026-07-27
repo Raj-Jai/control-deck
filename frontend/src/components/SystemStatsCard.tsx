@@ -96,7 +96,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
 
   return (
     <div className="deck-card flex flex-col gap-2.5">
-      <div className={`grid ${hasGPU ? 'grid-cols-5' : 'grid-cols-4'} gap-2`}>
+      <div className={`grid grid-cols-3 sm:grid-cols-4 ${hasGPU ? 'lg:grid-cols-5' : ''} gap-2`}>
         <StatBar
           label="CPU"
           icon={<Cpu size={14} className="text-deck-accent" />}

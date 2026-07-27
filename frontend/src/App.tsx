@@ -37,6 +37,7 @@ export default function App() {
   const [page, setPage] = useState(0);
   const [autoFocus, setAutoFocus] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRAF = useRef(0);
 
   useEffect(() => {
     const cb = () => setFull(!!document.fullscreenElement);
@@ -82,10 +83,13 @@ export default function App() {
   }, [appType, autoFocus]);
 
   const handleScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const idx = Math.round(el.scrollLeft / el.clientWidth);
-    setPage(idx);
+    if (scrollRAF.current) cancelAnimationFrame(scrollRAF.current);
+    scrollRAF.current = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const idx = Math.round(el.scrollLeft / el.clientWidth);
+      setPage(idx);
+    });
   };
 
   const showMini = page >= 3;
@@ -95,17 +99,17 @@ export default function App() {
       <div className={`min-h-[100dvh] flex flex-col relative ${showMini ? 'pb-[6.5rem]' : 'pb-14'}`}>
         <button
           onClick={toggleFull}
-          className="fixed top-[30px] right-3 z-50 w-8 h-8 rounded-lg flex items-center justify-center
+          className="fixed top-[30px] right-3 z-50 w-10 h-10 rounded-lg flex items-center justify-center
             bg-black/40 backdrop-blur border border-white/10 text-deck-dim
             hover:bg-deck-accent/20 hover:text-deck-accent hover:border-deck-accent/30
             transition-all duration-100 active:scale-90"
           title={full ? 'Exit fullscreen' : 'Fullscreen'}
         >
-          {full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+          {full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
 
         {/* Service process stats bar */}
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06]">
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
           <div className="w-full max-w-6xl mx-auto px-3 sm:px-4">
             <ServiceStatsBar />
           </div>
@@ -117,13 +121,17 @@ export default function App() {
             <button
               key={p.id}
               onClick={() => scrollTo(i)}
-              className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
+              className={`p-2 -m-2 rounded-full transition-all duration-200 ${
                 i === page
-                  ? 'bg-deck-accent w-4'
-                  : 'bg-white/20 hover:bg-white/40'
+                  ? 'text-deck-accent'
+                  : 'text-white/20 hover:text-white/40'
               }`}
               aria-label={p.label}
-            />
+            >
+              <span className={`block rounded-full transition-all duration-200 ${
+                i === page ? 'w-4 h-1.5 bg-current' : 'w-1.5 h-1.5 bg-current'
+              }`} />
+            </button>
           ))}
         </div>
 
@@ -205,7 +213,7 @@ export default function App() {
       {showMini && state && caps.playerctl && <MiniPlayer state={state} />}
 
       {/* Bottom strip — fixed to bottom of screen */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04] pb-[env(safe-area-inset-bottom)]">
         <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <button

@@ -52,16 +52,16 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
       {players.length > 1 && (
         <>
           <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-black/30 text-white/70 hover:bg-black/50 hover:text-white"
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 text-white/70 hover:bg-black/50 hover:text-white"
             onClick={() => go(clampedIdx - 1)}
           >
-            <ChevronLeft size={14} />
+            <ChevronLeft size={16} />
           </button>
           <button
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-black/30 text-white/70 hover:bg-black/50 hover:text-white"
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 text-white/70 hover:bg-black/50 hover:text-white"
             onClick={() => go(clampedIdx + 1)}
           >
-            <ChevronRight size={14} />
+            <ChevronRight size={16} />
           </button>
         </>
       )}
@@ -73,11 +73,13 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
           {players.map((p, i) => (
             <button
               key={p.id}
-              className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                i === clampedIdx ? 'bg-deck-accent' : 'bg-deck-dim/30'
-              }`}
+              className="p-2 -my-2 flex items-center justify-center"
               onClick={() => setIdx(i)}
-            />
+            >
+              <span className={`w-1.5 h-1.5 rounded-full block transition-colors ${
+                i === clampedIdx ? 'bg-deck-accent' : 'bg-deck-dim/30'
+              }`} />
+            </button>
           ))}
         </div>
       )}

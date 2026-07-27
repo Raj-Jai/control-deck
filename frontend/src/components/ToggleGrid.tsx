@@ -101,8 +101,8 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
             {/* Bluetooth connect button */}
             {cfg.id === 'bt' && (
               <button
-                className="absolute bottom-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
-                  bg-deck-surface2 border border-white/10 text-deck-dim text-[11px]
+                className="absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center
+                  bg-deck-surface2 border border-white/10 text-deck-dim
                   hover:bg-deck-accent hover:text-white hover:border-deck-accent
                   transition-all duration-100 z-[2] active:scale-85"
                 onClick={(e) => {
@@ -111,7 +111,7 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
                 }}
                 title="Connect headphone"
               >
-                <Headphones size={14} />
+                <Headphones size={15} />
               </button>
             )}
           </div>

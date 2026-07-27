@@ -43,7 +43,7 @@ export default function ServiceStatsBar() {
   if (services.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 px-1 py-1 text-[11px] text-deck-text/80 font-medium select-none">
+    <div className="flex items-center gap-2 px-1 py-1 text-[11px] text-deck-text/80 font-medium select-none overflow-x-auto flex-nowrap">
       {services.map(s => {
         const running = s.status === 'running';
         return (

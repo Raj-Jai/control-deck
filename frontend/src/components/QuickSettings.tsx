@@ -107,13 +107,13 @@ export default function QuickSettings({ state }: QuickSettingsProps) {
               onClick={() => handleToggle(cfg)}
               badge={cfg.id === 'bt' ? (
                 <button
-                  className="absolute bottom-0.5 right-0.5 w-5 h-5 rounded-full flex items-center justify-center
+                  className="absolute bottom-0.5 right-0.5 w-6 h-6 rounded-full flex items-center justify-center
                     bg-deck-surface2 border border-white/10 text-deck-dim hover:bg-deck-accent hover:text-white
                     transition-all active:scale-85"
                   onClick={(e) => { e.stopPropagation(); triggerCommand('btConnect'); }}
                   title="Connect headphone"
                 >
-                  <Headphones size={10} />
+                  <Headphones size={11} />
                 </button>
               ) : undefined}
             />
