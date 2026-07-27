@@ -187,6 +187,7 @@ type SystemStats struct {
 	SSID      string  `json:"ssid"`
 	IP        string  `json:"ip"`
 	PingOK    bool    `json:"ping_ok"`
+	GPU       *GPUStats `json:"gpu,omitempty"`
 }
 
 type MediaState struct {
@@ -1349,8 +1350,9 @@ func fetchSystemStats() *SystemStats {
 	pingMu.RLock()
 	pOK := pingOK
 	pingMu.RUnlock()
+	gpu := fetchGPUStats()
 
-	if cpu < 0 && ramPct < 0 && bat < 0 && temp < 0 && ssid == "" && ip == "" {
+	if cpu < 0 && ramPct < 0 && bat < 0 && temp < 0 && ssid == "" && ip == "" && gpu == nil {
 		return nil
 	}
 	return &SystemStats{
@@ -1364,6 +1366,7 @@ func fetchSystemStats() *SystemStats {
 		SSID:     ssid,
 		IP:       ip,
 		PingOK:   pOK,
+		GPU:      gpu,
 	}
 }
 

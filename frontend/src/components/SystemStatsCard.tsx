@@ -8,6 +8,7 @@ import {
   Thermometer,
   Wifi,
   WifiOff,
+  Monitor,
 } from 'lucide-react';
 import type { MediaState, SystemStats } from '../hooks/useMediaStream';
 
@@ -66,12 +67,21 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
   const ramColor = '#8b5cf6';
   const batColor = '#10b981';
   const tempColor = '#f59e0b';
+  const gpuColor = '#ec4899';
 
   const tempDisplay = sys.temp >= 0 ? `${Math.round(sys.temp)}°C` : '--';
   const batDisplay =
     sys.battery >= 0
       ? `${Math.round(sys.battery)}%${sys.charging ? ' ⚡' : ''}`
       : '--';
+
+  const hasGPU = sys.gpu?.present;
+  const gpuUtil = hasGPU ? (sys.gpu!.util >= 0 ? Math.round(sys.gpu!.util) : -1) : -1;
+  const gpuMemDisplay = hasGPU && sys.gpu!.mem_total > 0
+    ? `${Math.round(sys.gpu!.mem_used)}/${Math.round(sys.gpu!.mem_total)} MB`
+    : '';
+  const gpuTempDisplay = hasGPU && sys.gpu!.temp >= 0 ? `${Math.round(sys.gpu!.temp)}°C` : '';
+  const gpuLabel = hasGPU ? (sys.gpu!.name || 'GPU') : 'GPU';
 
   const pingIcon = sys.ping_ok ? (
     <Wifi size={14} className="text-deck-accent" />
@@ -86,7 +96,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
 
   return (
     <div className="deck-card flex flex-col gap-2.5">
-      <div className="grid grid-cols-4 gap-2">
+      <div className={`grid ${hasGPU ? 'grid-cols-5' : 'grid-cols-4'} gap-2`}>
         <StatBar
           label="CPU"
           icon={<Cpu size={14} className="text-deck-accent" />}
@@ -119,6 +129,15 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
           display={tempDisplay}
           color={tempColor}
         />
+        {hasGPU && (
+          <StatBar
+            label={gpuLabel}
+            icon={<Monitor size={14} className="text-pink-400" />}
+            value={gpuUtil >= 0 ? gpuUtil : -1}
+            display={gpuMemDisplay || gpuTempDisplay || (gpuUtil >= 0 ? `${gpuUtil}%` : gpuLabel)}
+            color={gpuColor}
+          />
+        )}
       </div>
 
       <div className="flex justify-center items-center gap-3 text-xs text-deck-dim mt-0.5 min-w-0">

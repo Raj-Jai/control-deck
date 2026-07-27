@@ -11,6 +11,7 @@ import SystemStatsCard from './components/SystemStatsCard';
 import ServiceStatsBar from './components/ServiceStatsBar';
 import MixerCard from './components/MixerCard';
 import QuickSettings from './components/QuickSettings';
+import WeatherCard from './components/WeatherCard';
 import CommandLogCard from './components/CommandLogCard';
 import ClipboardCard from './components/ClipboardCard';
 import FloatingNav from './components/FloatingNav';
@@ -151,6 +152,7 @@ export default function App() {
                 {/* RIGHT */}
                 <div className="flex flex-col gap-4 min-w-0">
                   <QuickSettings state={state} />
+                  <WeatherCard />
                   <ClipboardCard />
                   <CommandLogCard log={state?.cmd_log ?? []} />
                 </div>

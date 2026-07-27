@@ -12,6 +12,14 @@ export interface SystemStats {
   ssid: string;
   ip: string;
   ping_ok: boolean;
+  gpu?: {
+    present: boolean;
+    name?: string;
+    util: number;
+    mem_used: number;
+    mem_total: number;
+    temp: number;
+  };
 }
 
 export interface AppStreamInfo {
