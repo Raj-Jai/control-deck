@@ -72,6 +72,15 @@ func remoteStopStream(deviceID string) bool {
 	return false
 }
 
+func remoteStopAllStreams() {
+	deviceAudioWSMu.Lock()
+	for id, conn := range deviceAudioWS {
+		delete(deviceAudioWS, id)
+		conn.Close(websocket.StatusNormalClosure, "broadcast stop")
+	}
+	deviceAudioWSMu.Unlock()
+}
+
 func remoteStartStream(deviceID string) bool {
 	deviceAudioWSMu.Lock()
 	_, ok := deviceAudioWS[deviceID]

@@ -274,6 +274,9 @@ var (
 	mediaPlaying       bool
 	mediaPlayingPlayer string
 	mediaPlayingMu     sync.RWMutex
+
+	broadcasting   bool
+	broadcastingMu sync.Mutex
 )
 
 type ConnectedClient struct {
@@ -360,6 +363,7 @@ func main() {
 	http.HandleFunc("/api/command", handleCommand)
 	http.HandleFunc("/api/clients", handleClients)
 	http.HandleFunc("/api/stream/control", handleStreamControl)
+	http.HandleFunc("/api/stream/broadcast", handleStreamBroadcast)
 	http.HandleFunc("/seek", handleSeek)
 	http.HandleFunc("/api/set-volume", handleSetVolume)
 	http.HandleFunc("/api/set-brightness", handleSetBrightness)
@@ -819,9 +823,13 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 	}
 	deviceAudioWSMu.Unlock()
 	connectedClientsMu.RUnlock()
+	broadcastingMu.Lock()
+	bc := broadcasting
+	broadcastingMu.Unlock()
 	json.NewEncoder(w).Encode(map[string]any{
-		"count":   len(list),
-		"clients": list,
+		"count":       len(list),
+		"clients":     list,
+		"broadcasting": bc,
 	})
 }
 
@@ -872,6 +880,60 @@ func handleStreamControl(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "device not found", http.StatusNotFound)
 		}
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+	}
+}
+
+func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch req.Action {
+	case "start":
+		broadcastingMu.Lock()
+		broadcasting = true
+		broadcastingMu.Unlock()
+
+		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1").Run()
+
+		sseDeviceChansMu.RLock()
+		for _, ch := range sseDeviceChans {
+			select {
+			case ch <- `{"type":"stream_command","action":"start"}`:
+			default:
+			}
+		}
+		sseDeviceChansMu.RUnlock()
+
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	case "stop":
+		broadcastingMu.Lock()
+		broadcasting = false
+		broadcastingMu.Unlock()
+
+		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
+
+		remoteStopAllStreams()
+
+		sseDeviceChansMu.RLock()
+		for _, ch := range sseDeviceChans {
+			select {
+			case ch <- `{"type":"stream_command","action":"stop"}`:
+			default:
+			}
+		}
+		sseDeviceChansMu.RUnlock()
+
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	default:
 		http.Error(w, "unknown action", http.StatusBadRequest)
 	}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Monitor, Radio, RadioTower } from 'lucide-react';
+import { Monitor, Radio, RadioTower, VolumeX } from 'lucide-react';
 
 interface ClientInfo {
   ip: string;
@@ -14,6 +14,7 @@ interface ClientInfo {
 interface ClientsResponse {
   count: number;
   clients: ClientInfo[];
+  broadcasting: boolean;
 }
 
 function deviceLabel(c: ClientInfo): string {
@@ -74,6 +75,24 @@ export default function ConnectedDevicesCard() {
     }
   };
 
+  const toggleBroadcast = async () => {
+    setCtrlErr('');
+    const action = data?.broadcasting ? 'stop' : 'start';
+    try {
+      const res = await fetch('/api/stream/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        setCtrlErr(`broadcast ${action} failed: ${res.status} ${text}`);
+      }
+    } catch (e) {
+      setCtrlErr(`network error: ${e}`);
+    }
+  };
+
   if (!data || data.clients.length === 0) {
     if (ctrlErr) return <div className="deck-card"><p className="text-[10px] text-red-400">{ctrlErr}</p></div>;
     return null;
@@ -87,6 +106,20 @@ export default function ConnectedDevicesCard() {
           Connected Devices
         </span>
         <span className="text-[10px] text-deck-muted/40 font-medium">{data.count}</span>
+        <button
+          onClick={toggleBroadcast}
+          className={`icon-btn w-7 h-7 flex-shrink-0 ${
+            data.broadcasting
+              ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
+              : ''
+          }`}
+          title={data.broadcasting ? 'Stop broadcast & unmute' : 'Mute & broadcast to all'}
+        >
+          {data.broadcasting
+            ? <RadioTower size={12} className="animate-pulse" />
+            : <VolumeX size={12} />
+          }
+        </button>
         <div className="flex-1 h-px bg-white/[0.04]" />
       </div>
       <div className="flex flex-col gap-1.5">
