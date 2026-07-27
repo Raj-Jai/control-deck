@@ -3,7 +3,6 @@ import { useMediaStream } from '../hooks/useMediaStream';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { useArtTheming } from '../hooks/useArtTheming';
 import PlayerCarousel from './PlayerCarousel';
-import QuickSettings from './QuickSettings';
 import ConnectedDevicesCard from './ConnectedDevicesCard';
 import { AppStreamsList } from './MixerCard';
 import { clearAuth } from './AuthScreen';
@@ -72,8 +71,6 @@ export default function MediaStreamerPage({ deviceId }: Props) {
           </div>
         )}
 
-        {/* Quick Settings + Connected Devices */}
-        <QuickSettings state={state} />
         <ConnectedDevicesCard />
       </div>
     </div>
