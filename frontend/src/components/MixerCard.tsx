@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { Volume2, VolumeX, Moon, Speaker, Headphones, Music } from 'lucide-react';
 import type { MediaState, AppStreamInfo } from '../hooks/useMediaStream';
-import { triggerCommand, setVolume, setBrightness, setDefaultSink } from '../services/apiService';
+import { triggerCommand, setVolume, setBrightness, setDefaultSink, sliderToValue, valueToSlider } from '../services/apiService';
 
 interface MixerCardProps {
   state: MediaState | null;
@@ -24,8 +24,8 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   const lastVolSend = useRef(0);
   const lastBriSend = useRef(0);
 
-  const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(vol * 100) : localVol);
-  const showBri = draggingBri.current ? localBri : (bri >= 0 ? Math.round(bri) : localBri);
+  const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
+  const showBri = draggingBri.current ? localBri : (bri >= 0 ? Math.round(valueToSlider(bri, 100)) : localBri);
 
   const isBT = (s: AppStreamInfo & { id: number; name?: string; description?: string; default?: boolean }) =>
     /bluez/i.test((s as any).name ?? '');
@@ -71,13 +71,13 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                 setLocalVol(v);
                 draggingVol.current = true;
                 const now = Date.now();
-                if (now - lastVolSend.current >= THROTTLE) {
-                  lastVolSend.current = now;
-                  setVolume(v / 100);
-                }
-              }}
-              onMouseUp={() => { draggingVol.current = false; setVolume(localVol / 100); }}
-              onTouchEnd={() => { draggingVol.current = false; setVolume(localVol / 100); }}
+                  if (now - lastVolSend.current >= THROTTLE) {
+                    lastVolSend.current = now;
+                    setVolume(sliderToValue(v / 100, 1));
+                  }
+                }}
+                onMouseUp={() => { draggingVol.current = false; setVolume(sliderToValue(localVol / 100, 1)); }}
+                onTouchEnd={() => { draggingVol.current = false; setVolume(sliderToValue(localVol / 100, 1)); }}
               className="flex-1"
             />
             <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showVol}%</span>
@@ -111,11 +111,11 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                   const now = Date.now();
                   if (now - lastBriSend.current >= THROTTLE) {
                     lastBriSend.current = now;
-                    setBrightness(v);
+                    setBrightness(sliderToValue(v, 100));
                   }
                 }}
-                onMouseUp={() => { draggingBri.current = false; setBrightness(localBri); }}
-                onTouchEnd={() => { draggingBri.current = false; setBrightness(localBri); }}
+                onMouseUp={() => { draggingBri.current = false; setBrightness(sliderToValue(localBri, 100)); }}
+                onTouchEnd={() => { draggingBri.current = false; setBrightness(sliderToValue(localBri, 100)); }}
                 className="flex-1"
               />
               <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showBri}%</span>
@@ -132,7 +132,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   );
 }
 
-function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
+export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
   const [localVol, setLocalVol] = useState<Record<number, number>>({});
   const dragging = useRef<Record<number, boolean>>({});
   const lastSend = useRef<Record<number, number>>({});

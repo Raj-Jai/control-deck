@@ -67,6 +67,16 @@ export async function pushHostClipboard(text: string): Promise<void> {
   if (data.error) throw new Error(data.error);
 }
 
+/** Logarithmic scale helpers for human-perceptual volume/brightness sliders */
+export function sliderToValue(sliderPos: number, rangeMax: number): number {
+  const norm = sliderPos / rangeMax;
+  return norm * norm * rangeMax;
+}
+export function valueToSlider(apiVal: number, rangeMax: number): number {
+  const norm = apiVal / rangeMax;
+  return Math.sqrt(norm) * rangeMax;
+}
+
 export interface SinkInfo {
   id: number;
   name: string;

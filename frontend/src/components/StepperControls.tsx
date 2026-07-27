@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { Moon, Volume2, VolumeX, Speaker, Headphones } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capability } from '../hooks/useCapabilities';
-import { triggerCommand, setVolume, setBrightness, setDefaultSink } from '../services/apiService';
+import { triggerCommand, setVolume, setBrightness, setDefaultSink, sliderToValue, valueToSlider } from '../services/apiService';
 import type { SinkInfo } from '../hooks/useMediaStream';
 
 interface StepperControlsProps {
@@ -59,10 +59,10 @@ export default function StepperControls({ state, caps }: StepperControlsProps) {
 
   const showVol = draggingVol.current
     ? localVol
-    : (vol >= 0 ? Math.round(vol * 100) : localVol);
+    : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
   const showBri = draggingBri.current
     ? localBri
-    : (bri >= 0 ? Math.round(bri) : localBri);
+    : (bri >= 0 ? Math.round(valueToSlider(bri, 100)) : localBri);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
@@ -92,16 +92,16 @@ export default function StepperControls({ state, caps }: StepperControlsProps) {
               const now = Date.now();
               if (now - lastVolSend.current >= THROTTLE_MS) {
                 lastVolSend.current = now;
-                setVolume(v / 100);
+                setVolume(sliderToValue(v / 100, 1));
               }
             }}
             onMouseUp={() => {
               draggingVol.current = false;
-              setVolume(localVol / 100);
+              setVolume(sliderToValue(localVol / 100, 1));
             }}
             onTouchEnd={() => {
               draggingVol.current = false;
-              setVolume(localVol / 100);
+              setVolume(sliderToValue(localVol / 100, 1));
             }}
             className="flex-1"
           />
@@ -148,16 +148,16 @@ export default function StepperControls({ state, caps }: StepperControlsProps) {
               const now = Date.now();
               if (now - lastBriSend.current >= THROTTLE_MS) {
                 lastBriSend.current = now;
-                setBrightness(v);
+                setBrightness(sliderToValue(v, 100));
               }
             }}
             onMouseUp={() => {
               draggingBri.current = false;
-              setBrightness(localBri);
+              setBrightness(sliderToValue(localBri, 100));
             }}
             onTouchEnd={() => {
               draggingBri.current = false;
-              setBrightness(localBri);
+              setBrightness(sliderToValue(localBri, 100));
             }}
             className="flex-1"
           />

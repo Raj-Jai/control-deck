@@ -13,7 +13,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import type { MediaState, PlayerState } from '../hooks/useMediaStream';
-import { triggerCommand, seekTo, setVolume } from '../services/apiService';
+import { triggerCommand, seekTo, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import AudioStreamCard from './AudioStreamCard';
 import { parseLRC, getActiveLineIndex } from '../lib/lyricsEngine';
 import type { LyricLine } from '../lib/lyricsEngine';
@@ -390,8 +390,8 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                 type="range"
                 min={0}
                 max={100}
-                value={(state?.volume ?? 0) * 100}
-                onChange={(e) => setVolume(parseInt(e.target.value) / 100)}
+                value={Math.round(valueToSlider(state?.volume ?? 0, 1) * 100)}
+                onChange={(e) => setVolume(sliderToValue(parseInt(e.target.value) / 100, 1))}
                 className="w-full"
                 disabled={isOffline || isIdle}
               />
