@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Navigation, Check } from 'lucide-react';
+import { Navigation, Check, RefreshCw } from 'lucide-react';
 
 interface FloatingNavProps {
   pages: readonly { id: string; label: string }[];
@@ -63,6 +63,15 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
             }`}>
               {autoFocus && <Check size={12} className="text-white" strokeWidth={3} />}
             </span>
+          </button>
+
+          <button
+            onClick={() => location.reload()}
+            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] rounded-lg
+              text-deck-dim hover:text-deck-text hover:bg-white/5 transition-all"
+          >
+            <RefreshCw size={12} />
+            <span>Refresh</span>
           </button>
         </div>
       )}

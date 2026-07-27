@@ -60,7 +60,7 @@ function extractColors(img: HTMLImageElement): { primary: string; accent: string
   // accent: shift hue by 180 for complementary
   const [h, s, l] = rgbToHsl(pc.r, pc.g, pc.b);
   const ah = (h + 180) % 360;
-  const primary = `hsl(${h.toFixed(0)}, ${Math.min(70, s).toFixed(0)}%, ${Math.max(20, Math.min(50, l)).toFixed(0)}%)`;
+  const primary = `hsl(${h.toFixed(0)}, ${Math.min(70, s).toFixed(0)}%, ${Math.max(55, Math.min(80, l)).toFixed(0)}%)`;
   const accent = `hsl(${ah.toFixed(0)}, 80%, 55%)`;
   return { primary, accent };
 }

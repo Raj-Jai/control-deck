@@ -44,6 +44,20 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', cb);
   }, []);
 
+  useEffect(() => {
+    const onInteraction = () => {
+      document.documentElement.requestFullscreen().catch(() => {});
+    };
+    window.addEventListener('click', onInteraction, { once: true });
+    window.addEventListener('touchstart', onInteraction, { once: true });
+    window.addEventListener('keydown', onInteraction, { once: true });
+    return () => {
+      window.removeEventListener('click', onInteraction);
+      window.removeEventListener('touchstart', onInteraction);
+      window.removeEventListener('keydown', onInteraction);
+    };
+  }, []);
+
   const toggleFull = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen();
