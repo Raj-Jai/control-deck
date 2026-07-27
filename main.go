@@ -277,6 +277,12 @@ var (
 
 	broadcasting   bool
 	broadcastingMu sync.Mutex
+
+	syncBroadcastOn  bool
+	syncBroadcastMu  sync.Mutex
+	syncNullModule   uint32
+	syncLoopModule   uint32
+	syncRealSink     string
 )
 
 type ConnectedClient struct {
@@ -826,10 +832,14 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 	broadcastingMu.Lock()
 	bc := broadcasting
 	broadcastingMu.Unlock()
+	syncBroadcastMu.Lock()
+	sb := syncBroadcastOn
+	syncBroadcastMu.Unlock()
 	json.NewEncoder(w).Encode(map[string]any{
-		"count":       len(list),
-		"clients":     list,
-		"broadcasting": bc,
+		"count":          len(list),
+		"clients":        list,
+		"broadcasting":   bc,
+		"sync_broadcast": sb,
 	})
 }
 
@@ -892,6 +902,7 @@ func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Action string `json:"action"`
+		Sync   bool   `json:"sync"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -899,11 +910,64 @@ func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
 	}
 	switch req.Action {
 	case "start":
-		broadcastingMu.Lock()
-		broadcasting = true
-		broadcastingMu.Unlock()
+		sseDeviceChansMu.RLock()
+		hasClients := len(sseDeviceChans) > 0
+		sseDeviceChansMu.RUnlock()
+		if !hasClients {
+			http.Error(w, "no devices connected", http.StatusNotFound)
+			return
+		}
 
-		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1").Run()
+		if req.Sync {
+			broadcastingMu.Lock()
+			if broadcasting {
+				broadcasting = false
+				go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
+			}
+			broadcastingMu.Unlock()
+
+			syncBroadcastMu.Lock()
+			if syncBroadcastOn {
+				syncBroadcastMu.Unlock()
+				http.Error(w, "sync broadcast already active", http.StatusConflict)
+				return
+			}
+			realSink, err := getDefaultSink()
+			if err != nil {
+				syncBroadcastMu.Unlock()
+				http.Error(w, "failed to get default sink", http.StatusInternalServerError)
+				return
+			}
+			nullMod, err := runPactl("load-module", "module-null-sink", "sink_name=sync_broadcast")
+			if err != nil {
+				syncBroadcastMu.Unlock()
+				http.Error(w, "failed to create null sink", http.StatusInternalServerError)
+				return
+			}
+			loopMod, err := runPactl("load-module", "module-loopback",
+				"source=sync_broadcast.monitor",
+				"sink="+realSink,
+				"latency_msec=400")
+			if err != nil {
+				pactlUnload(nullMod)
+				syncBroadcastMu.Unlock()
+				http.Error(w, "failed to create loopback", http.StatusInternalServerError)
+				return
+			}
+			exec.Command("pactl", "set-default-sink", "sync_broadcast").Run()
+			syncNullModule = nullMod
+			syncLoopModule = loopMod
+			syncRealSink = realSink
+			syncBroadcastOn = true
+			syncBroadcastMu.Unlock()
+		} else {
+			disableSyncBroadcast()
+
+			go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1").Run()
+			broadcastingMu.Lock()
+			broadcasting = true
+			broadcastingMu.Unlock()
+		}
 
 		sseDeviceChansMu.RLock()
 		for _, ch := range sseDeviceChans {
@@ -916,11 +980,11 @@ func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
 
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	case "stop":
+		disableSyncBroadcast()
+		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
 		broadcastingMu.Lock()
 		broadcasting = false
 		broadcastingMu.Unlock()
-
-		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
 
 		remoteStopAllStreams()
 
@@ -933,10 +997,64 @@ func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
 		}
 		sseDeviceChansMu.RUnlock()
 
+		if !req.Sync {
+			broadcastingMu.Lock()
+			broadcasting = false
+			broadcastingMu.Unlock()
+		}
+
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	default:
 		http.Error(w, "unknown action", http.StatusBadRequest)
 	}
+}
+
+func getDefaultSink() (string, error) {
+	out, err := exec.Command("pactl", "info").Output()
+	if err != nil {
+		return "", err
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "Default Sink:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Default Sink:")), nil
+		}
+	}
+	return "", fmt.Errorf("no default sink found")
+}
+
+func runPactl(args ...string) (uint32, error) {
+	out, err := exec.Command("pactl", args...).Output()
+	if err != nil {
+		return 0, err
+	}
+	var id uint32
+	fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &id)
+	return id, nil
+}
+
+func pactlUnload(id uint32) {
+	exec.Command("pactl", "unload-module", fmt.Sprintf("%d", id)).Run()
+}
+
+func disableSyncBroadcast() {
+	syncBroadcastMu.Lock()
+	defer syncBroadcastMu.Unlock()
+	if !syncBroadcastOn {
+		return
+	}
+	if syncRealSink != "" {
+		exec.Command("pactl", "set-default-sink", syncRealSink).Run()
+	}
+	if syncLoopModule != 0 {
+		pactlUnload(syncLoopModule)
+	}
+	if syncNullModule != 0 {
+		pactlUnload(syncNullModule)
+	}
+	syncBroadcastOn = false
+	syncNullModule = 0
+	syncLoopModule = 0
+	syncRealSink = ""
 }
 
 func broadcastState() {

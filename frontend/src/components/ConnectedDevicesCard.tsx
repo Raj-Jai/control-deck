@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Monitor, Radio, RadioTower, VolumeX } from 'lucide-react';
+import { Monitor, Radio, RadioTower, VolumeX, Cast } from 'lucide-react';
 
 interface ClientInfo {
   ip: string;
@@ -15,6 +15,7 @@ interface ClientsResponse {
   count: number;
   clients: ClientInfo[];
   broadcasting: boolean;
+  sync_broadcast: boolean;
 }
 
 function deviceLabel(c: ClientInfo): string {
@@ -93,6 +94,24 @@ export default function ConnectedDevicesCard() {
     }
   };
 
+  const toggleSyncBroadcast = async () => {
+    setCtrlErr('');
+    const action = data?.sync_broadcast ? 'stop' : 'start';
+    try {
+      const res = await fetch('/api/stream/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, sync: true }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        setCtrlErr(`sync ${action} failed: ${res.status} ${text}`);
+      }
+    } catch (e) {
+      setCtrlErr(`network error: ${e}`);
+    }
+  };
+
   if (!data || data.clients.length === 0) {
     if (ctrlErr) return <div className="deck-card"><p className="text-[10px] text-red-400">{ctrlErr}</p></div>;
     return null;
@@ -106,6 +125,20 @@ export default function ConnectedDevicesCard() {
           Connected Devices
         </span>
         <span className="text-[10px] text-deck-muted/40 font-medium">{data.count}</span>
+        <button
+          onClick={toggleSyncBroadcast}
+          className={`icon-btn w-7 h-7 flex-shrink-0 ${
+            data.sync_broadcast
+              ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+              : ''
+          }`}
+          title={data.sync_broadcast ? 'Stop sync broadcast' : 'Sync broadcast (keep laptop audio)'}
+        >
+          {data.sync_broadcast
+            ? <Cast size={12} className="animate-pulse" />
+            : <Cast size={12} />
+          }
+        </button>
         <button
           onClick={toggleBroadcast}
           className={`icon-btn w-7 h-7 flex-shrink-0 ${
