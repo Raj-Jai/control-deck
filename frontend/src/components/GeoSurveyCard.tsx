@@ -1,8 +1,21 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Play, Square, MapPin, Save, FolderOpen, Trash2 } from 'lucide-react';
+import { Play, Square, MapPin, Save, FolderOpen, Trash2, Crosshair, Target } from 'lucide-react';
 
-const ROOM_LAT = 22.321917;
-const ROOM_LNG = 87.303572;
+const STORED_CENTER_KEY = 'geo_room_center';
+const DEFAULT_LAT = 22.321917;
+const DEFAULT_LNG = 87.303572;
+
+function loadCenter(): { lat: number; lng: number } {
+  try {
+    const raw = localStorage.getItem(STORED_CENTER_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { lat: DEFAULT_LAT, lng: DEFAULT_LNG };
+}
+
+function storeCenter(lat: number, lng: number) {
+  localStorage.setItem(STORED_CENTER_KEY, JSON.stringify({ lat, lng }));
+}
 
 interface Point {
   lat: number;
@@ -34,13 +47,21 @@ function pingColor(ping: number): string {
   return '#ef4444';
 }
 
+const CALIB_DURATION = 30_000; // 30 seconds
+
 export default function GeoSurveyCard() {
+  const [roomCenter, setRoomCenter] = useState(loadCenter);
   const [recording, setRecording] = useState(false);
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibSamples, setCalibSamples] = useState<{ lat: number; lng: number }[]>([]);
+  const [calibResult, setCalibResult] = useState<{ lat: number; lng: number; n: number } | null>(null);
+  const [calibProgress, setCalibProgress] = useState(0);
   const [points, setPoints] = useState<Point[]>([]);
   const [currPos, setCurrPos] = useState<{ lat: number; lng: number } | null>(null);
   const [currPing, setCurrPing] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPing = useRef(0);
+  const calibStart = useRef(0);
 
   const addPoint = useCallback(() => {
     if (!currPos || !currPing) return;
@@ -63,6 +84,33 @@ export default function GeoSurveyCard() {
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
+
+  // Calibration: collect GPS samples for CALIB_DURATION
+  useEffect(() => {
+    if (!calibrating) return;
+    calibStart.current = Date.now();
+    setCalibSamples([]);
+    setCalibResult(null);
+    const id = setInterval(() => {
+      setCalibProgress(Date.now() - calibStart.current);
+    }, 100);
+    return () => clearInterval(id);
+  }, [calibrating]);
+
+  useEffect(() => {
+    if (!calibrating || !currPos) return;
+    const elapsed = Date.now() - calibStart.current;
+    if (elapsed >= CALIB_DURATION) {
+      // compute average
+      const total = calibSamples.length + 1;
+      const sum = calibSamples.reduce((a, c) => ({ lat: a.lat + c.lat, lng: a.lng + c.lng }), { lat: currPos.lat, lng: currPos.lng });
+      setCalibResult({ lat: sum.lat / total, lng: sum.lng / total, n: total });
+      setCalibrating(false);
+      setCalibProgress(0);
+      return;
+    }
+    setCalibSamples(prev => [...prev, currPos]);
+  }, [currPos, calibrating, calibSamples]);
 
   // Ping polling
   useEffect(() => {
@@ -135,7 +183,7 @@ export default function GeoSurveyCard() {
     // Collect all coordinates to bound
     const coords: [number, number][] = [];
     if (currPos) coords.push([currPos.lat, currPos.lng]);
-    coords.push([ROOM_LAT, ROOM_LNG]);
+    coords.push([roomCenter.lat, roomCenter.lng]);
     for (const p of points) coords.push([p.lat, p.lng]);
     if (loadedSession) for (const p of loadedSession.points) coords.push([p.lat, p.lng]);
 
@@ -211,9 +259,9 @@ export default function GeoSurveyCard() {
       }
     }
 
-    // Server position
+    // Room center
     {
-      const [sx, sy] = toScreen(ROOM_LAT, ROOM_LNG);
+      const [sx, sy] = toScreen(roomCenter.lat, roomCenter.lng);
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -226,7 +274,7 @@ export default function GeoSurveyCard() {
       ctx.fillStyle = '#ef4444';
       ctx.font = '8px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('SERVER', sx, sy + 18);
+      ctx.fillText('CENTER', sx, sy + 18);
     }
 
     // Current position
@@ -275,7 +323,7 @@ export default function GeoSurveyCard() {
 
       <div className="flex items-center gap-3 text-[10px] text-deck-dim flex-wrap">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Server
+          <span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Center
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> You
@@ -298,9 +346,54 @@ export default function GeoSurveyCard() {
       <div className="text-[10px] text-deck-dim">
         Points: {points.length}
         {currPing !== null && <> · Ping: {currPing}ms</>}
-        {currPos && <> · Dist: {haversine(currPos.lat, currPos.lng, ROOM_LAT, ROOM_LNG).toFixed(0)}m</>}
+        {currPos && <> · Dist: {haversine(currPos.lat, currPos.lng, roomCenter.lat, roomCenter.lng).toFixed(0)}m</>}
         {loadedSession && <> · Loaded: {loadedSession.name} ({loadedSession.points.length}pts)</>}
+        {!roomCenter || (roomCenter.lat === DEFAULT_LAT && roomCenter.lng === DEFAULT_LNG) && <span className="text-amber-400"> ⚠ default</span>}
       </div>
+
+      {/* Calibrate button & progress */}
+      <div className="flex items-center gap-2">
+        <button
+          onPointerDown={() => setCalibrating(true)}
+          disabled={calibrating}
+          className="icon-btn h-7 px-2 flex items-center gap-1.5 text-[10px] font-medium disabled:opacity-50"
+          title="Record GPS for 30s to average room center"
+        >
+          <Crosshair size={12} />
+          Calibrate Center
+        </button>
+        {calibrating && (
+          <div className="flex items-center gap-2 flex-1">
+            <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+              <div
+                className="h-full rounded-full bg-deck-accent transition-all duration-200"
+                style={{ width: `${Math.min(100, (calibProgress / CALIB_DURATION) * 100)}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-deck-dim w-12">{Math.round(calibProgress / 1000)}s</span>
+          </div>
+        )}
+      </div>
+
+      {/* Calibration result */}
+      {calibResult && (
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-deck-accent/8 border border-deck-accent/15">
+          <Target size={12} className="text-deck-accent flex-shrink-0" />
+          <div className="flex-1 text-[10px] text-deck-dim">
+            Calibrated: {calibResult.lat.toFixed(6)}, {calibResult.lng.toFixed(6)} ({calibResult.n} samples)
+          </div>
+          <button
+            onPointerDown={() => {
+              storeCenter(calibResult.lat, calibResult.lng);
+              setRoomCenter({ lat: calibResult.lat, lng: calibResult.lng });
+              setCalibResult(null);
+            }}
+            className="text-[10px] font-medium text-deck-accent hover:text-white px-2 py-0.5 rounded border border-deck-accent/20"
+          >
+            Set as center
+          </button>
+        </div>
+      )}
 
       {/* Save */}
       <div className="flex items-center gap-2">
