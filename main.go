@@ -364,6 +364,7 @@ func main() {
 
 	// API Routes
 	http.HandleFunc("/api/capabilities", handleCapabilities)
+	http.HandleFunc("/api/ping", handlePing)
 	http.HandleFunc("/api/auth", handleAuth)
 	http.HandleFunc("/api/auth-media", handleAuthMedia)
 	http.HandleFunc("/api/command", handleCommand)
@@ -421,6 +422,11 @@ func main() {
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+func handlePing(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"pong":true}`))
 }
 
 func handleCapabilities(w http.ResponseWriter, r *http.Request) {

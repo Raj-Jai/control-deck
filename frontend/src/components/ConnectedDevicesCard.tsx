@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Monitor, Radio, RadioTower, VolumeX } from 'lucide-react';
 
 interface ClientInfo {
@@ -56,6 +56,25 @@ export default function ConnectedDevicesCard() {
   }, []);
 
   const thisDeviceId = sessionStorage.getItem('dash_device_id') || '';
+
+  const [ping, setPing] = useState<number | null>(null);
+  const pingRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    const measure = async () => {
+      const t0 = performance.now();
+      try {
+        await fetch('/api/ping', { method: 'HEAD', cache: 'no-store' });
+        const rtt = performance.now() - t0;
+        pingRef.current = [...pingRef.current.slice(-9), rtt];
+        const min = Math.min(...pingRef.current);
+        setPing(Math.round(min));
+      } catch { setPing(null); }
+    };
+    measure();
+    const id = setInterval(measure, 3000);
+    return () => clearInterval(id);
+  }, []);
 
   const [ctrlErr, setCtrlErr] = useState('');
   const control = async (target: string, action: 'start' | 'stop') => {
@@ -133,11 +152,19 @@ export default function ConnectedDevicesCard() {
             >
               <span className="text-base leading-none flex-shrink-0">{deviceIcon(c)}</span>
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-deck-text truncate">
-                  {deviceLabel(c)}
-                  {isThis && <span className="text-deck-muted/40 ml-1">(you)</span>}
+                  <div className="font-medium text-deck-text truncate">
+                    {deviceLabel(c)}
+                    {isThis && <span className="text-deck-muted/40 ml-1">(you)</span>}
+                  </div>
+                  {isThis && ping !== null && (
+                    <div className="text-[10px] text-deck-dim mt-0.5 flex items-center gap-1">
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                        ping < 10 ? 'bg-green-400' : ping < 50 ? 'bg-yellow-400' : 'bg-red-400'
+                      }`} />
+                      {ping}ms
+                    </div>
+                  )}
                 </div>
-              </div>
               <button
                 className={`icon-btn w-7 h-7 flex-shrink-0 ${
                   c.streaming
