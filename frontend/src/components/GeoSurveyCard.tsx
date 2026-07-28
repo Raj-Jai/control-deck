@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Play, Square, MapPin, Save, FolderOpen, Trash2, Crosshair, Target } from 'lucide-react';
+import { Play, Square, MapPin, Save, FolderOpen, Trash2, Crosshair, Target, Navigation } from 'lucide-react';
 
 const STORED_CENTER_KEY = 'geo_room_center';
 const DEFAULT_LAT = 22.321917;
@@ -51,6 +51,7 @@ const CALIB_DURATION = 30_000; // 30 seconds
 
 export default function GeoSurveyCard() {
   const [roomCenter, setRoomCenter] = useState(loadCenter);
+  const [gpsEnabled, setGpsEnabled] = useState(false);
   const [recording, setRecording] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
   const [calibSamples, setCalibSamples] = useState<{ lat: number; lng: number }[]>([]);
@@ -58,10 +59,43 @@ export default function GeoSurveyCard() {
   const [calibProgress, setCalibProgress] = useState(0);
   const [points, setPoints] = useState<Point[]>([]);
   const [currPos, setCurrPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsAcc, setGpsAcc] = useState(0);
+  const [posErr, setPosErr] = useState('');
   const [currPing, setCurrPing] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPing = useRef(0);
   const calibStart = useRef(0);
+  const watchId = useRef<number | null>(null);
+
+  const startGps = useCallback(() => {
+    if (!navigator.geolocation) { setPosErr('GPS unavailable'); return; }
+    setPosErr('');
+    watchId.current = navigator.geolocation.watchPosition(
+      (p) => { setCurrPos({ lat: p.coords.latitude, lng: p.coords.longitude }); setGpsAcc(p.coords.accuracy); },
+      (e) => { if (e.code === e.PERMISSION_DENIED) setPosErr('GPS denied'); },
+      { enableHighAccuracy: true, timeout: 1000, maximumAge: 200 }
+    );
+  }, []);
+
+  const stopGps = useCallback(() => {
+    if (watchId.current !== null) { navigator.geolocation.clearWatch(watchId.current); watchId.current = null; }
+    setCurrPos(null);
+    setPosErr('');
+  }, []);
+
+  const toggleGps = () => {
+    if (gpsEnabled) { stopGps(); setGpsEnabled(false); }
+    else { startGps(); setGpsEnabled(true); }
+  };
+
+  const toggleRecording = () => {
+    const next = !recording;
+    setRecording(next);
+    if (next && !gpsEnabled) {
+      startGps();
+      setGpsEnabled(true);
+    }
+  };
 
   const addPoint = useCallback(() => {
     if (!currPos || !currPing) return;
@@ -74,16 +108,8 @@ export default function GeoSurveyCard() {
     return () => clearInterval(id);
   }, [recording, addPoint]);
 
-  // GPS watch
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    const id = navigator.geolocation.watchPosition(
-      (p) => setCurrPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true, timeout: 1000, maximumAge: 200 }
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
+  // Disable GPS on unmount
+  useEffect(() => () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); }, []);
 
   // Calibration: collect GPS samples for CALIB_DURATION
   useEffect(() => {
@@ -305,7 +331,14 @@ export default function GeoSurveyCard() {
         </span>
         <div className="flex-1 h-px bg-white/[0.04]" />
         <button
-          onPointerDown={() => setRecording(!recording)}
+          onPointerDown={toggleGps}
+          className={`icon-btn w-7 h-7 ${gpsEnabled ? 'text-green-400 bg-green-500/15 border-green-500/20' : ''}`}
+          title={gpsEnabled ? 'GPS on' : 'GPS off'}
+        >
+          <Navigation size={12} />
+        </button>
+        <button
+          onPointerDown={toggleRecording}
           className={`icon-btn w-7 h-7 ${recording ? 'text-red-400 bg-red-500/15 border-red-500/20' : ''}`}
           title={recording ? 'Stop recording' : 'Start recording'}
         >
@@ -347,6 +380,7 @@ export default function GeoSurveyCard() {
         Points: {points.length}
         {currPing !== null && <> · Ping: {currPing}ms</>}
         {currPos && <> · Dist: {haversine(currPos.lat, currPos.lng, roomCenter.lat, roomCenter.lng).toFixed(0)}m</>}
+        {gpsEnabled && gpsAcc > 0 && <span className="text-deck-muted/40"> ±{gpsAcc.toFixed(0)}m</span>}
         {loadedSession && <> · Loaded: {loadedSession.name} ({loadedSession.points.length}pts)</>}
         {!roomCenter || (roomCenter.lat === DEFAULT_LAT && roomCenter.lng === DEFAULT_LNG) && <span className="text-amber-400"> ⚠ default</span>}
       </div>

@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { Monitor, Radio, RadioTower, VolumeX, MapPin } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Monitor, Radio, RadioTower, VolumeX } from 'lucide-react';
 
 interface ClientInfo {
   ip: string;
@@ -26,18 +26,6 @@ function deviceLabel(c: ClientInfo): string {
   if (/Windows/.test(ua)) return 'Windows';
   if (/Mac OS/.test(ua)) return 'macOS';
   return c.ip;
-}
-
-const ROOM_LAT = 22.321917;
-const ROOM_LNG = 87.303572;
-
-function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function deviceIcon(c: ClientInfo): string {
@@ -70,19 +58,6 @@ export default function ConnectedDevicesCard() {
   const thisDeviceId = sessionStorage.getItem('dash_device_id') || '';
 
   const [ping, setPing] = useState<number | null>(null);
-
-  const [pos, setPos] = useState<{ lat: number; lng: number; acc: number } | null>(null);
-  const [posErr, setPosErr] = useState('');
-
-  useEffect(() => {
-    if (!navigator.geolocation) { setPosErr('GPS unavailable'); return; }
-    const id = navigator.geolocation.watchPosition(
-      (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
-      (e) => { if (e.code === e.PERMISSION_DENIED) setPosErr('GPS denied'); },
-      { enableHighAccuracy: true, timeout: 1000, maximumAge: 200 }
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
 
   useEffect(() => {
     const measure = async () => {
@@ -184,16 +159,6 @@ export default function ConnectedDevicesCard() {
                       }`} />
                       {ping}ms
                     </div>
-                  )}
-                  {isThis && pos && (
-                    <div className="text-[10px] text-deck-dim mt-0.5 flex items-center gap-1">
-                      <MapPin size={10} className="text-deck-muted/40" />
-                      {haversine(pos.lat, pos.lng, ROOM_LAT, ROOM_LNG).toFixed(0)}m
-                      {pos.acc > 30 && <span className="text-deck-muted/30">±{pos.acc.toFixed(0)}m</span>}
-                    </div>
-                  )}
-                  {isThis && posErr && (
-                    <div className="text-[10px] text-deck-dim mt-0.5">{posErr}</div>
                   )}
                 </div>
               <button
