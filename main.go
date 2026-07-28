@@ -401,6 +401,9 @@ func handleGeoSessions(w http.ResponseWriter, r *http.Request) {
 			names = append(names, e.Name())
 		}
 	}
+	if names == nil {
+		names = []string{}
+	}
 	json.NewEncoder(w).Encode(names)
 }
 
