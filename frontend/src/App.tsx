@@ -23,6 +23,7 @@ import IdeDeck from './decks/IdeDeck';
 import TerminalDeck from './decks/TerminalDeck';
 import MediaStreamerPage from './components/MediaStreamerPage';
 import GeoSurveyCard from './components/GeoSurveyCard';
+import AcousticProximityCard from './components/AcousticProximityCard';
 
 const pages = [
   { id: 'home', label: 'Home' },
@@ -231,6 +232,7 @@ export default function App() {
                 <div className="flex flex-col gap-4 min-w-0">
                   <MixerCard state={state} caps={caps} />
                   <GeoSurveyCard />
+                  <AcousticProximityCard />
                 </div>
 
                 {/* RIGHT */}
