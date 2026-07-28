@@ -70,7 +70,6 @@ export default function ConnectedDevicesCard() {
   const thisDeviceId = sessionStorage.getItem('dash_device_id') || '';
 
   const [ping, setPing] = useState<number | null>(null);
-  const pingRef = useRef<number[]>([]);
 
   const [pos, setPos] = useState<{ lat: number; lng: number; acc: number } | null>(null);
   const [posErr, setPosErr] = useState('');
@@ -80,7 +79,7 @@ export default function ConnectedDevicesCard() {
     const id = navigator.geolocation.watchPosition(
       (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
       (e) => { if (e.code === e.PERMISSION_DENIED) setPosErr('GPS denied'); },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+      { enableHighAccuracy: true, timeout: 1000, maximumAge: 200 }
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
@@ -90,14 +89,11 @@ export default function ConnectedDevicesCard() {
       const t0 = performance.now();
       try {
         await fetch('/api/ping', { method: 'HEAD', cache: 'no-store' });
-        const rtt = performance.now() - t0;
-        pingRef.current = [...pingRef.current.slice(-9), rtt];
-        const min = Math.min(...pingRef.current);
-        setPing(Math.round(min));
+        setPing(Math.round(performance.now() - t0));
       } catch { setPing(null); }
     };
     measure();
-    const id = setInterval(measure, 3000);
+    const id = setInterval(measure, 200);
     return () => clearInterval(id);
   }, []);
 
