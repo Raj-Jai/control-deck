@@ -22,6 +22,7 @@ import VideoPlayerDeck from './decks/VideoPlayerDeck';
 import IdeDeck from './decks/IdeDeck';
 import TerminalDeck from './decks/TerminalDeck';
 import MediaStreamerPage from './components/MediaStreamerPage';
+import GeoSurveyCard from './components/GeoSurveyCard';
 
 const pages = [
   { id: 'home', label: 'Home' },
@@ -229,6 +230,7 @@ export default function App() {
                 {/* LEFT */}
                 <div className="flex flex-col gap-4 min-w-0">
                   <MixerCard state={state} caps={caps} />
+                  <GeoSurveyCard />
                 </div>
 
                 {/* RIGHT */}
