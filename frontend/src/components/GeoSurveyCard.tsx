@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Play, Square, MapPin, Crosshair } from 'lucide-react';
+import { Play, Square, MapPin, Save, FolderOpen, Trash2 } from 'lucide-react';
 
 const ROOM_LAT = 22.321917;
 const ROOM_LNG = 87.303572;
@@ -79,7 +79,48 @@ export default function GeoSurveyCard() {
     return () => clearInterval(id);
   }, []);
 
-  // Canvas render
+  const [sessionList, setSessionList] = useState<string[]>([]);
+  const [loadedSession, setLoadedSession] = useState<{ name: string; points: Point[] } | null>(null);
+  const [sessionName, setSessionName] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
+
+  const saveSession = async () => {
+    const name = sessionName.trim() || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    try {
+      const res = await fetch('/api/geo/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, points: points.map(p => ({ ...p, ts: p.ts })) }),
+      });
+      const data = await res.json();
+      if (data.ok) { setSaveMsg(`Saved: ${data.ok}`); loadSessions(); }
+      else setSaveMsg('Save failed');
+    } catch { setSaveMsg('Save error'); }
+    setTimeout(() => setSaveMsg(''), 3000);
+  };
+
+  const loadSessions = async () => {
+    try { const res = await fetch('/api/geo/sessions'); setSessionList(await res.json()); }
+    catch {}
+  };
+
+  const loadSession = async (name: string) => {
+    try {
+      const res = await fetch(`/api/geo/session?name=${encodeURIComponent(name)}`);
+      const points: Point[] = await res.json();
+      setLoadedSession({ name, points });
+    } catch {}
+  };
+
+  const deleteSession = async (name: string) => {
+    try {
+      await fetch(`/api/geo/session?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (loadedSession?.name === name) setLoadedSession(null);
+      loadSessions();
+    } catch {}
+  };
+
+  useEffect(() => { loadSessions(); }, []);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -96,6 +137,7 @@ export default function GeoSurveyCard() {
     if (currPos) coords.push([currPos.lat, currPos.lng]);
     coords.push([ROOM_LAT, ROOM_LNG]);
     for (const p of points) coords.push([p.lat, p.lng]);
+    if (loadedSession) for (const p of loadedSession.points) coords.push([p.lat, p.lng]);
 
     if (coords.length === 0) return;
 
@@ -155,6 +197,20 @@ export default function GeoSurveyCard() {
       ctx.stroke();
     }
 
+    // Draw loaded session points
+    if (loadedSession) {
+      for (const p of loadedSession.points) {
+        const [sx, sy] = toScreen(p.lat, p.lng);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
     // Server position
     {
       const [sx, sy] = toScreen(ROOM_LAT, ROOM_LNG);
@@ -190,7 +246,7 @@ export default function GeoSurveyCard() {
       ctx.textAlign = 'center';
       ctx.fillText('YOU', sx, sy + 18);
     }
-  }, [points, currPos]);
+  }, [points, currPos, loadedSession]);
 
   return (
     <div className="deck-card flex flex-col gap-2.5">
@@ -243,7 +299,51 @@ export default function GeoSurveyCard() {
         Points: {points.length}
         {currPing !== null && <> · Ping: {currPing}ms</>}
         {currPos && <> · Dist: {haversine(currPos.lat, currPos.lng, ROOM_LAT, ROOM_LNG).toFixed(0)}m</>}
+        {loadedSession && <> · Loaded: {loadedSession.name} ({loadedSession.points.length}pts)</>}
       </div>
+
+      {/* Save */}
+      <div className="flex items-center gap-2">
+        <input
+          value={sessionName}
+          onChange={e => setSessionName(e.target.value)}
+          placeholder="Session name (optional)"
+          className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded px-2 py-1 text-[11px] text-deck-text
+            placeholder:text-deck-muted/30 outline-none focus:border-deck-accent/30"
+        />
+        <button
+          onPointerDown={saveSession}
+          disabled={points.length === 0}
+          className="icon-btn w-7 h-7 flex-shrink-0 disabled:opacity-30"
+          title="Save session"
+        >
+          <Save size={12} />
+        </button>
+        {saveMsg && <span className="text-[10px] text-deck-dim ml-1">{saveMsg}</span>}
+      </div>
+
+      {/* Session list */}
+      {sessionList.length > 0 && (
+        <div className="flex flex-col gap-1 max-h-24 overflow-y-auto">
+          {sessionList.map(name => (
+            <div key={name}
+              className={`flex items-center gap-2 px-2 py-1 rounded text-[10px] cursor-pointer
+                ${loadedSession?.name === name ? 'bg-deck-accent/10 border border-deck-accent/20' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}
+              onPointerDown={() => loadSession(name)}
+            >
+              <FolderOpen size={10} className="text-deck-muted/40 flex-shrink-0" />
+              <span className="flex-1 truncate text-deck-text">{name.replace('.json','')}</span>
+              <button
+                onPointerDown={e => { e.stopPropagation(); deleteSession(name); }}
+                className="icon-btn w-5 h-5 text-deck-dim hover:text-red-400 flex-shrink-0"
+                title="Delete"
+              >
+                <Trash2 size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

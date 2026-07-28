@@ -352,6 +352,83 @@ func addLog(cmd string) {
 	}
 }
 
+const geoDir = "geo_sessions"
+
+type GeoPoint struct {
+	Lat  float64 `json:"lat"`
+	Lng  float64 `json:"lng"`
+	Ping int     `json:"ping"`
+	TS   int64   `json:"ts"`
+}
+
+type GeoSaveRequest struct {
+	Name   string     `json:"name"`
+	Points []GeoPoint `json:"points"`
+}
+
+func handleGeoSave(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req GeoSaveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		req.Name = time.Now().Format("2006-01-02_15-04-05")
+	}
+	os.MkdirAll(geoDir, 0755)
+	data, _ := json.MarshalIndent(req.Points, "", "  ")
+	if err := os.WriteFile(geoDir+"/"+req.Name+".json", data, 0644); err != nil {
+		http.Error(w, "Save failed", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"ok": req.Name})
+}
+
+func handleGeoSessions(w http.ResponseWriter, r *http.Request) {
+	os.MkdirAll(geoDir, 0755)
+	entries, err := os.ReadDir(geoDir)
+	if err != nil {
+		json.NewEncoder(w).Encode([]string{})
+		return
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	json.NewEncoder(w).Encode(names)
+}
+
+func handleGeoSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		name := r.URL.Query().Get("name")
+		if name == "" {
+			http.Error(w, "Missing name", http.StatusBadRequest)
+			return
+		}
+		os.Remove(geoDir + "/" + name)
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "Missing name", http.StatusBadRequest)
+		return
+	}
+	data, err := os.ReadFile(geoDir + "/" + name)
+	if err != nil {
+		http.Error(w, "Not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+
 func main() {
 	initConfig()
 	initVideoPlayerConfig()
@@ -388,6 +465,9 @@ func main() {
 	http.HandleFunc("/api/video/status", handleVideoStatus)
 	http.HandleFunc("/api/video/command", handleVideoCommand)
 	http.HandleFunc("/api/service-stats", handleServiceStats)
+	http.HandleFunc("/api/geo/save", handleGeoSave)
+	http.HandleFunc("/api/geo/sessions", handleGeoSessions)
+	http.HandleFunc("/api/geo/session", handleGeoSession)
 	http.HandleFunc("/ws/terminal", handleTerminalWS)
 
 	// Background tickers
