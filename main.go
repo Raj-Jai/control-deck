@@ -471,6 +471,7 @@ func main() {
 	http.HandleFunc("/api/geo/save", handleGeoSave)
 	http.HandleFunc("/api/geo/sessions", handleGeoSessions)
 	http.HandleFunc("/api/geo/session", handleGeoSession)
+	http.HandleFunc("/api/ble/transmit", handleBleTransmit)
 	http.HandleFunc("/ws/terminal", handleTerminalWS)
 
 	// Background tickers
