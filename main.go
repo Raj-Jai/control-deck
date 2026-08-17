@@ -473,6 +473,8 @@ func main() {
 	http.HandleFunc("/api/geo/session", handleGeoSession)
 	http.HandleFunc("/api/ble/transmit", handleBleTransmit)
 	http.HandleFunc("/ws/terminal", handleTerminalWS)
+	http.HandleFunc("/api/music/search", handleMusicSearch)
+	http.HandleFunc("/api/music/play", handleMusicPlay)
 
 	// Background tickers
 	go startMediaBroadcaster()
@@ -527,6 +529,8 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		"battery":     checkBattery(),
 		"mpv_socket":  checkMPVSocket(),
 		"vlc_http":    checkVLCInterface(),
+		"yt_dlp":      checkBinary("yt-dlp"),
+		"mpv":         checkBinary("mpv"),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(caps)
@@ -1521,6 +1525,11 @@ func findBestPlayer() string {
 		if length > 1000000 {
 			score += 3
 		}
+		// mpv is the dedicated player launched from the deck (music search);
+		// prefer it whenever it is actually playing so the deck surfaces it.
+		if strings.HasPrefix(p, "mpv") && status == "Playing" {
+			score += 20
+		}
 
 		cands = append(cands, candidate{name: p, score: score, status: status, title: title})
 	}
@@ -1713,6 +1722,15 @@ func playerPrettyName(id string) string {
 func fetchPlayerState(player string) PlayerState {
 	title, _ := runCmd("playerctl", "--player", player, "metadata", "xesam:title")
 	artist, _ := runCmd("playerctl", "--player", player, "metadata", "xesam:artist")
+
+	// mpv exposes no artist and a raw YouTube title (stdin stream). Use the
+	// clean artist/title stored when the deck launched the music pipeline.
+	if strings.HasPrefix(player, "mpv") {
+		if a, t := currentMusicMeta(); t != "" {
+			artist, title = a, t
+		}
+	}
+
 	status, _ := runCmd("playerctl", "--player", player, "status")
 
 	lenStr, _ := runCmd("playerctl", "--player", player, "metadata", "mpris:length")
@@ -1787,6 +1805,16 @@ func fetchAllPlayers() []PlayerState {
 func fetchMPRISState() MediaState {
 	title, _ := runPlayerctlBest("metadata", "xesam:title")
 	artist, _ := runPlayerctlBest("metadata", "xesam:artist")
+
+	// mpv streams from stdin (no file metadata), so playerctl exposes no
+	// xesam:artist and the raw YouTube title. When the deck launched the music
+	// pipeline, override with the known clean artist/title for lyrics + display.
+	if strings.HasPrefix(findBestPlayer(), "mpv") {
+		if a, t := currentMusicMeta(); t != "" {
+			artist, title = a, t
+		}
+	}
+
 	status, _ := runPlayerctlBest("status")
 
 	lenStr, lenErr := runPlayerctlBest("metadata", "mpris:length")

@@ -13,6 +13,8 @@ const defaultCaps = {
   ffmpeg: false,
   playerctl: false,
   battery: false,
+  mpv: false,
+  yt_dlp: false,
 };
 
 export type Capabilities = typeof defaultCaps;

@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MediaState, PlayerState } from '../hooks/useMediaStream';
 import NowPlayingCard from './NowPlayingCard';
@@ -14,8 +14,23 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
   const [idx, setIdx] = useState(0);
   const touchStart = useRef(0);
   const [dragging, setDragging] = useState(false);
+  const lastFocusedPlaying = useRef<string | null>(null);
 
   const clampedIdx = players.length === 0 ? 0 : idx % players.length;
+
+  // Auto-focus the currently playing player. Snaps to the player whose status
+  // just became Playing (e.g. mpv when a song is started from the deck). Manual
+  // swipes still work because we only re-snap when the playing player id
+  // changes, not on every state poll.
+  useEffect(() => {
+    const playingIdx = players.findIndex(p => p.status === 'Playing');
+    const playingId = playingIdx >= 0 ? players[playingIdx].id : null;
+    if (playingId && playingId !== lastFocusedPlaying.current) {
+      lastFocusedPlaying.current = playingId;
+      setIdx(playingIdx);
+    }
+    if (!playingId) lastFocusedPlaying.current = null;
+  }, [players]);
 
   const go = useCallback((i: number) => {
     if (players.length === 0) return;

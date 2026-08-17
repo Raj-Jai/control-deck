@@ -11,12 +11,15 @@ import {
   Maximize2,
   X,
   Volume2,
+  Search,
 } from 'lucide-react';
 import type { MediaState, PlayerState } from '../hooks/useMediaStream';
 import { triggerCommand, seekTo, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import AudioStreamCard from './AudioStreamCard';
 import { parseLRC, getActiveLineIndex } from '../lib/lyricsEngine';
 import type { LyricLine } from '../lib/lyricsEngine';
+import MusicSearch from './MusicSearch';
+import { useCapabilities } from '../hooks/useCapabilities';
 
 interface NowPlayingCardProps {
   player: PlayerState | null;
@@ -31,6 +34,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
+  const caps = useCapabilities();
   const dragging = useRef(false);
   const seekRef = useRef(0);
   const [localPos, setLocalPos] = useState<number | null>(null);
@@ -40,6 +44,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const [activeIdx, setActiveIdx] = useState(-1);
   const activeIdxRef = useRef(-1);
   const [showFullLyrics, setShowFullLyrics] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isOffline = !player;
@@ -51,18 +56,34 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const playerId = player?.id;
 
   const lyricsData = state?.lyrics ?? null;
-  const hasSynced = !!lyricsData?.synced_lyrics;
-  const isInstrumental = lyricsData?.instrumental ?? false;
 
-  // Parse LRC on track change
+  // Selected language version. -1 = use the top-level (default) lyrics.
+  const [activeVersion, setActiveVersion] = useState(-1);
+  const versions = lyricsData?.versions?.filter(v => v.synced_lyrics || v.plain_lyrics) ?? [];
+  const version = activeVersion >= 0 && activeVersion < versions.length ? versions[activeVersion] : null;
+  const effectiveLyrics = version ?? {
+    track_id: lyricsData?.track_id ?? '',
+    instrumental: lyricsData?.instrumental ?? false,
+    plain_lyrics: lyricsData?.plain_lyrics ?? '',
+    synced_lyrics: lyricsData?.synced_lyrics ?? '',
+  };
+  const effectiveHasSynced = !!effectiveLyrics.synced_lyrics;
+  const effectiveIsInstrumental = effectiveLyrics.instrumental;
+
+  // Parse LRC on track or version change
   useEffect(() => {
-    if (hasSynced) {
-      setLyricLines(parseLRC(lyricsData!.synced_lyrics));
+    if (effectiveHasSynced) {
+      setLyricLines(parseLRC(effectiveLyrics.synced_lyrics));
     } else {
       setLyricLines([]);
     }
     setActiveIdx(-1);
     activeIdxRef.current = -1;
+  }, [lyricsData?.track_id, activeVersion]);
+
+  // Reset language selection when the track changes
+  useEffect(() => {
+    setActiveVersion(-1);
   }, [lyricsData?.track_id]);
 
   // Scroll active line into view when modal opens or active line changes
@@ -87,7 +108,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
 
   // rAF sync loop for compact view
   useEffect(() => {
-    if (!hasSynced || lyricLines.length === 0 || !player) return;
+    if (!effectiveHasSynced || lyricLines.length === 0 || !player) return;
     let rafId: number;
     const tick = () => {
       const ms = (localPos !== null ? localPos : pos) * 1000;
@@ -100,11 +121,11 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [hasSynced, lyricLines, player?.id, localPos, pos]);
+  }, [effectiveHasSynced, lyricLines, player?.id, localPos, pos]);
 
   // Extra rAF sync loop for fullscreen modal ONLY (separate so we can keep it alive)
   useEffect(() => {
-    if (!showFullLyrics || !hasSynced || lyricLines.length === 0 || !player) return;
+    if (!showFullLyrics || !effectiveHasSynced || lyricLines.length === 0 || !player) return;
     let rafId: number;
     const tick = () => {
       const ms = (localPos !== null ? localPos : pos) * 1000;
@@ -117,7 +138,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [showFullLyrics, hasSynced, lyricLines, player?.id, localPos, pos]);
+  }, [showFullLyrics, effectiveHasSynced, lyricLines, player?.id, localPos, pos]);
 
   if (localPos !== null && seekRef.current !== 0 && Math.abs(pos - seekRef.current) < 2) {
     seekRef.current = 0;
@@ -144,13 +165,13 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const prevLineText = activeIdx > 0 ? lyricLines[activeIdx - 1].text : '';
   const currentLineText = activeIdx >= 0 && activeIdx < lyricLines.length
     ? lyricLines[activeIdx].text
-    : hasSynced && lyricLines.length > 0
+    : effectiveHasSynced && lyricLines.length > 0
       ? lyricLines[0].text
       : '';
   const nextLineText = activeIdx >= 0 && activeIdx < lyricLines.length - 1
     ? lyricLines[activeIdx + 1].text
     : '';
-  const showTicker = hasSynced && lyricLines.length > 0;
+  const showTicker = effectiveHasSynced && lyricLines.length > 0;
 
   // Shared seekbar
   const seekbar = (
@@ -252,7 +273,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       </div>
 
       {/* 3-line inline lyrics ticker */}
-      {showTicker && !isInstrumental && (
+      {showTicker && !effectiveIsInstrumental && (
         <div className="relative flex flex-col items-center justify-center h-[76px] px-8 overflow-hidden text-center rounded-xl"
           style={{
             background: 'rgba(30, 41, 59, 0.55)',
@@ -286,7 +307,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       )}
 
       {/* Plain lyrics fallback */}
-      {!showTicker && !isInstrumental && lyricsData?.plain_lyrics && (
+      {!showTicker && !effectiveIsInstrumental && effectiveLyrics.plain_lyrics && (
         <div className="relative flex items-center justify-center h-[52px] px-8 overflow-hidden text-center rounded-xl"
           style={{
             background: 'rgba(30, 41, 59, 0.55)',
@@ -294,7 +315,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           }}
         >
           <div className="text-xs text-deck-dim/70 truncate max-w-full">
-            {lyricsData.plain_lyrics.split('\n')[0]}
+            {effectiveLyrics.plain_lyrics.split('\n')[0]}
           </div>
           <button
             onClick={() => setShowFullLyrics(true)}
@@ -307,7 +328,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       )}
 
       {/* Instrumental badge */}
-      {isInstrumental && (
+      {effectiveIsInstrumental && (
         <div className="flex items-center justify-center h-[52px] rounded-xl"
           style={{
             background: 'rgba(30, 41, 59, 0.55)',
@@ -323,9 +344,30 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
 
       {/* Controls */}
       <div className="flex justify-center items-center gap-3">
+        {caps.mpv && caps.yt_dlp && (
+          <button
+            className={`media-btn relative ${showSearch ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
+            onClick={() => setShowSearch(s => !s)}
+            title="Search songs"
+          >
+            <Search size={16} />
+          </button>
+        )}
         {playControls()}
         {state && <AudioStreamCard state={state} compact />}
       </div>
+
+      {/* Inline song search panel */}
+      {showSearch && (
+        <div className="rounded-xl p-3"
+          style={{
+            background: 'rgba(30, 41, 59, 0.55)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          <MusicSearch available={caps.mpv && caps.yt_dlp} />
+        </div>
+      )}
 
       {/* Fullscreen lyrics modal — portal to body to escape deck-card stacking context */}
       {showFullLyrics && createPortal(
@@ -407,6 +449,31 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                   {lyricsData.track_id}
                 </div>
               )}
+
+              {/* Language / version switcher */}
+              {versions.length > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
+                  {versions.map((v, i) => {
+                    const isSel = activeVersion === i;
+                    const label = v.lang
+                      ? v.lang.toUpperCase()
+                      : `Version ${i + 1}`;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setActiveVersion(isSel ? -1 : i)}
+                        className={`px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide rounded-full border transition-all duration-150 cursor-pointer ${
+                          isSel
+                            ? 'bg-deck-accent/20 border-deck-accent/40 text-deck-accent'
+                            : 'bg-white/[0.04] border-white/[0.08] text-deck-dim hover:text-deck-text hover:border-white/20'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div
               ref={lyricsContainerRef}
@@ -416,7 +483,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                 WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 8%, black 92%, transparent 100%)',
               }}
             >
-              {isInstrumental ? (
+              {effectiveIsInstrumental ? (
                 <div className="flex items-center justify-center h-full text-deck-muted text-sm italic">Instrumental Track</div>
               ) : lyricLines.length > 0 ? (
                 <div className="flex flex-col gap-3 md:gap-4 items-center">
@@ -445,9 +512,9 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                     );
                   })}
                 </div>
-              ) : lyricsData?.plain_lyrics ? (
+              ) : effectiveLyrics.plain_lyrics ? (
                 <div className="text-sm md:text-base text-deck-dim/80 whitespace-pre-wrap leading-relaxed text-center max-w-2xl mx-auto">
-                  {lyricsData.plain_lyrics}
+                  {effectiveLyrics.plain_lyrics}
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-deck-muted text-sm italic">No lyrics available</div>

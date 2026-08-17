@@ -138,3 +138,45 @@ export async function sendVideoCommand(action: string, payload?: Record<string, 
   });
 }
 
+export interface MusicSearchResult {
+  id: string;
+  title: string;
+  artist: string;
+  duration: number;
+  thumbnail: string;
+  url: string;
+}
+
+export interface MusicSearchResponse {
+  query: string;
+  results: MusicSearchResult[];
+}
+
+export async function searchMusic(query: string, n = 8): Promise<MusicSearchResult[]> {
+  const res = await fetch(`/api/music/search?q=${encodeURIComponent(query)}&n=${n}`);
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Search failed (${res.status}): ${t}`);
+  }
+  const data = (await res.json()) as MusicSearchResponse;
+  return data.results ?? [];
+}
+
+export async function playMusic(url: string, title?: string, artist?: string): Promise<void> {
+  const params = new URLSearchParams({ url });
+  if (title) params.set('title', title);
+  if (artist) params.set('artist', artist);
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(`/api/music/play?${params.toString()}`, { signal: ctrl.signal });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Play failed (${res.status}): ${text}`);
+    }
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+

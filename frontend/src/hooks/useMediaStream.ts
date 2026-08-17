@@ -48,11 +48,19 @@ export interface PlayerState {
   length: number;
 }
 
+export interface LyricVersion {
+  lang: string;
+  plain_lyrics: string;
+  synced_lyrics: string;
+  instrumental: boolean;
+}
+
 export interface LyricData {
   track_id: string;
   instrumental: boolean;
   plain_lyrics: string;
   synced_lyrics: string;
+  versions?: LyricVersion[];
 }
 
 export interface CmdLogEntry {

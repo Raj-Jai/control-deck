@@ -7,16 +7,26 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 )
+
+// LyricVersion is a single language/format variant of a track's lyrics.
+type LyricVersion struct {
+	Lang         string `json:"lang"`
+	PlainLyrics  string `json:"plain_lyrics"`
+	SyncedLyrics string `json:"synced_lyrics"`
+	Instrumental bool   `json:"instrumental"`
+}
 
 type LyricData struct {
 	TrackID      string `json:"track_id"`
 	Instrumental bool   `json:"instrumental"`
 	PlainLyrics  string `json:"plain_lyrics"`
 	SyncedLyrics string `json:"synced_lyrics"`
+	Versions     []LyricVersion `json:"versions,omitempty"`
 }
 
 type lrclibResult struct {
@@ -26,6 +36,7 @@ type lrclibResult struct {
 	TrackName    string  `json:"trackName"`
 	ArtistName   string  `json:"artistName"`
 	Duration     float64 `json:"duration"`
+	Lang         string  `json:"lang"`
 }
 
 var (
@@ -181,7 +192,8 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 		searchArtist = cleanMeta.Artist
 	}
 
-	// Try exact /api/get with best available metadata
+	// Try exact /api/get with best available metadata. This typically returns a
+	// single result but may include multiple language versions.
 	params := url.Values{}
 	params.Set("track_name", searchTitle)
 	params.Set("artist_name", searchArtist)
@@ -199,44 +211,37 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 		}
 	}
 
+	// Collect candidates from all search strategies, merged and deduped by language.
+	var results []lrclibResult
+
 	// Search with cleaned artist + title
-	if results := doLRCLIBSearch(searchArtist + " " + searchTitle); len(results) > 0 {
-		if best := fuzzyPickBest(results, searchArtist, searchTitle, duration); best != nil {
-			if data := responseToLyricData(best, searchArtist, best.TrackName); data != nil {
-				log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
-				lyricsCacheMu.Lock()
-				lyricsCache[key] = data
-				lyricsCacheMu.Unlock()
-				return data
-			}
-		}
+	if r := doLRCLIBSearch(searchArtist + " " + searchTitle); len(r) > 0 {
+		results = append(results, r...)
 	}
 
 	// Search by track name only
-	if results := doLRCLIBSearch(searchTitle); len(results) > 0 {
-		if best := fuzzyPickBest(results, searchArtist, searchTitle, duration); best != nil {
-			if data := responseToLyricData(best, searchArtist, best.TrackName); data != nil {
-				log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
-				lyricsCacheMu.Lock()
-				lyricsCache[key] = data
-				lyricsCacheMu.Unlock()
-				return data
-			}
+	if len(results) == 0 {
+		if r := doLRCLIBSearch(searchTitle); len(r) > 0 {
+			results = append(results, r...)
 		}
 	}
 
 	// Broader search with original (uncleaned) artist + track
 	if searchTitle != track || searchArtist != artist {
-		if results := doLRCLIBSearch(artist + " " + cleanYouTubeTitle(track, artist).Title); len(results) > 0 {
-			if best := fuzzyPickBest(results, artist, cleanYouTubeTitle(track, artist).Title, duration); best != nil {
-				if data := responseToLyricData(best, artist, best.TrackName); data != nil {
-					log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
-					lyricsCacheMu.Lock()
-					lyricsCache[key] = data
-					lyricsCacheMu.Unlock()
-					return data
-				}
-			}
+		if r := doLRCLIBSearch(artist + " " + cleanYouTubeTitle(track, artist).Title); len(r) > 0 {
+			results = append(results, r...)
+		}
+	}
+
+	if len(results) > 0 {
+		if data := buildVersions(results, searchArtist, searchTitle, duration); data != nil {
+			log.Printf("lyrics: found %d version(s) for %s - %s (synced=%v)",
+				len(data.Versions), artist, track, data.SyncedLyrics != "")
+			data.TrackID = lyricsCacheKey(artist, track)
+			lyricsCacheMu.Lock()
+			lyricsCache[key] = data
+			lyricsCacheMu.Unlock()
+			return data
 		}
 	}
 
@@ -245,6 +250,129 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 	lyricsCache[key] = nil
 	lyricsCacheMu.Unlock()
 	return nil
+}
+
+// buildVersions scores all candidate results, keeps the best version per
+// language (and dedupes identical content), and returns a LyricData whose
+// active fields point at the overall best version while Versions lists every
+// distinct language so the frontend can offer a language switcher.
+func buildVersions(results []lrclibResult, artist, title string, duration float64) *LyricData {
+	type scored struct {
+		r   lrclibResult
+		scr float64
+	}
+
+	aLower := strings.ToLower(artist)
+	tLower := strings.ToLower(title)
+
+	score := func(r lrclibResult) float64 {
+		titleSim := jaroWinkler(strings.ToLower(r.TrackName), tLower)
+		artistSim := jaroWinkler(strings.ToLower(r.ArtistName), aLower)
+		s := titleSim*0.6 + artistSim*0.4
+		if duration > 0 && r.Duration > 0 {
+			diff := duration - r.Duration
+			if diff < 0 {
+				diff = -diff
+			}
+			durSim := 1.0 - diff/30.0
+			if durSim < 0 {
+				durSim = 0
+			}
+			s += durSim * 0.1
+		}
+		return s
+	}
+
+	// Rank all results.
+	ranked := make([]scored, 0, len(results))
+	for _, r := range results {
+		ranked = append(ranked, scored{r: r, scr: score(r)})
+	}
+	// Stable-ish sort by descending score.
+	// (Simple insertion sort since result counts are small.)
+	for i := 1; i < len(ranked); i++ {
+		for j := i; j > 0 && ranked[j].scr > ranked[j-1].scr; j-- {
+			ranked[j], ranked[j-1] = ranked[j-1], ranked[j]
+		}
+	}
+
+	// Filter weak matches.
+	var strong []scored
+	for _, s := range ranked {
+		if s.r.SyncedLyrics == "" && s.r.PlainLyrics == "" {
+			continue
+		}
+		if s.scr >= 0.5 {
+			strong = append(strong, s)
+		}
+	}
+	if len(strong) == 0 {
+		return nil
+	}
+
+	// Group by language: normalise empty/lang names; pick the best per group.
+	type key struct {
+		lang   string
+		lyrics string // content fingerprint to catch same-content duplicates
+	}
+	langBest := make(map[key]scored)
+
+	for _, s := range strong {
+		lang := s.r.Lang
+		if lang == "" || lang == "null" || strings.EqualFold(lang, "und") || strings.EqualFold(lang, "unknown") {
+			lang = ""
+		}
+		fp := s.r.SyncedLyrics
+		if fp == "" {
+			fp = s.r.PlainLyrics
+		}
+		k := key{lang: lang, lyrics: fp}
+		if cur, ok := langBest[k]; !ok || s.scr > cur.scr {
+			langBest[k] = s
+		}
+	}
+
+	versions := make([]LyricVersion, 0, len(langBest))
+	best := LyricVersion{}
+	bestSet := false
+	var bestScr float64
+
+	for _, s := range langBest {
+		lang := s.r.Lang
+		if lang == "" || lang == "null" || strings.EqualFold(lang, "und") || strings.EqualFold(lang, "unknown") {
+			lang = ""
+		}
+		v := LyricVersion{
+			Lang:         lang,
+			PlainLyrics:  s.r.PlainLyrics,
+			SyncedLyrics: s.r.SyncedLyrics,
+			Instrumental: s.r.Instrumental,
+		}
+		versions = append(versions, v)
+		if !bestSet || s.scr > bestScr {
+			best = v
+			bestSet = true
+			bestScr = s.scr
+		}
+	}
+
+	// Sort versions: labelled languages first, then the unlabelled one last.
+	sort.SliceStable(versions, func(i, j int) bool {
+		if versions[i].Lang == "" && versions[j].Lang != "" {
+			return false
+		}
+		if versions[i].Lang != "" && versions[j].Lang == "" {
+			return true
+		}
+		return true // keep stable order otherwise
+	})
+
+	return &LyricData{
+		Instrumental: best.Instrumental,
+		PlainLyrics:  best.PlainLyrics,
+		SyncedLyrics: best.SyncedLyrics,
+		Versions:     versions,
+	}
 }
 
 func doLRCLIBGet(params url.Values) *lrclibResult {
@@ -298,61 +426,6 @@ func doLRCLIBSearch(query string) []lrclibResult {
 	return results
 }
 
-func fuzzyPickBest(results []lrclibResult, artist, title string, duration float64) *lrclibResult {
-	if len(results) == 0 {
-		return nil
-	}
-
-	aLower := strings.ToLower(artist)
-	tLower := strings.ToLower(title)
-
-	score := func(r lrclibResult) float64 {
-		titleSim := jaroWinkler(strings.ToLower(r.TrackName), tLower)
-		artistSim := jaroWinkler(strings.ToLower(r.ArtistName), aLower)
-		s := titleSim*0.6 + artistSim*0.4
-		if duration > 0 && r.Duration > 0 {
-			diff := duration - r.Duration
-			if diff < 0 {
-				diff = -diff
-			}
-			durSim := 1.0 - diff/30.0
-			if durSim < 0 {
-				durSim = 0
-			}
-			s += durSim * 0.1
-		}
-		return s
-	}
-
-	bestSynced := -1
-	bestSyncedScore := 0.0
-	bestAny := 0
-	bestAnyScore := 0.0
-
-	for i, r := range results {
-		s := score(r)
-		if s > bestAnyScore {
-			bestAnyScore = s
-			bestAny = i
-		}
-		if r.SyncedLyrics != "" && s > bestSyncedScore {
-			bestSyncedScore = s
-			bestSynced = i
-		}
-	}
-
-	if bestSynced >= 0 && bestSyncedScore >= 0.5 {
-		return &results[bestSynced]
-	}
-	if bestAnyScore >= 0.6 {
-		return &results[bestAny]
-	}
-
-	log.Printf("lyrics: no good match (best=%.3f) for %s - %s (closest: %s - %s)",
-		bestAnyScore, artist, title, results[bestAny].ArtistName, results[bestAny].TrackName)
-	return nil
-}
-
 func responseToLyricData(r *lrclibResult, artist, track string) *LyricData {
 	trackID := strings.ToLower(strings.TrimSpace(artist)) + "-" + strings.ToLower(strings.TrimSpace(track))
 	return &LyricData{
@@ -360,6 +433,12 @@ func responseToLyricData(r *lrclibResult, artist, track string) *LyricData {
 		Instrumental: r.Instrumental,
 		PlainLyrics:  r.PlainLyrics,
 		SyncedLyrics: r.SyncedLyrics,
+		Versions: []LyricVersion{{
+			Lang:         r.Lang,
+			PlainLyrics:  r.PlainLyrics,
+			SyncedLyrics: r.SyncedLyrics,
+			Instrumental: r.Instrumental,
+		}},
 	}
 }
 
