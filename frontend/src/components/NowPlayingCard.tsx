@@ -12,9 +12,12 @@ import {
   X,
   Volume2,
   Search,
+  ExternalLink,
+  Smartphone,
 } from 'lucide-react';
 import type { MediaState, PlayerState } from '../hooks/useMediaStream';
-import { triggerCommand, seekTo, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
+import { triggerCommand, seekTo, setVolume, sliderToValue, valueToSlider, openInBrowser, handoffToPhone, listHandoffDevices } from '../services/apiService';
+import type { HandoffDevice } from '../services/apiService';
 import AudioStreamCard from './AudioStreamCard';
 import { parseLRC, getActiveLineIndex } from '../lib/lyricsEngine';
 import type { LyricLine } from '../lib/lyricsEngine';
@@ -45,6 +48,10 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const activeIdxRef = useRef(-1);
   const [showFullLyrics, setShowFullLyrics] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [handingOff, setHandingOff] = useState(false);
+  const [showHandoffMenu, setShowHandoffMenu] = useState(false);
+  const [handoffDevices, setHandoffDevices] = useState<HandoffDevice[]>([]);
   const modalRef = useRef<HTMLDivElement>(null);
 
   const isOffline = !player;
@@ -154,6 +161,42 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     seekRef.current = v;
     setLocalPos(v);
     seekTo(v, playerId);
+  };
+
+  const handleOpenInBrowser = async () => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await openInBrowser(playerId ?? undefined);
+    } catch (e) {
+      console.error('Open in browser failed:', e);
+    } finally {
+      setOpening(false);
+    }
+  };
+
+  const handleHandoffToPhone = async (deviceId?: string) => {
+    if (handingOff) return;
+    setHandingOff(true);
+    setShowHandoffMenu(false);
+    try {
+      await handoffToPhone(playerId ?? undefined, deviceId);
+    } catch (e) {
+      console.error('Handoff to phone failed:', e);
+    } finally {
+      setHandingOff(false);
+    }
+  };
+
+  const toggleHandoffMenu = async () => {
+    setShowHandoffMenu(s => !s);
+    if (handoffDevices.length === 0) {
+      try {
+        setHandoffDevices(await listHandoffDevices());
+      } catch (e) {
+        console.error('Failed to list handoff devices:', e);
+      }
+    }
   };
 
   const isPlaying = !isOffline && !isIdle && status === 'Playing';
@@ -354,6 +397,54 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           </button>
         )}
         {playControls()}
+        {!isOffline && !isIdle && (
+          <button
+            className={`media-btn relative ${opening ? 'animate-pulse text-deck-accent' : ''}`}
+            onClick={handleOpenInBrowser}
+            title="Open in browser (same position)"
+          >
+            <ExternalLink size={16} />
+          </button>
+        )}
+        {caps.kdeconnect && !isOffline && !isIdle && (
+          <div className="relative">
+            <button
+              className={`media-btn relative ${handingOff ? 'animate-pulse text-deck-accent' : ''} ${showHandoffMenu ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
+              onClick={toggleHandoffMenu}
+              title="Send to phone (same position)"
+            >
+              <Smartphone size={16} />
+            </button>
+
+            {showHandoffMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowHandoffMenu(false)} />
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 min-w-[180px] rounded-xl p-1.5 border border-white/[0.1] bg-[rgba(15,23,42,0.95)] shadow-2xl">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-deck-muted/50 px-2 py-1">
+                    Send to
+                  </div>
+                  {handoffDevices.length === 0 ? (
+                    <div className="text-xs text-deck-muted/70 px-2 py-1.5">
+                      No phones reachable
+                    </div>
+                  ) : (
+                    handoffDevices.map(d => (
+                      <button
+                        key={d.id}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-deck-text hover:bg-white/[0.06] transition-colors cursor-pointer text-left"
+                        onClick={() => handleHandoffToPhone(d.id)}
+                        disabled={handingOff}
+                      >
+                        <Smartphone size={14} className="text-deck-dim flex-shrink-0" />
+                        <span className="truncate">{d.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         {state && <AudioStreamCard state={state} compact />}
       </div>
 

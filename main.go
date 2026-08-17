@@ -475,6 +475,9 @@ func main() {
 	http.HandleFunc("/ws/terminal", handleTerminalWS)
 	http.HandleFunc("/api/music/search", handleMusicSearch)
 	http.HandleFunc("/api/music/play", handleMusicPlay)
+	http.HandleFunc("/api/music/open", handleOpenInBrowser)
+	http.HandleFunc("/api/music/handoff", handleHandoffToPhone)
+	http.HandleFunc("/api/music/handoff-devices", handleHandoffDevices)
 
 	// Background tickers
 	go startMediaBroadcaster()
@@ -531,6 +534,7 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		"vlc_http":    checkVLCInterface(),
 		"yt_dlp":      checkBinary("yt-dlp"),
 		"mpv":         checkBinary("mpv"),
+		"kdeconnect":  checkBinary("kdeconnect-cli"),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(caps)

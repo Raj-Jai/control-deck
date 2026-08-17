@@ -15,6 +15,7 @@ const defaultCaps = {
   battery: false,
   mpv: false,
   yt_dlp: false,
+  kdeconnect: false,
 };
 
 export type Capabilities = typeof defaultCaps;

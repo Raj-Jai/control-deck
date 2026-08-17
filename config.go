@@ -16,6 +16,7 @@ type Config struct {
 	HTTPSPort        int                 `json:"https_port"`
 	CaffeineSchemaDir string             `json:"caffeine_schema_dir"`
 	CustomCommands   map[string][]string `json:"custom_commands"`
+	KDConnectPhone   string              `json:"kdeconnect_phone"`
 }
 
 func loadConfig(path string) (*Config, error) {

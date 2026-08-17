@@ -179,4 +179,64 @@ export async function playMusic(url: string, title?: string, artist?: string): P
   }
 }
 
+export interface OpenMediaResult {
+  opened: boolean;
+  paused: boolean;
+  url: string;
+  player: string;
+  seconds: number;
+}
+
+export async function openInBrowser(player?: string): Promise<OpenMediaResult> {
+  const res = await fetch('/api/music/open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...(player ? { player } : {}) }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Open failed (${res.status}): ${text}`);
+  }
+  const result = (await res.json()) as OpenMediaResult;
+  // Open the resolved URL in a new tab on THIS device (the client), not the
+  // server. The server has already paused the laptop player.
+  if (result.url) {
+    window.open(result.url, '_blank', 'noopener');
+  }
+  return result;
+}
+
+export interface HandoffDevice {
+  id: string;
+  name: string;
+}
+
+export interface HandoffResult {
+  opened: boolean;
+  paused: boolean;
+  url: string;
+  player: string;
+  device: string;
+  seconds: number;
+}
+
+export async function listHandoffDevices(): Promise<HandoffDevice[]> {
+  const res = await fetch('/api/music/handoff-devices');
+  const data = await res.json();
+  return (data.devices ?? []) as HandoffDevice[];
+}
+
+export async function handoffToPhone(player?: string, device?: string): Promise<HandoffResult> {
+  const res = await fetch('/api/music/handoff', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...(player ? { player } : {}), ...(device ? { device } : {}) }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Handoff failed (${res.status}): ${text}`);
+  }
+  return (await res.json()) as HandoffResult;
+}
+
 

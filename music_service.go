@@ -125,6 +125,7 @@ var (
 	musicMetaMu     sync.Mutex
 	musicMetaArtist string
 	musicMetaTitle  string
+	musicMetaURL    string
 )
 
 // currentMusicMeta returns the stored artist/title for the music pipeline.
@@ -132,6 +133,13 @@ func currentMusicMeta() (string, string) {
 	musicMetaMu.Lock()
 	defer musicMetaMu.Unlock()
 	return musicMetaArtist, musicMetaTitle
+}
+
+// currentMusicURL returns the stored source URL for the music pipeline.
+func currentMusicURL() string {
+	musicMetaMu.Lock()
+	defer musicMetaMu.Unlock()
+	return musicMetaURL
 }
 
 // killMusicPipeline terminates any running music pipeline and its whole
@@ -208,6 +216,7 @@ func handleMusicPlay(w http.ResponseWriter, r *http.Request) {
 	musicMetaMu.Lock()
 	musicMetaArtist = artist
 	musicMetaTitle = title
+	musicMetaURL = u
 	musicMetaMu.Unlock()
 
 	// Stop any existing music pipeline before starting the new song.
@@ -281,6 +290,363 @@ func cleanSearchPart(s string) string {
 	s = noise.ReplaceAllString(s, "")
 	s = strings.TrimSpace(s)
 	return s
+}
+
+// resolvePlayerMedia returns the browser-openable URL for the given (or best)
+// player, captured at its current position, plus the player id and position.
+// The player is NOT paused here — callers decide.
+func resolvePlayerMedia(player string) (id, openURL string, pos float64, err error) {
+	p := strings.TrimSpace(player)
+	if p == "" {
+		p = findBestPlayer()
+	}
+	if p == "" {
+		return "", "", 0, fmt.Errorf("no media player found")
+	}
+
+	// Capture position before pausing.
+	posStr, _ := runCmd("playerctl", "--player", p, "position")
+	if f, e := strconv.ParseFloat(strings.TrimSpace(posStr), 64); e == nil && f >= 0 {
+		pos = f
+	}
+
+	// Resolve the media URL.
+	mediaURL := ""
+	if strings.HasPrefix(p, "mpv") {
+		mediaURL = currentMusicURL()
+	}
+	if mediaURL == "" {
+		if u, err := runCmd("playerctl", "--player", p, "metadata", "xesam:url"); err == nil {
+			mediaURL = strings.TrimSpace(u)
+		}
+	}
+	if mediaURL == "" {
+		if t, err := runCmd("playerctl", "--player", p, "metadata", "xesam:title"); err == nil {
+			mediaURL = resolveYouTubeByTitle(strings.TrimSpace(t))
+		}
+	}
+	if mediaURL == "" {
+		return "", "", 0, fmt.Errorf("could not determine media URL")
+	}
+
+	return p, browserURLAtPosition(mediaURL, pos), pos, nil
+}
+
+// handleOpenInBrowser pauses the given (or best) player and returns the current
+// media's browser-openable URL (resumed from the same position where possible)
+// so the client device — not the server — can open it in a new tab.
+func handleOpenInBrowser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Player string `json:"player"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	p, openURL, pos, err := resolvePlayerMedia(req.Player)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Pause the laptop player first.
+	runCmd("playerctl", "--player", p, "pause")
+
+	addLog("↗ open in browser: " + openURL)
+	log.Printf("open-in-browser: player=%s pos=%.0f → %s", p, pos, openURL)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"opened":  true,
+		"paused":  true,
+		"url":     openURL,
+		"player":  p,
+		"seconds": pos,
+	})
+}
+
+// phoneDevice is a handoff target discovered via KDE Connect.
+type phoneDevice struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// listPhoneDevices returns all reachable KDE Connect phone/tablet devices.
+func listPhoneDevices() []phoneDevice {
+	out, err := exec.Command("kdeconnect-cli", "-l", "--id-name-only").Output()
+	if err != nil {
+		log.Printf("handoff: kdeconnect-cli -l failed: %v", err)
+		return nil
+	}
+	var devs []phoneDevice
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Format: "<id> <name>"
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		id := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+		if id == "" || !deviceIsPhone(id) {
+			continue
+		}
+		devs = append(devs, phoneDevice{ID: id, Name: name})
+	}
+	return devs
+}
+
+// handleHandoffDevices lists reachable phones for the frontend device picker.
+func handleHandoffDevices(w http.ResponseWriter, r *http.Request) {
+	if !checkBinary("kdeconnect-cli") {
+		http.Error(w, "kdeconnect-cli not installed", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"devices": listPhoneDevices(),
+	})
+}
+
+// findPhoneDeviceID returns the device id of the handoff target phone:
+//  1. the device configured in config.json (kdeconnect_phone), matched by
+//     device id or name, if it is reachable;
+//  2. otherwise the first reachable phone/tablet device.
+func findPhoneDeviceID() string {
+	out, err := exec.Command("kdeconnect-cli", "-l", "--id-name-only").Output()
+	if err != nil {
+		log.Printf("handoff: kdeconnect-cli -l failed: %v", err)
+		return ""
+	}
+
+	type dev struct{ id, name string }
+	var devs []dev
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Format: "<id> <name>"
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		id := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+		if id == "" {
+			continue
+		}
+		devs = append(devs, dev{id: id, name: name})
+	}
+
+	// Prefer the configured device.
+	if cfg := appCfg.KDConnectPhone; cfg != "" {
+		for _, d := range devs {
+			if d.id == cfg || d.name == cfg {
+				if deviceIsPhone(d.id) {
+					return d.id
+				}
+				log.Printf("handoff: configured device %q is not a phone (type?)", cfg)
+			}
+		}
+		log.Printf("handoff: configured device %q not reachable, falling back", cfg)
+	}
+
+	for _, d := range devs {
+		if deviceIsPhone(d.id) {
+			return d.id
+		}
+	}
+	return ""
+}
+
+// deviceIsPhone reports whether the KDE Connect device of the given id is a
+// phone or tablet (vs desktop/laptop).
+func deviceIsPhone(id string) bool {
+	out, err := exec.Command("dbus-send", "--session", "--print-reply",
+		"--dest=org.kde.kdeconnect", "--type=method_call",
+		"/modules/kdeconnect/devices/"+id,
+		"org.freedesktop.DBus.Properties.Get",
+		"string:org.kde.kdeconnect.device", "string:type").Output()
+	if err != nil {
+		return false
+	}
+	s := string(out)
+	return strings.Contains(s, "phone") || strings.Contains(s, "tablet")
+}
+
+// devicePaired reports whether the KDE Connect device is paired (plugins load
+// only after pairing, so sharing needs it).
+func devicePaired(id string) bool {
+	out, err := exec.Command("dbus-send", "--session", "--print-reply",
+		"--dest=org.kde.kdeconnect", "--type=method_call",
+		"/modules/kdeconnect/devices/"+id,
+		"org.freedesktop.DBus.Properties.Get",
+		"string:org.kde.kdeconnect.device", "string:isPaired").Output()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "true")
+}
+
+// ensureDevicePaired requests pairing if needed and waits up to 15s for the
+// user to accept on the phone. Returns true if the device ends up paired.
+func ensureDevicePaired(id string) bool {
+	if devicePaired(id) {
+		return true
+	}
+	log.Printf("handoff: device %s not paired, requesting pairing", id)
+	exec.Command("kdeconnect-cli", "--pair", "--device", id).Run()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(500 * time.Millisecond)
+		if devicePaired(id) {
+			return true
+		}
+	}
+	return false
+}
+
+// handleHandoffToPhone pauses the given (or best) player and shares the current
+// media URL (at the same position) to the user's KDE Connect phone so it opens
+// natively there — no dashboard needed on the phone.
+func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !checkBinary("kdeconnect-cli") {
+		http.Error(w, "kdeconnect-cli not installed", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		Player string `json:"player"`
+		Device string `json:"device"`
+	}
+	if r.Body != nil {
+		json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	p, openURL, pos, err := resolvePlayerMedia(req.Player)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Pause the laptop player first.
+	runCmd("playerctl", "--player", p, "pause")
+
+	dev := strings.TrimSpace(req.Device)
+	if dev == "" {
+		dev = findPhoneDeviceID()
+	}
+	if dev == "" {
+		http.Error(w, "No KDE Connect phone device reachable", http.StatusNotFound)
+		return
+	}
+
+	// Plugins (including share) only load after pairing. Auto-request pairing
+	// and wait for the user to accept on the phone.
+	if !ensureDevicePaired(dev) {
+		http.Error(w, "Phone not paired — accept the pairing request on the phone and retry", http.StatusConflict)
+		return
+	}
+
+	// Share the URL to the phone. KDE Connect shows a notification with an
+	// "Open" action which launches the URL natively (YouTube/Spotify app or
+	// browser) at the embedded timestamp.
+	out, err := exec.Command("kdeconnect-cli", "--share", openURL, "--device", dev).CombinedOutput()
+	if err != nil {
+		log.Printf("handoff: kdeconnect-cli share failed: %v | %s", err, string(out))
+		http.Error(w, "Failed to share to phone: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	addLog("📲 handoff to phone: " + openURL)
+	log.Printf("handoff: player=%s dev=%s pos=%.0f → %s", p, dev, pos, openURL)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"opened":  true,
+		"paused":  true,
+		"url":     openURL,
+		"player":  p,
+		"device":  dev,
+		"seconds": pos,
+	})
+}
+
+// resolveYouTubeByTitle finds the YouTube watch URL for a title via yt-dlp.
+func resolveYouTubeByTitle(title string) string {
+	if title == "" {
+		return ""
+	}
+	out, err := exec.Command("yt-dlp",
+		fmt.Sprintf("ytsearch1:%s", title),
+		"--flat-playlist", "-J", "--no-warnings").Output()
+	if err != nil {
+		log.Printf("open-in-browser: yt-dlp resolve failed: %v", err)
+		return ""
+	}
+	var pl struct {
+		Entries []struct {
+			ID string `json:"id"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(out, &pl); err != nil || len(pl.Entries) == 0 || pl.Entries[0].ID == "" {
+		log.Printf("open-in-browser: no yt-dlp result for %q", title)
+		return ""
+	}
+	return "https://www.youtube.com/watch?v=" + pl.Entries[0].ID
+}
+
+// browserURLAtPosition converts a media URL into a browser-openable URL,
+// appending a seek timestamp for YouTube.
+func browserURLAtPosition(raw string, pos float64) string {
+	raw = strings.TrimSpace(raw)
+
+	// Spotify canonical form: spotify:track:ID → https://open.spotify.com/track/ID
+	if strings.HasPrefix(raw, "spotify:") {
+		id := strings.TrimPrefix(raw, "spotify:")
+		if id != "" {
+			return "https://open.spotify.com/" + id
+		}
+	}
+
+	ts := ""
+	if pos > 0 {
+		ts = fmt.Sprintf("%d", int(pos))
+	}
+
+	if strings.Contains(raw, "youtube.com/watch") || strings.Contains(raw, "youtube.com/shorts") || strings.Contains(raw, "music.youtube.com") {
+		sep := "?"
+		if strings.Contains(raw, "?") {
+			sep = "&"
+		}
+		if ts != "" {
+			return raw + sep + "t=" + ts + "s"
+		}
+		return raw
+	}
+	if strings.Contains(raw, "youtu.be/") {
+		sep := "?"
+		if strings.Contains(raw, "?") {
+			sep = "&"
+		}
+		if ts != "" {
+			return raw + sep + "t=" + ts + "s"
+		}
+		return raw
+	}
+
+	return raw
 }
 
 // browserHasCookies reports whether a browser profile with a cookies DB exists.
