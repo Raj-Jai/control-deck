@@ -369,14 +369,89 @@ func handleOpenInBrowser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// phoneDevice is a handoff target discovered via KDE Connect.
+// phoneDevice is a handoff target discovered via KDE Connect / GSConnect.
 type phoneDevice struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-// listPhoneDevices returns all reachable KDE Connect phone/tablet devices.
+// gsconnectDaemon returns the path to GSConnect's daemon.js (its CLI entry
+// point) if the extension is installed, or "" if not.
+func gsconnectDaemon() string {
+	home, _ := os.UserHomeDir()
+	candidates := []string{
+		filepath.Join(home, ".local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js"),
+		"/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js",
+		"/usr/lib/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js",
+	}
+	for _, p := range candidates {
+		if fileExists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
+// gsconnectAvailable reports whether GSConnect is installed and its daemon is
+// reachable on the session bus (preferred backend over kdeconnect-cli).
+func gsconnectAvailable() bool {
+	daemon := gsconnectDaemon()
+	if daemon == "" || !checkBinary("gjs") {
+		return false
+	}
+	out, err := exec.Command("gjs", "-m", daemon, "--list-devices").CombinedOutput()
+	return err == nil || len(out) > 0
+}
+
+// gsconnectListDevices runs GSConnect's CLI and returns reachable paired
+// devices as "id\tname\tconnected\tpaired" lines.
+func gsconnectListDevices() string {
+	daemon := gsconnectDaemon()
+	if daemon == "" {
+		return ""
+	}
+	out, err := exec.Command("gjs", "-m", daemon, "--list-all").Output()
+	if err != nil {
+		log.Printf("handoff: gsconnect --list-all failed: %v", err)
+		return ""
+	}
+	return string(out)
+}
+
+// gsconnectDeviceProp reads a property from GSConnect's Device D-Bus object.
+func gsconnectDeviceProp(id, prop string) string {
+	path := "/org/gnome/Shell/Extensions/GSConnect/Device/" + id
+	out, err := exec.Command("dbus-send", "--session", "--print-reply",
+		"--dest=org.gnome.Shell.Extensions.GSConnect", "--type=method_call",
+		path,
+		"org.freedesktop.DBus.Properties.Get",
+		"string:org.gnome.Shell.Extensions.GSConnect.Device", "string:"+prop).Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+// listPhoneDevices returns all reachable KDE Connect/GSConnect phone/tablet
+// devices, preferring GSConnect when installed.
 func listPhoneDevices() []phoneDevice {
+	if gsconnectAvailable() {
+		var devs []phoneDevice
+		for _, line := range strings.Split(strings.TrimSpace(gsconnectListDevices()), "\n") {
+			fields := strings.Split(line, "\t")
+			if len(fields) < 2 {
+				continue
+			}
+			id := strings.TrimSpace(fields[0])
+			name := strings.TrimSpace(fields[1])
+			if id == "" || !deviceIsPhone(id) {
+				continue
+			}
+			devs = append(devs, phoneDevice{ID: id, Name: name})
+		}
+		return devs
+	}
+
 	out, err := exec.Command("kdeconnect-cli", "-l", "--id-name-only").Output()
 	if err != nil {
 		log.Printf("handoff: kdeconnect-cli -l failed: %v", err)
@@ -405,8 +480,8 @@ func listPhoneDevices() []phoneDevice {
 
 // handleHandoffDevices lists reachable phones for the frontend device picker.
 func handleHandoffDevices(w http.ResponseWriter, r *http.Request) {
-	if !checkBinary("kdeconnect-cli") {
-		http.Error(w, "kdeconnect-cli not installed", http.StatusServiceUnavailable)
+	if !gsconnectAvailable() && !checkBinary("kdeconnect-cli") {
+		http.Error(w, "no KDE Connect / GSConnect backend available", http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -420,38 +495,14 @@ func handleHandoffDevices(w http.ResponseWriter, r *http.Request) {
 //     device id or name, if it is reachable;
 //  2. otherwise the first reachable phone/tablet device.
 func findPhoneDeviceID() string {
-	out, err := exec.Command("kdeconnect-cli", "-l", "--id-name-only").Output()
-	if err != nil {
-		log.Printf("handoff: kdeconnect-cli -l failed: %v", err)
-		return ""
-	}
-
-	type dev struct{ id, name string }
-	var devs []dev
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		// Format: "<id> <name>"
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		id := strings.TrimSpace(parts[0])
-		name := strings.TrimSpace(parts[1])
-		if id == "" {
-			continue
-		}
-		devs = append(devs, dev{id: id, name: name})
-	}
+	devs := listPhoneDevices()
 
 	// Prefer the configured device.
 	if cfg := appCfg.KDConnectPhone; cfg != "" {
 		for _, d := range devs {
-			if d.id == cfg || d.name == cfg {
-				if deviceIsPhone(d.id) {
-					return d.id
+			if d.ID == cfg || d.Name == cfg {
+				if deviceIsPhone(d.ID) {
+					return d.ID
 				}
 				log.Printf("handoff: configured device %q is not a phone (type?)", cfg)
 			}
@@ -459,17 +510,19 @@ func findPhoneDeviceID() string {
 		log.Printf("handoff: configured device %q not reachable, falling back", cfg)
 	}
 
-	for _, d := range devs {
-		if deviceIsPhone(d.id) {
-			return d.id
-		}
+	if len(devs) > 0 {
+		return devs[0].ID
 	}
 	return ""
 }
 
-// deviceIsPhone reports whether the KDE Connect device of the given id is a
-// phone or tablet (vs desktop/laptop).
+// deviceIsPhone reports whether the device of the given id is a phone or
+// tablet (vs desktop/laptop), via whichever backend is active.
 func deviceIsPhone(id string) bool {
+	if gsconnectAvailable() {
+		s := gsconnectDeviceProp(id, "Type")
+		return strings.Contains(s, "phone") || strings.Contains(s, "tablet")
+	}
 	out, err := exec.Command("dbus-send", "--session", "--print-reply",
 		"--dest=org.kde.kdeconnect", "--type=method_call",
 		"/modules/kdeconnect/devices/"+id,
@@ -482,9 +535,12 @@ func deviceIsPhone(id string) bool {
 	return strings.Contains(s, "phone") || strings.Contains(s, "tablet")
 }
 
-// devicePaired reports whether the KDE Connect device is paired (plugins load
-// only after pairing, so sharing needs it).
+// devicePaired reports whether the device is paired (plugins load only after
+// pairing, so sharing needs it).
 func devicePaired(id string) bool {
+	if gsconnectAvailable() {
+		return strings.Contains(gsconnectDeviceProp(id, "Paired"), "true")
+	}
 	out, err := exec.Command("dbus-send", "--session", "--print-reply",
 		"--dest=org.kde.kdeconnect", "--type=method_call",
 		"/modules/kdeconnect/devices/"+id,
@@ -503,7 +559,14 @@ func ensureDevicePaired(id string) bool {
 		return true
 	}
 	log.Printf("handoff: device %s not paired, requesting pairing", id)
-	exec.Command("kdeconnect-cli", "--pair", "--device", id).Run()
+	if gsconnectAvailable() {
+		daemon := gsconnectDaemon()
+		if daemon != "" {
+			exec.Command("gjs", "-m", daemon, "--pair", "--device", id).Run()
+		}
+	} else {
+		exec.Command("kdeconnect-cli", "--pair", "--device", id).Run()
+	}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(500 * time.Millisecond)
@@ -522,8 +585,8 @@ func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !checkBinary("kdeconnect-cli") {
-		http.Error(w, "kdeconnect-cli not installed", http.StatusServiceUnavailable)
+	if !gsconnectAvailable() && !checkBinary("kdeconnect-cli") {
+		http.Error(w, "no KDE Connect / GSConnect backend available", http.StatusServiceUnavailable)
 		return
 	}
 	var req struct {
@@ -562,10 +625,17 @@ func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
 	// Share the URL to the phone. KDE Connect shows a notification with an
 	// "Open" action which launches the URL natively (YouTube/Spotify app or
 	// browser) at the embedded timestamp.
-	out, err := exec.Command("kdeconnect-cli", "--share", openURL, "--device", dev).CombinedOutput()
-	if err != nil {
-		log.Printf("handoff: kdeconnect-cli share failed: %v | %s", err, string(out))
-		http.Error(w, "Failed to share to phone: "+err.Error(), http.StatusInternalServerError)
+	var out []byte
+	var errShare error
+	if gsconnectAvailable() {
+		daemon := gsconnectDaemon()
+		out, errShare = exec.Command("gjs", "-m", daemon, "--share-link", openURL, "--device", dev).CombinedOutput()
+	} else {
+		out, errShare = exec.Command("kdeconnect-cli", "--share", openURL, "--device", dev).CombinedOutput()
+	}
+	if errShare != nil {
+		log.Printf("handoff: share failed: %v | %s", errShare, string(out))
+		http.Error(w, "Failed to share to phone: "+errShare.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -534,7 +534,8 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 		"vlc_http":    checkVLCInterface(),
 		"yt_dlp":      checkBinary("yt-dlp"),
 		"mpv":         checkBinary("mpv"),
-		"kdeconnect":  checkBinary("kdeconnect-cli"),
+		"kdeconnect":  gsconnectAvailable() || checkBinary("kdeconnect-cli"),
+		"gsconnect":   gsconnectAvailable(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(caps)

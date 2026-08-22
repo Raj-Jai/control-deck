@@ -440,6 +440,9 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                       </button>
                     ))
                   )}
+                  <div className="text-[10px] text-deck-muted/50 px-2 py-1.5 border-t border-white/[0.06] mt-1">
+                    Tip: keep the KDE Connect app open on the phone so the link auto-opens
+                  </div>
                 </div>
               </>
             )}
