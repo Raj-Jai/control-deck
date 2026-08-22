@@ -6,3 +6,7 @@ server.key
 config.local.json
 tab-dashboard
 config.json
+server.log
+geo_sessions/
+docs/
+
