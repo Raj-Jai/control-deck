@@ -54,6 +54,11 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const [handoffDevices, setHandoffDevices] = useState<HandoffDevice[]>([]);
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // Reset art error when the artwork URL changes so new art can load
+  useEffect(() => {
+    setArtError(false);
+  }, [player?.art_url]);
+
   const isOffline = !player;
   const isIdle = !!player && !player.title && player.status !== 'Playing' && player.status !== 'Paused';
   const status = isOffline ? 'Stopped' : (player.status || 'Stopped');
@@ -113,7 +118,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     return () => { document.body.style.overflow = ''; };
   }, [showFullLyrics]);
 
-  // rAF sync loop for compact view
+  // Single rAF sync loop for lyrics (compact + fullscreen share state)
   useEffect(() => {
     if (!effectiveHasSynced || lyricLines.length === 0 || !player) return;
     let rafId: number;
@@ -130,27 +135,13 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     return () => cancelAnimationFrame(rafId);
   }, [effectiveHasSynced, lyricLines, player?.id, localPos, pos]);
 
-  // Extra rAF sync loop for fullscreen modal ONLY (separate so we can keep it alive)
+  // Clear optimistic seek position once the server catches up
   useEffect(() => {
-    if (!showFullLyrics || !effectiveHasSynced || lyricLines.length === 0 || !player) return;
-    let rafId: number;
-    const tick = () => {
-      const ms = (localPos !== null ? localPos : pos) * 1000;
-      const idx = getActiveLineIndex(lyricLines, ms);
-      if (idx !== activeIdxRef.current) {
-        activeIdxRef.current = idx;
-        setActiveIdx(idx);
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [showFullLyrics, effectiveHasSynced, lyricLines, player?.id, localPos, pos]);
-
-  if (localPos !== null && seekRef.current !== 0 && Math.abs(pos - seekRef.current) < 2) {
-    seekRef.current = 0;
-    setLocalPos(null);
-  }
+    if (localPos !== null && seekRef.current !== 0 && Math.abs(pos - seekRef.current) < 2) {
+      seekRef.current = 0;
+      setLocalPos(null);
+    }
+  }, [pos, localPos]);
 
   const displayVal = localPos !== null ? localPos : Math.floor(pos);
   const displayTitle = isOffline ? 'No Track' : (player.title || 'Idle');

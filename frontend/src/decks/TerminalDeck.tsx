@@ -67,6 +67,15 @@ export default function TerminalDeck({ caps }: Props) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${proto}//${window.location.host}/ws/terminal`;
     let reconnectTimer: ReturnType<typeof setTimeout>;
+    let dataDispose: { dispose: () => void } | null = null;
+
+    // Register input handler once — not per reconnect — to avoid duplicate sends
+    dataDispose = term.onData((data) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(new TextEncoder().encode(data));
+      }
+    });
 
     const connect = () => {
       const ws = new WebSocket(wsUrl);
@@ -82,11 +91,6 @@ export default function TerminalDeck({ caps }: Props) {
         if (dims) {
           ws.send(JSON.stringify({ type: 'resize', rows: dims.rows, cols: dims.cols }));
         }
-        term.onData((data) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(new TextEncoder().encode(data));
-          }
-        });
       };
 
       ws.onmessage = (ev) => {
@@ -110,6 +114,7 @@ export default function TerminalDeck({ caps }: Props) {
     return () => {
       ro.disconnect();
       clearTimeout(reconnectTimer);
+      dataDispose?.dispose();
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       term.dispose();
       termInstance.current = null;

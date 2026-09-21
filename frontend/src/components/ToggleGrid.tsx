@@ -5,6 +5,7 @@ import {
   Shield,
   Speaker,
   Headphones,
+  Radio,
   type LucideIcon,
 } from 'lucide-react';
 import { DECK_CONFIG } from '../config/deckConfig';
@@ -22,6 +23,7 @@ const iconMap: Record<string, LucideIcon> = {
   GraduationCap,
   Shield,
   Speaker,
+  Radio,
 };
 
 function createRipple(
@@ -69,7 +71,7 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
 
   const visible = toggles.filter(t => !t.cap || caps[t.cap as keyof typeof caps]);
 
-  const handleClick = (cfg: ToggleConfig, el: HTMLElement) => {
+  const handleClick = (cfg: ToggleConfig) => {
     if (cfg.cmd) {
       triggerCommand(cfg.cmd);
     } else if (cfg.cmdOn && cfg.cmdOff) {
@@ -85,15 +87,19 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
         return (
           <div
             key={cfg.id}
-            className={`toggle-card ${active ? 'active' : ''}`}
+            className={`toggle-card ${active ? 'active' : ''} focus-visible:outline-2 focus-visible:outline-deck-accent`}
             role="button"
             tabIndex={0}
             aria-pressed={active}
+            aria-label={cfg.label}
             onMouseDown={(e) => createRipple(e, e.currentTarget)}
             onTouchStart={(e) => createRipple(e, e.currentTarget)}
-            onClick={() => {
-              const el = document.querySelector(`[data-id="${cfg.id}"]`) as HTMLElement;
-              handleClick(cfg, el ?? document.body);
+            onClick={() => handleClick(cfg)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleClick(cfg);
+              }
             }}
           >
             <span className="text-[28px] leading-none">{renderIcon(cfg.icon)}</span>

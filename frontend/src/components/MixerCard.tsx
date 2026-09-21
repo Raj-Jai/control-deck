@@ -23,6 +23,17 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   const draggingBri = useRef(false);
   const lastVolSend = useRef(0);
   const lastBriSend = useRef(0);
+  const latestVol = useRef(100);
+  const latestBri = useRef(100);
+
+  const commitVol = () => {
+    draggingVol.current = false;
+    setVolume(sliderToValue(latestVol.current / 100, 1));
+  };
+  const commitBri = () => {
+    draggingBri.current = false;
+    setBrightness(sliderToValue(latestBri.current, 100));
+  };
 
   const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
   const showBri = draggingBri.current ? localBri : (bri >= 0 ? Math.round(valueToSlider(bri, 100)) : localBri);
@@ -66,8 +77,10 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
             </button>
             <input
               type="range" min={0} max={100} value={showVol}
+              aria-label="Volume"
               onChange={(e) => {
                 const v = Number(e.target.value);
+                latestVol.current = v;
                 setLocalVol(v);
                 draggingVol.current = true;
                 const now = Date.now();
@@ -76,8 +89,10 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                     setVolume(sliderToValue(v / 100, 1));
                   }
                 }}
-                onMouseUp={() => { draggingVol.current = false; setVolume(sliderToValue(localVol / 100, 1)); }}
-                onTouchEnd={() => { draggingVol.current = false; setVolume(sliderToValue(localVol / 100, 1)); }}
+                onMouseUp={commitVol}
+                onTouchEnd={commitVol}
+                onPointerUp={commitVol}
+                onKeyUp={commitVol}
               className="flex-1"
             />
             <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showVol}%</span>
@@ -104,8 +119,10 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
               </button>
               <input
                 type="range" min={0} max={100} value={showBri}
+                aria-label="Brightness"
                 onChange={(e) => {
                   const v = Number(e.target.value);
+                  latestBri.current = v;
                   setLocalBri(v);
                   draggingBri.current = true;
                   const now = Date.now();
@@ -114,8 +131,10 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                     setBrightness(sliderToValue(v, 100));
                   }
                 }}
-                onMouseUp={() => { draggingBri.current = false; setBrightness(sliderToValue(localBri, 100)); }}
-                onTouchEnd={() => { draggingBri.current = false; setBrightness(sliderToValue(localBri, 100)); }}
+                onMouseUp={commitBri}
+                onTouchEnd={commitBri}
+                onPointerUp={commitBri}
+                onKeyUp={commitBri}
                 className="flex-1"
               />
               <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showBri}%</span>

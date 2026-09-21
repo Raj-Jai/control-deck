@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Maximize2, Minimize2, Monitor } from 'lucide-react';
-import AuthScreen, { getStoredMode, clearAuth } from './components/AuthScreen';
+import AuthScreen, { getStoredMode } from './components/AuthScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
 import { useArtTheming } from './hooks/useArtTheming';
@@ -33,7 +33,7 @@ const pages = [
   { id: 'terminal', label: 'Terminal' },
 ] as const;
 
-const PX_PER_PAGE = 36;
+const CLIENT_POLL_MS = 5000;
 
 function getDeviceId(): string {
   try {
@@ -73,20 +73,6 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', cb);
   }, []);
 
-  useEffect(() => {
-    const onInteraction = () => {
-      document.documentElement.requestFullscreen().catch(() => {});
-    };
-    window.addEventListener('click', onInteraction, { once: true });
-    window.addEventListener('touchstart', onInteraction, { once: true });
-    window.addEventListener('keydown', onInteraction, { once: true });
-    return () => {
-      window.removeEventListener('click', onInteraction);
-      window.removeEventListener('touchstart', onInteraction);
-      window.removeEventListener('keydown', onInteraction);
-    };
-  }, []);
-
   const toggleFull = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen();
@@ -98,15 +84,17 @@ export default function App() {
   const scrollTo = (i: number, smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
-    const child = el.children[i] as HTMLElement | undefined;
-    if (!child) return;
-    child.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', inline: 'start' });
-    setPage(i);
+    const clamped = Math.max(0, Math.min(pages.length - 1, i));
+    el.scrollTo({ left: clamped * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+    setPage(clamped);
   };
 
+  // Auto-focus follows host app changes only — page omitted from deps so
+  // manual navigation (dots/nav menu) is never yanked back.
   useEffect(() => {
     if (!autoFocus || !appType) return;
     const target = appToPageIndex(appType);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     if (target !== page) scrollTo(target);
   }, [appType, autoFocus]);
 
@@ -123,23 +111,27 @@ export default function App() {
   const showMini = page >= 3;
 
   useEffect(() => {
+    let cancelled = false;
     const poll = async () => {
+      if (document.hidden) return;
       try {
         const res = await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`);
         const data = await res.json();
-        setClientCount(data.count);
+        if (!cancelled) setClientCount(data.count);
       } catch {}
     };
     poll();
-    const id = setInterval(poll, 1000);
-    return () => clearInterval(id);
+    const id = setInterval(poll, CLIENT_POLL_MS);
+    const onVisible = () => { if (!document.hidden) poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!e.isPrimary) return;
     const el = scrollRef.current;
     if (!el) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     el.style.scrollSnapType = 'none';
     dragState.current = { startX: e.clientX, startScrollLeft: el.scrollLeft };
     setDragging(true);
@@ -154,10 +146,8 @@ export default function App() {
     cancelAnimationFrame(moveRAF.current);
     moveRAF.current = requestAnimationFrame(() => {
       const dx = e.clientX - ds.startX;
-      const pageWidth = el.clientWidth;
-      const scrollDelta = dx * (pageWidth / PX_PER_PAGE);
       const maxScroll = el.scrollWidth - el.clientWidth;
-      el.scrollLeft = Math.max(0, Math.min(maxScroll, ds.startScrollLeft + scrollDelta));
+      el.scrollLeft = Math.max(0, Math.min(maxScroll, ds.startScrollLeft - dx));
     });
   };
 

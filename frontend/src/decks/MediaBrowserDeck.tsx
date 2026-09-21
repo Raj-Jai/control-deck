@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Monitor, Captions, VolumeX, Volume2, Play, ChevronUp, ChevronDown, Tv } from 'lucide-react';
 import { triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
@@ -19,11 +19,17 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
   const playerId = activePlayer?.id;
   const draggingVol = useRef(false);
   const lastVolSend = useRef(0);
-  const localVol = useRef(75);
+  const [localVol, setLocalVol] = useState(75);
+  const latestVol = useRef(75);
 
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
-  const showVol = draggingVol.current ? localVol.current : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol.current);
+  const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
+
+  const commitVol = () => {
+    draggingVol.current = false;
+    setVolume(sliderToValue(latestVol.current / 100, 1));
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,9 +51,11 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
           </button>
           <input
             type="range" min={0} max={100} value={showVol}
+            aria-label="Volume"
             onChange={(e) => {
               const v = Number(e.target.value);
-              localVol.current = v;
+              latestVol.current = v;
+              setLocalVol(v);
               draggingVol.current = true;
               const now = Date.now();
               if (now - lastVolSend.current >= 80) {
@@ -55,14 +63,10 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
                 setVolume(sliderToValue(v / 100, 1));
               }
             }}
-            onMouseUp={() => {
-              draggingVol.current = false;
-              setVolume(sliderToValue(localVol.current / 100, 1));
-            }}
-            onTouchEnd={() => {
-              draggingVol.current = false;
-              setVolume(sliderToValue(localVol.current / 100, 1));
-            }}
+            onMouseUp={commitVol}
+            onTouchEnd={commitVol}
+            onPointerUp={commitVol}
+            onKeyUp={commitVol}
             className="w-full"
           />
           <span className="text-[11px] text-deck-dim w-8 text-right tabular-nums">{showVol}%</span>

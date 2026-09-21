@@ -22,17 +22,19 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
       {/* Backdrop overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 -z-10"
           onClick={() => setOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* Menu */}
       {open && (
         <div
+          role="menu"
+          aria-label="Deck navigation"
           className="absolute bottom-full right-0 mb-3 min-w-[180px] z-50
-            bg-deck-bg/95 backdrop-blur-xl border border-white/[0.08] rounded-xl p-2 shadow-2xl
-            animate-in fade-in slide-in-from-bottom-2 duration-150"
+            bg-deck-bg/95 backdrop-blur-xl border border-white/[0.08] rounded-xl p-2 shadow-2xl"
         >
           <div className="flex flex-col gap-0.5">
             {pages.map((p, i) => (
@@ -79,6 +81,9 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
       {/* FAB bubble */}
       <button
         onClick={() => setOpen(prev => !prev)}
+        aria-label={open ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={open}
+        aria-haspopup="menu"
         className="relative z-50 w-12 h-12 rounded-full shadow-xl
           flex items-center justify-center
           transition-all duration-100 active:scale-90

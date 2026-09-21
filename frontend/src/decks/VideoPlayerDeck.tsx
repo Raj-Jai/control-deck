@@ -64,6 +64,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
   const draggingVol = useRef(false);
   const lastVolSend = useRef(0);
   const [localVol, setLocalVol] = useState(100);
+  const latestVol = useRef(100);
 
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
@@ -71,6 +72,11 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
   const showVol = draggingVol.current
     ? localVol
     : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
+
+  const commitVol = () => {
+    draggingVol.current = false;
+    setVolume(sliderToValue(latestVol.current / 100, 1));
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,8 +110,10 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
             min={0}
             max={100}
             value={showVol}
+            aria-label="Volume"
             onChange={(e) => {
               const v = Number(e.target.value);
+              latestVol.current = v;
               setLocalVol(v);
               draggingVol.current = true;
               const now = Date.now();
@@ -114,14 +122,10 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
                 setVolume(sliderToValue(v / 100, 1));
               }
             }}
-            onMouseUp={() => {
-              draggingVol.current = false;
-              setVolume(sliderToValue(localVol / 100, 1));
-            }}
-            onTouchEnd={() => {
-              draggingVol.current = false;
-              setVolume(sliderToValue(localVol / 100, 1));
-            }}
+            onMouseUp={commitVol}
+            onTouchEnd={commitVol}
+            onPointerUp={commitVol}
+            onKeyUp={commitVol}
             className="flex-1 accent-deck-accent"
           />
           <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">

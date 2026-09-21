@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { DECK_CONFIG } from '../config/deckConfig';
 
 export interface SystemStats {
@@ -104,17 +104,25 @@ export function useMediaStream(deviceId?: string): UseMediaStreamResult {
   const [state, setState] = useState<MediaState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     const streamUrl = DECK_CONFIG.api.stream + (deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '');
-    let es = new EventSource(streamUrl);
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+    let failures = 0;
 
-    es.onmessage = (e) => {
+    // Bounded exponential backoff with jitter so N clients don't hammer
+    // the backend in lockstep after an outage. Resets on first good frame.
+    const reconnectDelay = () => {
+      const capped = Math.min(30000, 1000 * 2 ** Math.min(failures, 5));
+      return capped + Math.random() * 500;
+    };
+
+    const handleMessage = (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
         if (data.type === 'stream_command') {
-          console.log('SSE stream_command:', data.action);
           if (data.action === 'start') {
             import('../lib/streamManager').then(m => m.start());
           } else if (data.action === 'stop') {
@@ -122,6 +130,7 @@ export function useMediaStream(deviceId?: string): UseMediaStreamResult {
           }
           return;
         }
+        failures = 0;
         setState(data as MediaState);
         setLoading(false);
         setError(null);
@@ -130,43 +139,29 @@ export function useMediaStream(deviceId?: string): UseMediaStreamResult {
       }
     };
 
-    es.onerror = () => {
-      setError('Connection lost');
-      setLoading(false);
-      es.close();
-      // attempt reconnect after 3s
-      const timer = setTimeout(() => {
-        es = new EventSource(streamUrl);
-        es.onmessage = (ev) => {
-          try {
-            const data = JSON.parse(ev.data);
-            if (data.type === 'stream_command') {
-              if (data.action === 'start') {
-                import('../lib/streamManager').then(m => m.start());
-              } else if (data.action === 'stop') {
-                import('../lib/streamManager').then(m => m.stop());
-              }
-              return;
-            }
-            setState(data as MediaState);
-            setLoading(false);
-            setError(null);
-          } catch {
-            // skip
-          }
-        };
-      }, 3000);
-      esRef.current = es;
-      const cleanup = () => clearTimeout(timer);
-      return cleanup;
+    const connect = () => {
+      if (cancelled) return;
+      es?.close();
+      es = new EventSource(streamUrl);
+      es.onmessage = handleMessage;
+      es.onerror = () => {
+        if (cancelled) return;
+        failures += 1;
+        setError('Connection lost');
+        setLoading(false);
+        es?.close();
+        reconnectTimer = setTimeout(connect, reconnectDelay());
+      };
     };
 
-    esRef.current = es;
+    connect();
 
     return () => {
-      es.close();
+      cancelled = true;
+      clearTimeout(reconnectTimer);
+      es?.close();
     };
-  }, []);
+  }, [deviceId]);
 
   return { state, loading, error };
 }

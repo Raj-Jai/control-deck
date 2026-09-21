@@ -92,7 +92,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
 
             <div className="flex flex-col gap-3 w-full max-w-[220px]">
               <button
-                onPointerDown={() => { setMode('dashboard'); setStep('pin'); }}
+                onClick={() => { setMode('dashboard'); setStep('pin'); }}
                 className="flex items-center gap-3 h-14 px-4 rounded-xl text-sm font-semibold text-deck-text
                   bg-deck-surface2 border border-white/5
                   hover:bg-deck-accent/10 hover:border-deck-accent/20
@@ -103,7 +103,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 Full Dashboard
               </button>
               <button
-                onPointerDown={() => { setMode('media'); setStep('pin'); }}
+                onClick={() => { setMode('media'); setStep('pin'); }}
                 className="flex items-center gap-3 h-14 px-4 rounded-xl text-sm font-semibold text-deck-text
                   bg-deck-surface2 border border-white/5
                   hover:bg-amber-500/10 hover:border-amber-500/20
@@ -118,7 +118,8 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
         ) : (
           <>
             <button
-              onPointerDown={() => { setStep('pick'); setPin([]); setError(false); }}
+              onClick={() => { setStep('pick'); setPin([]); setError(false); }}
+              aria-label="Back to mode selection"
               className="self-start -mt-2 -ml-2 w-8 h-8 flex items-center justify-center rounded-lg
                 text-deck-dim hover:text-deck-text hover:bg-white/5 transition-colors"
             >
@@ -132,7 +133,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               <div className="text-[11px] text-deck-dim mt-1">Enter PIN to unlock</div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3" role="status" aria-label={`PIN ${pin.length} of 4 digits entered`}>
               {[0, 1, 2, 3].map(i => (
                 <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
                   error ? 'bg-red-400 border-red-400'
@@ -141,24 +142,24 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 }`} />
               ))}
             </div>
-            {error && <div className="text-xs text-red-400 -mt-3">Wrong PIN</div>}
+            {error && <div className="text-xs text-red-400 -mt-3" role="alert">Wrong PIN</div>}
 
             <div className="grid grid-cols-3 gap-3 w-full max-w-[220px]">
               {['1','2','3','4','5','6','7','8','9'].map(n => (
-                <button key={n} onPointerDown={() => press(n)}
+                <button key={n} onClick={() => press(n)} aria-label={`Digit ${n}`}
                   className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                   {n}
                 </button>
               ))}
-              <button onPointerDown={() => setPin([])}
+              <button onClick={() => setPin([])} aria-label="Clear PIN"
                 className="h-14 rounded-xl text-xs font-semibold text-deck-dim bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 Clear
               </button>
-              <button onPointerDown={() => press('0')}
+              <button onClick={() => press('0')} aria-label="Digit 0"
                 className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 0
               </button>
-              <button onPointerDown={backspace}
+              <button onClick={backspace} aria-label="Delete last digit"
                 className="h-14 rounded-xl flex items-center justify-center text-deck-dim bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 <ArrowLeft size={20} />
               </button>

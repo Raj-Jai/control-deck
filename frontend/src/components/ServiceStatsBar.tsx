@@ -29,6 +29,7 @@ export default function ServiceStatsBar() {
 
   useEffect(() => {
     const poll = async () => {
+      if (document.hidden) return;
       try {
         const res = await fetch('/api/service-stats');
         const data: ServiceInfo[] = await res.json();
@@ -36,8 +37,12 @@ export default function ServiceStatsBar() {
       } catch { /* ignore */ }
     };
     poll();
-    pollRef.current = setInterval(poll, 3000);
-    return () => clearInterval(pollRef.current);
+    pollRef.current = setInterval(poll, 5000);
+    document.addEventListener('visibilitychange', poll);
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', poll);
+    };
   }, []);
 
   if (services.length === 0) return null;

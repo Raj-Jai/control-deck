@@ -1,5 +1,6 @@
 import {
   Cpu,
+  MemoryStick,
   BatteryFull,
   BatteryMedium,
   BatteryLow,
@@ -72,7 +73,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
   const tempDisplay = sys.temp >= 0 ? `${Math.round(sys.temp)}°C` : '--';
   const batDisplay =
     sys.battery >= 0
-      ? `${Math.round(sys.battery)}%${sys.charging ? ' ⚡' : ''}`
+      ? `${Math.round(sys.battery)}%${sys.charging ? ' (charging)' : ''}`
       : '--';
 
   const hasGPU = sys.gpu?.present;
@@ -81,7 +82,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
     ? `${Math.round(sys.gpu!.mem_used)}/${Math.round(sys.gpu!.mem_total)} MB`
     : '';
   const gpuTempDisplay = hasGPU && sys.gpu!.temp >= 0 ? `${Math.round(sys.gpu!.temp)}°C` : '';
-  const gpuLabel = hasGPU ? (sys.gpu!.name || 'GPU') : 'GPU';
+  const gpuLabel = 'GPU';
 
   const pingIcon = sys.ping_ok ? (
     <Wifi size={14} className="text-deck-accent" />
@@ -90,9 +91,9 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
   );
 
   const netParts: string[] = [];
-  if (sys.ssid) netParts.push(`🏠${sys.ssid}`);
+  if (sys.ssid) netParts.push(sys.ssid);
   if (sys.ip) netParts.push(sys.ip);
-  netParts.push(`Ping ${sys.ping_ok ? '✓' : '✗'}`);
+  netParts.push(`Ping ${sys.ping_ok ? 'OK' : 'FAIL'}`);
 
   return (
     <div className="deck-card flex flex-col gap-2.5">
@@ -106,7 +107,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
         />
         <StatBar
           label="RAM"
-          icon={<Cpu size={14} className="text-purple-400" />}
+          icon={<MemoryStick size={14} className="text-purple-400" />}
           value={sys.ram}
           display={sys.ram >= 0 ? `${Math.round(sys.ram)}%` : '--'}
           color={ramColor}
