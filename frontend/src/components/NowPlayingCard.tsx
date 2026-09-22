@@ -222,7 +222,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         }}
         onMouseUp={() => commitSeek(localPos !== null ? localPos : Math.floor(pos))}
         onTouchEnd={() => commitSeek(localPos !== null ? localPos : Math.floor(pos))}
-        className="w-full"
+        className="w-full seek"
         disabled={isOffline || isIdle}
       />
       <div className="flex justify-between text-[11px] text-deck-dim mt-1">
@@ -245,9 +245,11 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           <Rewind size={Math.round(s * 0.9)} />
         </button>
         <button
-          className={`media-btn ${large ? 'w-14 h-14' : 'w-12 h-12'}`}
+          className={`media-btn ${large ? 'w-14 h-14' : 'w-12 h-12'} !bg-deck-accent !text-white !border-deck-accent
+            shadow-[0_0_18px_rgba(6,182,212,0.35)] hover:!bg-deck-accent-dim`}
           onClick={() => triggerCommand('playpause', playerId)}
           disabled={isOffline || isIdle}
+          aria-label={status === 'Playing' ? 'Pause' : 'Play'}
         >
           {status === 'Playing' ? <Pause size={large ? 26 : 20} /> : <Play size={large ? 26 : 20} />}
         </button>
@@ -377,28 +379,36 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       {seekbar}
 
       {/* Controls */}
-      <div className="flex justify-center items-center gap-3">
-        {caps.mpv && caps.yt_dlp && (
-          <button
-            className={`media-btn relative ${showSearch ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
-            onClick={() => setShowSearch(s => !s)}
-            title="Search songs"
-          >
-            <Search size={16} />
-          </button>
+      <div className="flex justify-center items-center gap-2 flex-wrap">
+        {/* Transport cluster */}
+        <div className="flex justify-center items-center gap-2.5">
+          {playControls()}
+        </div>
+        {(((caps.mpv && caps.yt_dlp) || (!isOffline && !isIdle)) || state) && (
+          <div className="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
         )}
-        {playControls()}
-        {!isOffline && !isIdle && (
-          <button
-            className={`media-btn relative ${opening ? 'animate-pulse text-deck-accent' : ''}`}
-            onClick={handleOpenInBrowser}
-            title="Open in browser (same position)"
-          >
-            <ExternalLink size={16} />
-          </button>
-        )}
-        {caps.kdeconnect && !isOffline && !isIdle && (
-          <div className="relative">
+        {/* Utility cluster */}
+        <div className="flex justify-center items-center gap-2">
+          {caps.mpv && caps.yt_dlp && (
+            <button
+              className={`media-btn relative ${showSearch ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
+              onClick={() => setShowSearch(s => !s)}
+              title="Search songs"
+            >
+              <Search size={16} />
+            </button>
+          )}
+          {!isOffline && !isIdle && (
+            <button
+              className={`media-btn relative ${opening ? 'animate-pulse text-deck-accent' : ''}`}
+              onClick={handleOpenInBrowser}
+              title="Open in browser (same position)"
+            >
+              <ExternalLink size={16} />
+            </button>
+          )}
+          {caps.kdeconnect && !isOffline && !isIdle && (
+            <div className="relative">
             <button
               className={`media-btn relative ${handingOff ? 'animate-pulse text-deck-accent' : ''} ${showHandoffMenu ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
               onClick={toggleHandoffMenu}
@@ -437,9 +447,10 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                 </div>
               </>
             )}
-          </div>
-        )}
-        {state && <AudioStreamCard state={state} compact />}
+            </div>
+          )}
+          {state && <AudioStreamCard state={state} compact />}
+        </div>
       </div>
 
       {/* Inline song search panel */}

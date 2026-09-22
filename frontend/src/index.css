@@ -61,6 +61,21 @@
     pointer-events: none;
   }
 
+  /* Slim seek variant for media progress (volume sliders keep the big thumb) */
+  input[type='range'].seek {
+    height: 6px;
+  }
+
+  input[type='range'].seek::-webkit-slider-thumb {
+    width: 18px;
+    height: 18px;
+  }
+
+  input[type='range'].seek::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+  }
+
   /* Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;

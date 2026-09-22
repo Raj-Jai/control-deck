@@ -153,7 +153,7 @@ function QuickToggle({ icon: Icon, label, active, pulse, onClick, badge, customC
       <span className={`text-[22px] leading-none ${pulse ? 'animate-pulse' : ''}`}>
         {Icon ? <Icon size={22} /> : null}
       </span>
-      <span className="toggle-label text-[10px] font-semibold text-center leading-tight">
+      <span className="toggle-label text-[10px] font-semibold text-center leading-snug">
         {label}
       </span>
       {badge}

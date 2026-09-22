@@ -27,7 +27,8 @@ import MediaStreamerPage from './components/MediaStreamerPage';
 import GeoSurveyCard from './components/GeoSurveyCard';
 import BleProximityCard from './components/BleProximityCard';
 
-interface DeckPage { id: string; label: string; flag: FeatureKey | null }
+type PageId = 'home' | 'media' | 'video' | 'ide' | 'terminal';
+interface DeckPage { id: PageId; label: string; flag: FeatureKey | null }
 
 const ALL_PAGES: readonly DeckPage[] = [
   { id: 'home', label: 'Home', flag: null },
@@ -98,6 +99,10 @@ export default function App() {
     if (!el) return;
     const clamped = Math.max(0, Math.min(pages.length - 1, i));
     el.scrollTo({ left: clamped * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+    // Deck switch resets vertical scroll — otherwise a scrolled-down page
+    // leaves the new deck showing blank space below its content.
+    // Skipped when re-tapping the active page so the user's scroll is kept.
+    if (clamped !== page) window.scrollTo(0, 0);
     setPage(clamped);
   };
 
@@ -130,6 +135,14 @@ export default function App() {
 
   const currentPageId = pages[page]?.id;
   const showMini = currentPageId === 'ide' || currentPageId === 'terminal';
+
+  // Inactive pages are clamped to viewport height. All deck pages share one
+  // window scroll range, so without this the body stays as tall as the
+  // tallest page and short decks end in a long scrollable void.
+  const pageClass = (id: PageId) =>
+    `snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-12 ${
+      currentPageId === id ? '' : 'h-[calc(100dvh-7rem)] overflow-hidden'
+    }`;
 
   useEffect(() => {
     let cancelled = false;
@@ -239,7 +252,7 @@ export default function App() {
             style={{ scrollbarWidth: 'none' }}
           >
             {/* Page 0: Home */}
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
+            <div className={pageClass('home')}>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 {/* LEFT */}
                 <div className="flex flex-col gap-4 min-w-0">
@@ -267,28 +280,28 @@ export default function App() {
 
             {/* Page: Media Browser */}
             {features.media_browser && (
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
+            <div className={pageClass('media')}>
               <MediaBrowserDeck state={state} caps={caps} />
             </div>
             )}
 
             {/* Page: Video Player */}
             {features.video_player && (
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
+            <div className={pageClass('video')}>
               <VideoPlayerDeck state={state} caps={caps} />
             </div>
             )}
 
             {/* Page: IDE */}
             {features.ide && (
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
+            <div className={pageClass('ide')}>
               <IdeDeck caps={caps} />
             </div>
             )}
 
             {/* Page: Terminal */}
             {features.terminal && (
-            <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
+            <div className={pageClass('terminal')}>
               <TerminalDeck caps={caps} />
             </div>
             )}
