@@ -510,7 +510,7 @@ func findPhoneDeviceID() string {
 	devs := listPhoneDevices()
 
 	// Prefer the configured device.
-	if cfg := appCfg.KDConnectPhone; cfg != "" {
+	if cfg := getConfig().KDConnectPhone; cfg != "" {
 		for _, d := range devs {
 			if d.ID == cfg || d.Name == cfg {
 				if deviceIsPhone(d.ID) {

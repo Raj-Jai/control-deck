@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
+	"sync/atomic"
 )
 
 type Config struct {
@@ -103,7 +105,21 @@ func loadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-var appCfg *Config
+var appCfg atomic.Pointer[Config]
+
+// configMu guards the derived globals rebuilt from the config
+// (commandMap, dashPIN, dashMediaPIN, caffeineSD). The *Config pointer
+// itself swaps atomically, but these package-level values are written by
+// buildCommandMap/buildProfileCommandMap while request handlers read
+// them — all sides must hold configMu.
+var configMu sync.RWMutex
+
+// getConfig returns the active config snapshot. The pointer is swapped
+// atomically on SIGHUP reload, so per-request readers always see a
+// complete config without locking.
+func getConfig() *Config {
+	return appCfg.Load()
+}
 
 func initConfig() {
 	paths := []string{"config.json"}
@@ -115,7 +131,7 @@ func initConfig() {
 	for _, p := range paths {
 		cfg, err = loadConfig(p)
 		if err == nil {
-			appCfg = cfg
+			appCfg.Store(cfg)
 			log.Printf("config: loaded from %s", p)
 			for _, k := range unknownFeatureKeys(cfg.Features) {
 				log.Printf("config: warning: unknown feature flag %q (typo? known: %v)", k, KnownFeatures)
@@ -123,7 +139,41 @@ func initConfig() {
 			break
 		}
 	}
-	if appCfg == nil {
+	if getConfig() == nil {
 		log.Fatalf("config: no config.json found (%v)", err)
 	}
+}
+
+// reloadConfig re-reads config.json (or CONFIG_PATH) and swaps it in,
+// re-deriving PINs and the command map. A failed reload keeps the previous
+// running config. NOTE: http/https ports are bound at startup and still
+// require a restart. NOTE: changing PINs invalidates live sessions —
+// intended (PIN rotation without restart), but be deliberate about it.
+func reloadConfig() error {
+	paths := []string{"config.json"}
+	if p := os.Getenv("CONFIG_PATH"); p != "" {
+		paths = append([]string{p}, paths...)
+	}
+	var lastErr error
+	for _, p := range paths {
+		cfg, err := loadConfig(p)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for _, k := range unknownFeatureKeys(cfg.Features) {
+			log.Printf("config: warning: unknown feature flag %q (typo? known: %v)", k, KnownFeatures)
+		}
+		// Derive-then-swap under one lock: readers either see the full
+		// old state or the full new state, never a mix. This also
+		// serializes concurrent reloads.
+		configMu.Lock()
+		appCfg.Store(cfg)
+		buildCommandMap()
+		buildProfileCommandMap()
+		configMu.Unlock()
+		log.Printf("config: reloaded from %s", p)
+		return nil
+	}
+	return lastErr
 }

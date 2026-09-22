@@ -11,9 +11,11 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -44,15 +46,15 @@ var (
 )
 
 func buildCommandMap() {
-	caffeineSD = appCfg.CaffeineSchemaDir
+	caffeineSD = getConfig().CaffeineSchemaDir
 	if caffeineSD == "" {
 		caffeineSD = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
 	}
-	dashPIN = appCfg.PIN
+	dashPIN = getConfig().PIN
 	if dashPIN == "" {
 		dashPIN = "3456"
 	}
-	dashMediaPIN = appCfg.MediaPIN
+	dashMediaPIN = getConfig().MediaPIN
 	if dashMediaPIN == "" {
 		dashMediaPIN = "7890"
 	}
@@ -76,7 +78,7 @@ func buildCommandMap() {
 		"bluetoothOff":   {"rfkill", "block", "bluetooth"},
 		"btSinkOn":       {"sh", "-c", "bluetoothctl discoverable on && bluetoothctl pairable on"},
 		"btSinkOff":      {"bluetoothctl", "discoverable", "off"},
-		"btConnect":      {"bluetoothctl", "connect", appCfg.BTMAC},
+		"btConnect":      {"bluetoothctl", "connect", getConfig().BTMAC},
 		"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
 		"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
 		"caffeineOff": {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
@@ -84,7 +86,7 @@ func buildCommandMap() {
 		"caffeine30":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
 		"caffeine60":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
 	}
-	for k, v := range appCfg.CustomCommands {
+	for k, v := range getConfig().CustomCommands {
 		commandMap[k] = v
 	}
 }
@@ -448,6 +450,23 @@ func main() {
 	buildProfileCommandMap()
 	initVideoPlayerConfig()
 
+	// SIGHUP/SIGUSR1 hot-reload config.json in place (flags, PINs, commands).
+	// A failed reload keeps the previous config. Port changes still
+	// require a restart (listeners are bound at startup).
+	// NOTE: both are watched because `nohup` starts the process with SIGHUP
+	// set to SIG_IGN, which the Go runtime (and the kernel) will not
+	// deliver — prefer launching with setsid and no nohup. SIGUSR1 always
+	// works regardless of how the process was started.
+	go func() {
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGHUP, syscall.SIGUSR1)
+		for range sigs {
+			if err := reloadConfig(); err != nil {
+				log.Printf("config: reload failed, keeping previous config: %v", err)
+			}
+		}
+	}()
+
 	// Serve frontend assets
 	http.Handle("/", trackMiddleware(http.FileServer(http.Dir("."))))
 
@@ -495,21 +514,21 @@ func main() {
 	go startPingChecker()
 	go startWindowWatcher()
 
-	pingTarget := appCfg.PingTarget
+	pingTarget := getConfig().PingTarget
 	if pingTarget == "" {
 		pingTarget = "8.8.8.8"
 	}
 
-	port := fmt.Sprintf(":%d", appCfg.HTTPPort)
-	if appCfg.HTTPPort == 0 {
+	port := fmt.Sprintf(":%d", getConfig().HTTPPort)
+	if getConfig().HTTPPort == 0 {
 		port = ":8080"
 	}
 	log.Printf("Control Deck running on http://localhost%s\n", port)
 
 	// TLS server for PWA (Chrome requires HTTPS for display: standalone)
 	go func() {
-		httpsPort := fmt.Sprintf(":%d", appCfg.HTTPSPort)
-		if appCfg.HTTPSPort == 0 {
+		httpsPort := fmt.Sprintf(":%d", getConfig().HTTPSPort)
+		if getConfig().HTTPSPort == 0 {
 			httpsPort = ":8443"
 		}
 		log.Printf("HTTPS on https://localhost%s (accept self-signed cert once)", httpsPort)
@@ -558,8 +577,8 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 // this endpoint later without changing the frontend contract.
 func handleFeatures(w http.ResponseWriter, r *http.Request) {
 	features := map[string]bool{}
-	if appCfg != nil && appCfg.Features != nil {
-		for k, v := range appCfg.Features {
+	if cfg := getConfig(); cfg != nil && cfg.Features != nil {
+		for k, v := range cfg.Features {
 			features[k] = v
 		}
 	}
@@ -569,7 +588,7 @@ func handleFeatures(w http.ResponseWriter, r *http.Request) {
 
 // requireFeature rejects the request with 403 when a section is disabled.
 func requireFeature(w http.ResponseWriter, name string) bool {
-	if appCfg.IsEnabled(name) {
+	if getConfig().IsEnabled(name) {
 		return true
 	}
 	http.Error(w, "Feature disabled: "+name, http.StatusForbidden)
@@ -582,7 +601,9 @@ func checkBinary(name string) bool {
 }
 
 func checkCaffeine() bool {
+	configMu.RLock()
 	sd := caffeineSD
+	configMu.RUnlock()
 	if sd == "" {
 		sd = os.Getenv("HOME") + "/.local/share/gnome-shell/extensions/caffeine@patapon.info/schemas"
 	}
@@ -653,7 +674,10 @@ func handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"ok": req.PIN == dashPIN})
+	configMu.RLock()
+	ok := req.PIN == dashPIN
+	configMu.RUnlock()
+	json.NewEncoder(w).Encode(map[string]bool{"ok": ok})
 }
 
 func handleAuthMedia(w http.ResponseWriter, r *http.Request) {
@@ -669,7 +693,10 @@ func handleAuthMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"ok": req.PIN == dashMediaPIN})
+	configMu.RLock()
+	ok := req.PIN == dashMediaPIN
+	configMu.RUnlock()
+	json.NewEncoder(w).Encode(map[string]bool{"ok": ok})
 }
 
 // Executed when buttons are pressed on the Web Deck
@@ -701,7 +728,12 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	args, exists := commandMap[req.Command]
+	args, exists := func() ([]string, bool) {
+		configMu.RLock()
+		defer configMu.RUnlock()
+		args, exists := commandMap[req.Command]
+		return args, exists
+	}()
 	if !exists {
 		http.Error(w, "Unknown command", http.StatusBadRequest)
 		return
@@ -1610,7 +1642,7 @@ func runPlayerctlBest(args ...string) (string, error) {
 }
 
 func startPingChecker() {
-	target := appCfg.PingTarget
+	target := getConfig().PingTarget
 	if target == "" {
 		target = "8.8.8.8"
 	}
@@ -1915,11 +1947,15 @@ func fetchMPRISState() MediaState {
 	nightStr, _ := runCmd("gsettings", "get", "org.gnome.settings-daemon.plugins.color", "night-light-enabled")
 	nightLight := nightStr == "true"
 
-	caffeineOnStr, _ := runCmd("gsettings", "--schemadir", caffeineSD, "get", "org.gnome.shell.extensions.caffeine", "cli-toggle")
+	configMu.RLock()
+	caffeineSchemaDir := caffeineSD
+	configMu.RUnlock()
+
+	caffeineOnStr, _ := runCmd("gsettings", "--schemadir", caffeineSchemaDir, "get", "org.gnome.shell.extensions.caffeine", "cli-toggle")
 	caffeineOn := caffeineOnStr == "true"
-	caffeineCustomStr, _ := runCmd("gsettings", "--schemadir", caffeineSD, "get", "org.gnome.shell.extensions.caffeine", "use-custom-duration")
+	caffeineCustomStr, _ := runCmd("gsettings", "--schemadir", caffeineSchemaDir, "get", "org.gnome.shell.extensions.caffeine", "use-custom-duration")
 	caffeineCustom := caffeineCustomStr == "true"
-	caffeineDurStr, _ := runCmd("gsettings", "--schemadir", caffeineSD, "get", "org.gnome.shell.extensions.caffeine", "duration-timer")
+	caffeineDurStr, _ := runCmd("gsettings", "--schemadir", caffeineSchemaDir, "get", "org.gnome.shell.extensions.caffeine", "duration-timer")
 	caffeineDur, _ := strconv.Atoi(strings.TrimSpace(caffeineDurStr))
 
 	btOut, _ := runCmd("rfkill", "list", "bluetooth")
