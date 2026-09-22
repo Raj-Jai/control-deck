@@ -15,6 +15,9 @@ func handleClipboardPull(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !requireFeature(w, FeatureClipboard) {
+		return
+	}
 
 	text, err := readClipboard()
 	if err != nil {
@@ -34,6 +37,9 @@ func handleClipboardPull(w http.ResponseWriter, r *http.Request) {
 func handleClipboardPush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !requireFeature(w, FeatureClipboard) {
 		return
 	}
 

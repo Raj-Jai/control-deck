@@ -182,6 +182,9 @@ func uptimeSecs() int64 {
 }
 
 func handleServiceStats(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureServiceStats) {
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(collectServiceStats())
 }

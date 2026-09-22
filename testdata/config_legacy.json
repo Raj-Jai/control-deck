@@ -1,0 +1,10 @@
+{
+  "pin": "0000",
+  "bt_mac": "",
+  "ping_target": "8.8.8.8",
+  "http_port": 8080,
+  "https_port": 8443,
+  "caffeine_schema_dir": "",
+  "kdeconnect_phone": "",
+  "custom_commands": {}
+}

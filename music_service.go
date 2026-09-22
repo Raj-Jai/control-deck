@@ -30,6 +30,9 @@ type MusicSearchResult struct {
 
 // handleMusicSearch runs a YouTube search via yt-dlp and returns top results.
 func handleMusicSearch(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureMediaBrowser) {
+		return
+	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		http.Error(w, "Missing q", http.StatusBadRequest)
@@ -188,6 +191,9 @@ func mpvAlive() bool {
 // Optional query params: title & artist are passed to mpv via --force-media-title
 // so MPRIS exposes a human-readable title (and the deck/lyrics show it).
 func handleMusicPlay(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureMediaBrowser) {
+		return
+	}
 	u := strings.TrimSpace(r.URL.Query().Get("url"))
 	if u == "" {
 		http.Error(w, "Missing url", http.StatusBadRequest)
@@ -340,6 +346,9 @@ func handleOpenInBrowser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !requireFeature(w, FeatureMediaBrowser) {
+		return
+	}
 	var req struct {
 		Player string `json:"player"`
 	}
@@ -480,6 +489,9 @@ func listPhoneDevices() []phoneDevice {
 
 // handleHandoffDevices lists reachable phones for the frontend device picker.
 func handleHandoffDevices(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureMediaBrowser) {
+		return
+	}
 	if !gsconnectAvailable() && !checkBinary("kdeconnect-cli") {
 		http.Error(w, "no KDE Connect / GSConnect backend available", http.StatusServiceUnavailable)
 		return
@@ -583,6 +595,9 @@ func ensureDevicePaired(id string) bool {
 func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !requireFeature(w, FeatureMediaBrowser) {
 		return
 	}
 	if !gsconnectAvailable() && !checkBinary("kdeconnect-cli") {

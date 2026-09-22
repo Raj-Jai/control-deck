@@ -614,6 +614,9 @@ func sendVideoCommand(cmd VideoCommand) error {
 }
 
 func handleVideoStatus(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureVideoPlayer) {
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	vs := fetchVideoStatus()
 	if vs == nil {
@@ -625,6 +628,9 @@ func handleVideoStatus(w http.ResponseWriter, r *http.Request) {
 func handleVideoCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !requireFeature(w, FeatureVideoPlayer) {
 		return
 	}
 

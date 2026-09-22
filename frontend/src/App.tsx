@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Minimize2, Monitor } from 'lucide-react';
 import AuthScreen, { getStoredMode } from './components/AuthScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
+import { useFeatures } from './hooks/useFeatures';
+import type { FeatureKey } from './config/features';
 import { useArtTheming } from './hooks/useArtTheming';
 import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
 import { setDeviceId } from './lib/streamManager';
@@ -25,13 +27,15 @@ import MediaStreamerPage from './components/MediaStreamerPage';
 import GeoSurveyCard from './components/GeoSurveyCard';
 import BleProximityCard from './components/BleProximityCard';
 
-const pages = [
-  { id: 'home', label: 'Home' },
-  { id: 'media', label: 'Media' },
-  { id: 'video', label: 'Video' },
-  { id: 'ide', label: 'Code' },
-  { id: 'terminal', label: 'Terminal' },
-] as const;
+interface DeckPage { id: string; label: string; flag: FeatureKey | null }
+
+const ALL_PAGES: readonly DeckPage[] = [
+  { id: 'home', label: 'Home', flag: null },
+  { id: 'media', label: 'Media', flag: 'media_browser' },
+  { id: 'video', label: 'Video', flag: 'video_player' },
+  { id: 'ide', label: 'Code', flag: 'ide' },
+  { id: 'terminal', label: 'Terminal', flag: 'terminal' },
+];
 
 const CLIENT_POLL_MS = 5000;
 
@@ -55,6 +59,7 @@ export default function App() {
   const { state, loading, error } = useMediaStream(deviceId);
   const { appType } = useActiveWindow();
   const caps = useCapabilities();
+  const features = useFeatures();
   useArtTheming(state?.art_url);
   const [full, setFull] = useState(false);
   const [page, setPage] = useState(0);
@@ -81,6 +86,13 @@ export default function App() {
     }
   };
 
+  // Visible pages shrink when deck flags are disabled. Home is always
+  // present; its cards gate individually below.
+  const pages = useMemo(
+    () => ALL_PAGES.filter(p => p.flag === null || features[p.flag]),
+    [features]
+  );
+
   const scrollTo = (i: number, smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -89,14 +101,22 @@ export default function App() {
     setPage(clamped);
   };
 
-  // Auto-focus follows host app changes only — page omitted from deps so
-  // manual navigation (dots/nav menu) is never yanked back.
+  // Auto-focus follows host app changes only — page/scrollTo omitted from
+  // deps so manual navigation (dots/nav menu) is never yanked back.
   useEffect(() => {
     if (!autoFocus || !appType) return;
-    const target = appToPageIndex(appType);
+    const allTarget = ALL_PAGES[appToPageIndex(appType)];
+    if (!allTarget) return;
+    const visible = pages.findIndex(p => p.id === allTarget.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    if (target !== page) scrollTo(target);
+    if (visible >= 0 && visible !== page) scrollTo(visible);
   }, [appType, autoFocus]);
+
+  // Clamp the current page when flags remove pages.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (page > pages.length - 1) scrollTo(pages.length - 1);
+  }, [pages.length, page]);
 
   const handleScroll = () => {
     if (scrollRAF.current) cancelAnimationFrame(scrollRAF.current);
@@ -104,11 +124,12 @@ export default function App() {
       const el = scrollRef.current;
       if (!el) return;
       const idx = Math.round(el.scrollLeft / el.clientWidth);
-      setPage(idx);
+      setPage(Math.max(0, Math.min(pages.length - 1, idx)));
     });
   };
 
-  const showMini = page >= 3;
+  const currentPageId = pages[page]?.id;
+  const showMini = currentPageId === 'ide' || currentPageId === 'terminal';
 
   useEffect(() => {
     let cancelled = false;
@@ -180,11 +201,13 @@ export default function App() {
         </button>
 
         {/* Service process stats bar */}
+        {features.service_stats && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
           <div className="w-full max-w-6xl mx-auto px-3 sm:px-4">
             <ServiceStatsBar />
           </div>
         </div>
+        )}
 
         <div className="flex-1 w-full max-w-6xl mx-auto relative">
           {loading && (
@@ -195,7 +218,7 @@ export default function App() {
           )}
 
           {/* Now Playing — full on Home/Media/Video, mini on Code/Terminal */}
-          {state && caps.playerctl && !showMini && (
+          {features.now_playing && state && caps.playerctl && !showMini && (
             <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-3 pb-2">
               <div className="flex items-center gap-2.5 mb-1">
                 <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
@@ -220,52 +243,62 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 {/* LEFT */}
                 <div className="flex flex-col gap-4 min-w-0">
-                  <MixerCard state={state} caps={caps} />
-                  <GeoSurveyCard />
-                  <BleProximityCard />
+                  {features.mixer && <MixerCard state={state} caps={caps} />}
+                  {features.geo_survey && <GeoSurveyCard />}
+                  {features.ble_proximity && <BleProximityCard />}
                 </div>
 
                 {/* RIGHT */}
                 <div className="flex flex-col gap-4 min-w-0">
-                  <QuickSettings state={state} />
-                  <ConnectedDevicesCard />
-                  <WeatherCard />
-                  <ClipboardCard />
-                  <CommandLogCard log={state?.cmd_log ?? []} />
+                  {features.quick_settings && <QuickSettings state={state} />}
+                  {features.connected_devices && <ConnectedDevicesCard />}
+                  {features.weather && <WeatherCard />}
+                  {features.clipboard && <ClipboardCard />}
+                  {features.command_log && <CommandLogCard log={state?.cmd_log ?? []} />}
                 </div>
               </div>
 
+              {features.system_stats && (
               <div className="mt-4 mb-3">
                 <SystemStatsCard state={state} />
               </div>
+              )}
             </div>
 
-            {/* Page 1: Media Browser */}
+            {/* Page: Media Browser */}
+            {features.media_browser && (
             <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <MediaBrowserDeck state={state} caps={caps} />
             </div>
+            )}
 
-            {/* Page 2: Video Player */}
+            {/* Page: Video Player */}
+            {features.video_player && (
             <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <VideoPlayerDeck state={state} caps={caps} />
             </div>
+            )}
 
-            {/* Page 3: IDE */}
+            {/* Page: IDE */}
+            {features.ide && (
             <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <IdeDeck caps={caps} />
             </div>
+            )}
 
-            {/* Page 4: Terminal */}
+            {/* Page: Terminal */}
+            {features.terminal && (
             <div className="snap-start shrink-0 w-full p-3 sm:p-4 md:p-5 lg:p-6 pb-0">
               <TerminalDeck caps={caps} />
             </div>
+            )}
           </div>
         </div>
 
       </div>
 
       {/* Mini player — docked above nav strip on Code/Terminal decks */}
-      {showMini && state && caps.playerctl && <MiniPlayer state={state} />}
+      {features.now_playing && showMini && state && caps.playerctl && <MiniPlayer state={state} />}
 
       {/* Bottom strip — fixed to bottom of screen */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04] pb-[env(safe-area-inset-bottom)]">

@@ -371,6 +371,9 @@ func handleGeoSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !requireFeature(w, FeatureGeoSurvey) {
+		return
+	}
 	var req GeoSaveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -389,6 +392,9 @@ func handleGeoSave(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGeoSessions(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureGeoSurvey) {
+		return
+	}
 	os.MkdirAll(geoDir, 0755)
 	entries, err := os.ReadDir(geoDir)
 	if err != nil {
@@ -408,6 +414,9 @@ func handleGeoSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGeoSession(w http.ResponseWriter, r *http.Request) {
+	if !requireFeature(w, FeatureGeoSurvey) {
+		return
+	}
 	if r.Method == http.MethodDelete {
 		name := r.URL.Query().Get("name")
 		if name == "" {
@@ -444,6 +453,7 @@ func main() {
 
 	// API Routes
 	http.HandleFunc("/api/capabilities", handleCapabilities)
+	http.HandleFunc("/api/features", handleFeatures)
 	http.HandleFunc("/api/ping", handlePing)
 	http.HandleFunc("/api/auth", handleAuth)
 	http.HandleFunc("/api/auth-media", handleAuthMedia)
@@ -539,6 +549,31 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(caps)
+}
+
+// handleFeatures returns the configured feature-flag overrides.
+// Keys absent from config default to enabled; the frontend merges these
+// over all-true defaults. Shape is a flat string->bool map so a remote
+// flag provider (Flagsmith, Unleash, ConfigCat, GrowthBook) could back
+// this endpoint later without changing the frontend contract.
+func handleFeatures(w http.ResponseWriter, r *http.Request) {
+	features := map[string]bool{}
+	if appCfg != nil && appCfg.Features != nil {
+		for k, v := range appCfg.Features {
+			features[k] = v
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(features)
+}
+
+// requireFeature rejects the request with 403 when a section is disabled.
+func requireFeature(w http.ResponseWriter, name string) bool {
+	if appCfg.IsEnabled(name) {
+		return true
+	}
+	http.Error(w, "Feature disabled: "+name, http.StatusForbidden)
+	return false
 }
 
 func checkBinary(name string) bool {
@@ -650,6 +685,13 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// IDE deck commands (debugger, git, task runners) execute arbitrary
+	// shell/keystrokes — reject them when the ide section is disabled.
+	// Shared media/volume transports stay available to other sections.
+	if isIdeCommand(req.Command) && !requireFeature(w, FeatureIde) {
+		return
+	}
+
 	// Intercept speed commands for the shift+. / shift+, state machine
 	if strings.HasPrefix(req.Command, "speed_") {
 		addLog("▶ " + req.Command)
@@ -692,6 +734,14 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
+}
+
+// isIdeCommand reports whether a /api/command name belongs to the IDE deck
+// (debugger, git, task runners).
+func isIdeCommand(cmd string) bool {
+	return strings.HasPrefix(cmd, "dbg_") ||
+		strings.HasPrefix(cmd, "git_") ||
+		strings.HasPrefix(cmd, "task_")
 }
 
 // handleSpeedCommand implements a Shift+. / Shift+, state machine matching YouTube's

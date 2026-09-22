@@ -19,6 +19,10 @@ type resizeMsg struct {
 }
 
 func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
+	// Gate before upgrade: a disabled terminal section must not yield a shell.
+	if !requireFeature(w, FeatureTerminal) {
+		return
+	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 	})

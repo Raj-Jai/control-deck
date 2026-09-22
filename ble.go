@@ -65,6 +65,9 @@ func handleBleTransmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !requireFeature(w, FeatureBleProximity) {
+		return
+	}
 	var req struct {
 		Action string `json:"action"`
 	}
