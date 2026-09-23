@@ -55,6 +55,27 @@ export default function ConnectedDevicesCard() {
     return () => clearInterval(id);
   }, []);
 
+  // Fallback: if SSE stream_command was missed (e.g. buffered channel race or
+  // hotkey pressed before SSE was ready), polling will still see
+  // broadcasting=true and can auto-start the audio stream.
+  // This also handles the hotkey-first-press case where the AudioContext
+  // was suspended — the start() will wait for a tap and then play.
+  useEffect(() => {
+    if (!data) return;
+    import('../lib/streamManager').then(m => {
+      if (data.broadcasting && !m.isActive()) {
+        console.log('ConnectedDevicesCard: auto-start via polling fallback (broadcasting=true)');
+        m.start();
+      } else if (!data.broadcasting && m.isActive()) {
+        // Optional: auto-stop when broadcast ends, so hotkey stop also works via polling
+        // Don't auto-stop if the user manually started via AudioStreamCard — but that
+        // case is rare; the SSE stop will also fire, so this is just a safety net.
+        console.log('ConnectedDevicesCard: auto-stop via polling fallback (broadcasting=false)');
+        m.stop();
+      }
+    });
+  }, [data?.broadcasting]);
+
   const thisDeviceId = sessionStorage.getItem('dash_device_id') || '';
 
   const [ping, setPing] = useState<number | null>(null);
@@ -73,6 +94,22 @@ export default function ConnectedDevicesCard() {
   }, []);
 
   const [ctrlErr, setCtrlErr] = useState('');
+  const [needsTap, setNeedsTap] = useState(false);
+  useEffect(() => {
+    const onNeed = () => setNeedsTap(true);
+    const onUnlock = () => setNeedsTap(false);
+    window.addEventListener('audio-needs-gesture' as any, onNeed);
+    window.addEventListener('audio-unlocked' as any, onUnlock);
+    // Also clear prompt when broadcast stops
+    return () => {
+      window.removeEventListener('audio-needs-gesture' as any, onNeed);
+      window.removeEventListener('audio-unlocked' as any, onUnlock);
+    };
+  }, []);
+  // Hide prompt when broadcast stops
+  useEffect(() => {
+    if (data && !data.broadcasting) setNeedsTap(false);
+  }, [data?.broadcasting]);
   const control = async (target: string, action: 'start' | 'stop') => {
     setCtrlErr('');
     try {
@@ -137,6 +174,11 @@ export default function ConnectedDevicesCard() {
         </button>
         <div className="flex-1 h-px bg-white/[0.04]" />
       </div>
+      {needsTap && data.broadcasting && (
+        <div className="px-2 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-[11px] text-yellow-300 flex items-center gap-1.5">
+          <span>🔊</span> Tap anywhere to enable audio — browser blocked autoplay
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         {data.clients.map((c, i) => {
           const isThis = c.device_id === thisDeviceId;

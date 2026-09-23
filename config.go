@@ -19,10 +19,19 @@ type Config struct {
 	CaffeineSchemaDir string             `json:"caffeine_schema_dir"`
 	CustomCommands   map[string][]string `json:"custom_commands"`
 	KDConnectPhone   string              `json:"kdeconnect_phone"`
+	BroadcastHotkey  string              `json:"broadcast_hotkey"`
+	Scenes           []SceneConfig       `json:"scenes"`
 	// Features holds per-section feature flags. Absent map or absent key
 	// means enabled, so existing configs behave exactly as before.
 	// See KnownFeatures for the canonical key list.
 	Features map[string]bool `json:"features"`
+}
+
+// SceneConfig is a named one-tap macro of deck-command actions.
+type SceneConfig struct {
+	Name    string   `json:"name"`
+	Icon    string   `json:"icon"`
+	Actions []string `json:"actions"`
 }
 
 // Feature flag keys, one per major deck section. Add new sections here,
@@ -43,6 +52,9 @@ const (
 	FeatureVideoPlayer      = "video_player"
 	FeatureIde              = "ide"
 	FeatureTerminal         = "terminal"
+	FeaturePower            = "power"
+	FeatureScenes           = "scenes"
+	FeatureFileDrop         = "filedrop"
 )
 
 // KnownFeatures is the canonical set of feature flag keys, used to warn
@@ -63,6 +75,9 @@ var KnownFeatures = []string{
 	FeatureVideoPlayer,
 	FeatureIde,
 	FeatureTerminal,
+	FeaturePower,
+	FeatureScenes,
+	FeatureFileDrop,
 }
 
 // unknownFeatureKeys returns configured keys outside the known set.

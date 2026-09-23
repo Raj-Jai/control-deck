@@ -444,11 +444,43 @@ func handleGeoSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// CLI helper: --toggle-broadcast triggers the toggle endpoint and exits.
+	// Useful for manual keybinding commands: tab-dashboard --toggle-broadcast
+	if len(os.Args) > 1 && os.Args[1] == "--toggle-broadcast" {
+		port := 8080
+		if cfg, err := loadConfig("config.json"); err == nil && cfg.HTTPPort != 0 {
+			port = cfg.HTTPPort
+		}
+		if p := os.Getenv("CONFIG_PATH"); p != "" {
+			if cfg, err := loadConfig(p); err == nil && cfg.HTTPPort != 0 {
+				port = cfg.HTTPPort
+			}
+		}
+		url := fmt.Sprintf("http://localhost:%d/api/stream/broadcast", port)
+		body := `{"action":"toggle"}`
+		resp, err := http.Post(url, "application/json", strings.NewReader(body))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "toggle failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Fprintf(os.Stderr, "toggle: server returned %d\n", resp.StatusCode)
+			os.Exit(1)
+		}
+		fmt.Println("broadcast toggled")
+		os.Exit(0)
+	}
+
 	initConfig()
 	initVideoPlayerConfig()
 	buildCommandMap()
 	buildProfileCommandMap()
 	initVideoPlayerConfig()
+
+	// Auto-register GNOME global hotkey for broadcast toggle (idempotent).
+	// Runs in background so a missing gsettings doesn't block startup.
+	go ensureBroadcastHotkey()
 
 	// SIGHUP/SIGUSR1 hot-reload config.json in place (flags, PINs, commands).
 	// A failed reload keeps the previous config. Port changes still
@@ -768,6 +800,76 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
 }
 
+// lookupCommand returns a copy of the registered args for a deck command.
+func lookupCommand(cmdName string) ([]string, bool) {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	args, exists := commandMap[cmdName]
+	return args, exists
+}
+
+// commandKnown reports whether a name dispatches (commandMap or speed_).
+func commandKnown(cmdName string) bool {
+	if strings.HasPrefix(cmdName, "speed_") {
+		return true
+	}
+	_, exists := lookupCommand(cmdName)
+	return exists
+}
+
+// execDeckArgs runs one deck command asynchronously (fire-and-forget).
+func execDeckArgs(cmdName, player string, args []string) {
+	go func() {
+		if err := execDeckArgsSync(cmdName, player, args); err != nil {
+			log.Printf("Error executing %v: %v", args, err)
+		}
+	}()
+}
+
+// execDeckArgsSync runs one deck command to completion (scene runner).
+func execDeckArgsSync(cmdName, player string, args []string) error {
+	sendkeyBin := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
+	p := player
+	if p == "" {
+		p = findBestPlayer()
+	}
+	cmdArgs := args
+	if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
+		if p != "" && p != cmdArgs[1] {
+			cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
+		}
+	} else if (cmdName == "fullscreen" || cmdName == "captions") && cmdArgs[0] == sendkeyBin {
+		if p != "" {
+			cmdArgs = []string{cmdArgs[0], cmdArgs[1], p}
+		}
+	}
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+	cmd.Env = append(os.Environ(), "PLAYER="+p, "PLAYER_BUS=org.mpris.MediaPlayer2."+p)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%v | Output: %s", err, string(out))
+	}
+	return nil
+}
+
+// runDeckCommand validates + dispatches one deck command. Shared by
+// /api/command and the scene runner. Returns 200 + payload on success,
+// else a status code + message.
+func runDeckCommand(cmdName, player string) (int, any) {
+	// Intercept speed commands for the shift+. / shift+, state machine
+	if strings.HasPrefix(cmdName, "speed_") {
+		addLog("▶ " + cmdName)
+		go handleSpeedCommand(cmdName)
+		return http.StatusOK, map[string]string{"status": "ok", "executed": cmdName}
+	}
+	args, exists := lookupCommand(cmdName)
+	if !exists {
+		return http.StatusBadRequest, "Unknown command"
+	}
+	addLog("▶ " + cmdName)
+	execDeckArgs(cmdName, player, args)
+	return http.StatusOK, map[string]string{"status": "ok", "executed": cmdName}
+}
+
 // isIdeCommand reports whether a /api/command name belongs to the IDE deck
 // (debugger, git, task runners).
 func isIdeCommand(cmd string) bool {
@@ -965,7 +1067,7 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 
 	deviceID := r.URL.Query().Get("device_id")
 	trackClient(r, deviceID)
-	messageChan := make(chan string)
+	messageChan := make(chan string, 16)
 
 	clientsMu.Lock()
 	clients[messageChan] = true
@@ -1060,12 +1162,8 @@ func handleStreamControl(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "device not connected", http.StatusNotFound)
 			return
 		}
-		select {
-		case ch <- `{"type":"stream_command","action":"start"}`:
-			log.Printf("stream/control: sent start to %s", req.Target)
-		default:
-			log.Printf("stream/control: channel full for %s", req.Target)
-		}
+		sendSSECommand(ch, `{"type":"stream_command","action":"start"}`)
+		log.Printf("stream/control: sent start to %s", req.Target)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	case "stop":
 		stopped := remoteStopStream(req.Target)
@@ -1073,10 +1171,7 @@ func handleStreamControl(w http.ResponseWriter, r *http.Request) {
 		ch, hasSSE := sseDeviceChans[req.Target]
 		sseDeviceChansMu.RUnlock()
 		if hasSSE {
-			select {
-			case ch <- `{"type":"stream_command","action":"stop"}`:
-			default:
-			}
+			sendSSECommand(ch, `{"type":"stream_command","action":"stop"}`)
 		}
 		if stopped || hasSSE {
 			json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -1086,6 +1181,74 @@ func handleStreamControl(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "unknown action", http.StatusBadRequest)
 	}
+}
+
+func isBroadcasting() bool {
+	broadcastingMu.Lock()
+	defer broadcastingMu.Unlock()
+	return broadcasting
+}
+
+func sendSSECommand(ch chan string, msg string) {
+	select {
+	case ch <- msg:
+	default:
+		// Buffer full or no receiver — retry in background without blocking the broadcaster.
+		go func(c chan string, m string) {
+			defer func() { recover() }()
+			select {
+			case c <- m:
+			case <-time.After(3 * time.Second):
+				log.Printf("broadcast: SSE send timeout, dropping %s", m)
+			}
+		}(ch, msg)
+	}
+}
+
+func doBroadcastStart() {
+	broadcastingMu.Lock()
+	broadcasting = true
+	broadcastingMu.Unlock()
+	go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1").Run()
+	sseDeviceChansMu.RLock()
+	chans := make([]chan string, 0, len(sseDeviceChans))
+	for _, ch := range sseDeviceChans {
+		chans = append(chans, ch)
+	}
+	n := len(chans)
+	sseDeviceChansMu.RUnlock()
+	for _, ch := range chans {
+		sendSSECommand(ch, `{"type":"stream_command","action":"start"}`)
+	}
+	log.Printf("broadcast: started (notified %d clients)", n)
+}
+
+func doBroadcastStop() {
+	broadcastingMu.Lock()
+	broadcasting = false
+	broadcastingMu.Unlock()
+	go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
+	remoteStopAllStreams()
+	sseDeviceChansMu.RLock()
+	chans := make([]chan string, 0, len(sseDeviceChans))
+	for _, ch := range sseDeviceChans {
+		chans = append(chans, ch)
+	}
+	n := len(chans)
+	sseDeviceChansMu.RUnlock()
+	for _, ch := range chans {
+		sendSSECommand(ch, `{"type":"stream_command","action":"stop"}`)
+	}
+	log.Printf("broadcast: stopped (notified %d clients)", n)
+}
+
+func doBroadcastToggle() string {
+	if isBroadcasting() {
+		doBroadcastStop()
+		return "stop"
+	}
+	doBroadcastStart()
+	return "start"
 }
 
 func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
@@ -1102,43 +1265,16 @@ func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {
 	}
 	switch req.Action {
 	case "start":
-		broadcastingMu.Lock()
-		broadcasting = true
-		broadcastingMu.Unlock()
-
-		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1").Run()
-
-		sseDeviceChansMu.RLock()
-		for _, ch := range sseDeviceChans {
-			select {
-			case ch <- `{"type":"stream_command","action":"start"}`:
-			default:
-			}
-		}
-		sseDeviceChansMu.RUnlock()
-
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		doBroadcastStart()
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "action": "start", "broadcasting": "true"})
 	case "stop":
-		broadcastingMu.Lock()
-		broadcasting = false
-		broadcastingMu.Unlock()
-
-		go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
-
-		remoteStopAllStreams()
-
-		sseDeviceChansMu.RLock()
-		for _, ch := range sseDeviceChans {
-			select {
-			case ch <- `{"type":"stream_command","action":"stop"}`:
-			default:
-			}
-		}
-		sseDeviceChansMu.RUnlock()
-
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+		doBroadcastStop()
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "action": "stop", "broadcasting": "false"})
+	case "toggle":
+		action := doBroadcastToggle()
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "action": action, "broadcasting": fmt.Sprintf("%v", isBroadcasting())})
 	default:
-		http.Error(w, "unknown action", http.StatusBadRequest)
+		http.Error(w, "unknown action (use start|stop|toggle)", http.StatusBadRequest)
 	}
 }
 

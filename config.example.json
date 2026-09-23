@@ -6,6 +6,8 @@
   "https_port": 8443,
   "caffeine_schema_dir": "",
   "kdeconnect_phone": "",
+  "broadcast_hotkey": "<Control><Alt>b",
+  "_comment_broadcast_hotkey": "Global keyboard shortcut to mute laptop speaker and stream to all devices (toggle). Uses GNOME custom keybinding via gsettings. Set to \"disabled\" to turn off auto-registration. Default is <Control><Alt>b. Restart or SIGHUP after editing.",
   "_comment": "features: per-section flags. Any key absent (or whole block absent) defaults to true. Set a key false to hide the section and disable its dedicated backend endpoints. Restart the service after editing.",
   "features": {
     "now_playing": true,
@@ -22,7 +24,10 @@
     "media_browser": true,
     "video_player": true,
     "ide": true,
-    "terminal": true
+    "terminal": true,
+    "power": true,
+    "scenes": true,
+    "filedrop": true
   },
   "custom_commands": {
     "erpLogin": ["erp", "login"],

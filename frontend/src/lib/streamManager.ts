@@ -73,6 +73,12 @@ class SyncedAudioPlayer {
 
   private flushBatch() {
     if (!this.ctx || this.accFrames === 0) return;
+    if (this.ctx.state !== 'running') {
+      // AudioContext is suspended (autoplay blocked) — keep frames buffered and try to resume.
+      // The next feedFrame or a user gesture will retry.
+      this.ensureResumed(this.ctx).catch(() => {});
+      return;
+    }
 
     const totalFrames = this.accFrames * FRAME_SAMPLES;
     const buffer = this.ctx.createBuffer(this.channels, totalFrames, this.sampleRate);
@@ -154,21 +160,70 @@ class SyncedAudioPlayer {
     }
   }
 
+  private async ensureResumed(ctx: AudioContext): Promise<void> {
+    if ((ctx.state as any) === 'running') return;
+    try { await ctx.resume(); } catch {}
+    if ((ctx.state as any) === 'running') return;
+    console.log('streamManager: AudioContext suspended, waiting for user gesture to unlock audio');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('audio-needs-gesture'));
+    }
+    if (typeof document !== 'undefined') {
+      await new Promise<void>((resolve) => {
+        const tryResume = async () => {
+          try { await ctx.resume(); } catch {}
+          if ((ctx.state as any) === 'running') {
+            console.log('streamManager: AudioContext resumed via user gesture');
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('audio-unlocked'));
+            }
+            document.removeEventListener('click', tryResume);
+            document.removeEventListener('touchend', tryResume);
+            document.removeEventListener('keydown', tryResume);
+            resolve();
+          }
+        };
+        document.addEventListener('click', tryResume, { passive: true } as any);
+        document.addEventListener('touchend', tryResume, { passive: true } as any);
+        document.addEventListener('keydown', tryResume, { passive: true } as any);
+        // Also try immediately in case the page already has activation
+        tryResume();
+      });
+    }
+  }
+
   async start() {
     if (this.active) { console.log('streamManager: already active'); return; }
     console.log('streamManager: starting...');
 
-    let ctx: AudioContext;
-    try {
-      ctx = new AudioContext({ sampleRate: 48000 });
-    } catch {
-      ctx = new AudioContext();
+    let ctx = this.ctx;
+    // Reuse a previously-unlocked context if available (hotkey can then work without a new gesture)
+    if (!ctx || ctx.state === 'closed') {
+      try {
+        ctx = new AudioContext({ sampleRate: 48000 });
+      } catch {
+        ctx = new AudioContext();
+      }
+      this.ctx = ctx;
+    } else {
+      // Reuse existing context — ensure it's not in a broken state
+      this.ctx = ctx;
+      console.log('streamManager: reusing existing AudioContext state', ctx.state);
     }
-    this.ctx = ctx;
     this.accFrames = 0;
     this.scheduledEnd = 0;
     this.currentRate = 1.0;
     this.integralError = 0;
+
+    // Try to resume immediately; if still suspended, the global gesture listener or ensureResumed will handle it.
+    if (ctx.state === 'suspended') {
+      try { await ctx.resume(); } catch {}
+      if (ctx.state === 'suspended') {
+        console.log('streamManager: AudioContext suspended on start, will unlock on next gesture');
+        // Don't block — let the websocket connect and buffer, audio will start after the user taps.
+        this.ensureResumed(ctx).catch(() => {});
+      }
+    }
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = `${proto}//${location.host}/api/audio-stream/ws${deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : ''}`;
@@ -178,7 +233,8 @@ class SyncedAudioPlayer {
 
     try {
       await this.handleConnection(w, ctx);
-    } catch {
+    } catch (e) {
+      console.log('streamManager: handleConnection failed', e);
       this.stop();
     }
   }
@@ -204,8 +260,10 @@ class SyncedAudioPlayer {
           this.channels = dv.getUint8(5);
           this.bytesPerSample = dv.getUint8(6);
 
+          // Fire-and-forget unlock: try to resume, and if blocked, wait for user gesture in background.
+          // Don't block NTP/active on the gesture — the stream will buffer and start playing after the tap.
           if (ctx.state === 'suspended') {
-            ctx.resume();
+            this.ensureResumed(ctx).catch(() => {});
           }
 
           this.startNtp(w).then(() => {
@@ -297,10 +355,17 @@ class SyncedAudioPlayer {
       this.ws = null;
     }
     if (this.ctx) {
-      this.ctx.close();
-      this.ctx = null;
+      // Keep the AudioContext for reuse so a hotkey-triggered start doesn't need a new gesture.
+      // Suspend instead of close — a previously-unlocked context can be resumed without a new tap.
+      try { this.ctx.suspend(); } catch {}
+      // Don't null it immediately; keep it for next start, but clear scheduling state.
+      // If the context was closed externally, it will be recreated on next start.
+      if (this.ctx.state === 'closed') {
+        this.ctx = null;
+      }
     }
     this.accFrames = 0;
+    this.scheduledEnd = 0;
     this.notify();
   }
 
@@ -316,6 +381,21 @@ class SyncedAudioPlayer {
 }
 
 const player = new SyncedAudioPlayer();
+
+// Global gesture unlock: if the AudioContext is suspended (autoplay blocked),
+// any user interaction on the page will try to resume it so a hotkey-triggered
+// stream can start without requiring an extra tap after the hotkey.
+if (typeof document !== 'undefined') {
+  const tryGlobalResume = () => {
+    const ctx = (player as any).ctx as AudioContext | null;
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+  };
+  document.addEventListener('click', tryGlobalResume, { passive: true } as any);
+  document.addEventListener('touchend', tryGlobalResume, { passive: true } as any);
+  document.addEventListener('keydown', tryGlobalResume, { passive: true } as any);
+}
 
 export function start() { player.start(); }
 export function stop() { player.stop(); }
