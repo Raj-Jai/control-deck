@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Deck — Background Audio</title>
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon-192.png">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:16px}
+  .card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:15px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#94a3b8}
+  .status{font-size:13px;color:#cbd5e1;background:rgba(255,255,255,0.03);border-radius:8px;padding:10px 12px;min-height:44px;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#64748b;flex-shrink:0}
+  .dot.on{background:#22c55e;box-shadow:0 0 8px #22c55e}
+  .dot.wait{background:#eab308;box-shadow:0 0 8px #eab308;animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+  .btn{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.06);color:#e2e8f0;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+  .btn:active{scale:0.98}
+  .btn.on{background:rgba(34,197,94,0.15);border-color:rgba(34,197,94,0.3);color:#4ade80}
+  .hint{font-size:11px;color:#64748b;line-height:1.5;text-align:center}
+  a{color:#38bdf8;text-decoration:none;font-size:12px}
+  .vol{width:100%;accent-color:#38bdf8}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔊 Background Audio</h1>
+  <div class="status" id="status"><span class="dot" id="dot"></span><span id="stext">Connecting…</span></div>
+  <button class="btn" id="toggle"><span id="ticon">▶</span> <span id="tlabel">Connect</span></button>
+  <label style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:8px"><input type="checkbox" id="autoc" checked> Auto-connect when broadcast starts</label>
+  <label style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:8px"><input type="checkbox" id="wake"> Keep screen awake (more battery)</label>
+  <div style="display:flex;flex-direction:column;gap:4px">
+    <span style="font-size:11px;color:#94a3b8">Volume</span>
+    <input type="range" min="0" max="100" value="80" class="vol" id="vol">
+  </div>
+  <p class="hint" id="hint">Install this page as an app: Chrome → ⋮ → Add to Home screen.<br>It will run with minimal power, auto-starts on broadcast, and shows a media notification so it stays alive when screen is locked.</p>
+  <a href="/static/">← Open full dashboard</a>
+</div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const dot = $('dot'), stext = $('stext'), toggle = $('toggle'), ticon = $('ticon'), tlabel = $('tlabel'), autoc = $('autoc'), wake = $('wake'), vol = $('vol'), hint = $('hint');
+  let deviceId = (()=>{try{let id=localStorage.getItem('deck_bg_device');if(!id){id=crypto.randomUUID();localStorage.setItem('deck_bg_device',id)}return id}catch{return 'bg-'+Math.random().toString(36).slice(2)}})();
+  let ws=null, ctx=null, active=false, es=null, pollId=null, wakeLock=null;
+  let accCh=[], accFrames=0, firstPTS=0, schedEnd=0, clockOff=0, perfBase=0, dateBase=0;
+  let sampleRate=48000, channels=2, ntpOffs=[], ntpResolve=null;
+
+  const FRAME_SAMPLES=2048, BATCH=3, TARGET_DELAY=500, TARGET_BUF=350, PI_KP=0.000008, PI_KI=0.0000003, PI_MAX=0.003, PI_LIM=500;
+  let curRate=1, intErr=0;
+
+  function setStatus(txt, state){
+    stext.textContent=txt;
+    dot.className='dot'+(state? ' '+state:'');
+    if(state==='wait') hint.textContent='Browser blocked autoplay — tap anywhere to enable audio.';
+    else if(state==='on') hint.textContent='Playing in background. You can lock the screen or switch apps.';
+    else if(!state) hint.textContent='Idle. Will auto-connect when you press the laptop hotkey (<C-A-b>).';
+  }
+  function hostMs(){return (performance.now()-perfBase)+dateBase+clockOff}
+  function pcmToFloat(buf){
+    const i16=new Int16Array(buf);
+    const per=i16.length/channels, out=[];
+    for(let ch=0;ch<channels;ch++){
+      const c=new Float32Array(per);
+      for(let i=0;i<per;i++) c[i]=i16[i*channels+ch]/32768;
+      out.push(c);
+    }
+    return out;
+  }
+  async function ensureResumed(){
+    if(!ctx) return;
+    if(ctx.state==='running') return;
+    try{await ctx.resume()}catch{}
+    if(ctx.state==='running') return;
+    setStatus('Tap to enable audio','wait');
+    if(navigator.mediaSession) navigator.mediaSession.playbackState='paused';
+    await new Promise(res=>{
+      const fn=async()=>{
+        try{await ctx.resume()}catch{}
+        if(ctx.state==='running'){
+          document.removeEventListener('click',fn);document.removeEventListener('touchend',fn);document.removeEventListener('keydown',fn);
+          setStatus('Audio unlocked','on');
+          if(navigator.mediaSession) navigator.mediaSession.playbackState='playing';
+          res();
+        }
+      };
+      document.addEventListener('click',fn,{passive:true});document.addEventListener('touchend',fn,{passive:true});document.addEventListener('keydown',fn,{passive:true});
+      fn();
+    });
+  }
+  function flush(){
+    if(!ctx||accFrames===0) return;
+    if(ctx.state!=='running'){ensureResumed().catch(()=>{});return}
+    const total=accFrames*FRAME_SAMPLES;
+    const buf=ctx.createBuffer(channels,total,sampleRate);
+    for(let ch=0;ch<channels;ch++) buf.getChannelData(ch).set(accCh[ch]);
+    let t, dur;
+    if(schedEnd===0){
+      curRate=1;intErr=0;
+      const target=firstPTS+TARGET_DELAY, now=hostMs(), d=target-now;
+      if(d<0){accFrames=0;return}
+      t=ctx.currentTime+d/1000;dur=total/sampleRate;
+    }else{
+      const ahead=(schedEnd-ctx.currentTime)*1000, err=ahead-TARGET_BUF;
+      intErr=Math.max(-PI_LIM,Math.min(PI_LIM,intErr+err*0.05));
+      let adj=err*PI_KP+intErr*PI_KI; adj=Math.max(-PI_MAX,Math.min(PI_MAX,adj)); curRate=1+adj;
+      dur=total/(sampleRate*curRate); t=schedEnd;
+    }
+    const src=ctx.createBufferSource(); src.buffer=buf; src.playbackRate.value=curRate;
+    const g=ctx.createGain(); const st=t, et=t+dur;
+    g.gain.setValueAtTime(0,st); g.gain.linearRampToValueAtTime(1,st+0.002); g.gain.setValueAtTime(1,et-0.002); g.gain.linearRampToValueAtTime(0,et);
+    // volume
+    const v=Math.max(0,Math.min(100,parseInt(vol.value)||80))/100;
+    g.gain.value=v;
+    src.connect(g); g.connect(ctx.destination); src.start(st);
+    schedEnd=et; accFrames=0;
+  }
+  function feed(pts, pcm){
+    if(!ctx||!active) return;
+    const chs=pcmToFloat(pcm);
+    if(accFrames===0){firstPTS=pts; accCh=chs.map(c=>new Float32Array(c))}
+    else{for(let ch=0;ch<channels;ch++){const o=accCh[ch], n=o.length+chs[ch].length, m=new Float32Array(n); m.set(o); m.set(chs[ch],o.length); accCh[ch]=m}}
+    accFrames++; if(accFrames>=BATCH) flush();
+  }
+  function readU64(dv,off){return dv.getUint32(off)*4294967296+dv.getUint32(off+4)}
+  async function start(){
+    if(active){console.log('bg: already active');return}
+    setStatus('Connecting…','wait');
+    let c=ctx;
+    if(!c||c.state==='closed'){
+      try{c=new AudioContext({sampleRate:48000})}catch{c=new AudioContext()}
+      ctx=c;
+    }
+    accFrames=0; schedEnd=0; curRate=1; intErr=0;
+    if(c.state==='suspended'){try{await c.resume()}catch{}; if(c.state==='suspended') ensureResumed(c).catch(()=>{})}
+    // media session so Android keeps audio alive in background
+    if('mediaSession' in navigator){
+      try{
+        navigator.mediaSession.metadata=new MediaMetadata({title:'Control Deck — Background Audio',artist:'Laptop stream',album:'Tab Dashboard'});
+        navigator.mediaSession.playbackState='playing';
+        navigator.mediaSession.setActionHandler('stop',()=>stop());
+        navigator.mediaSession.setActionHandler('pause',()=>stop());
+      }catch{}
+    }
+    // wake lock (optional, low power when off)
+    if(wake.checked && 'wakeLock' in navigator){
+      try{wakeLock=await navigator.wakeLock.request('screen')}catch{}
+    }
+    const proto=location.protocol==='https:'?'wss:':'ws:';
+    const url=`${proto}//${location.host}/api/audio-stream/ws?device_id=${encodeURIComponent(deviceId)}`;
+    const w=new WebSocket(url); w.binaryType='arraybuffer'; ws=w;
+    await new Promise((res,rej)=>{
+      const to=setTimeout(()=>rej(new Error('init timeout')),10000);
+      w.onmessage=(e)=>{
+        if(typeof e.data==='string'){try{const m=JSON.parse(e.data);if(m.type==='ntp_pong'){const t3=Date.now(),rtt=t3-m.t1,off=m.t2-m.t1-rtt/2; ntpOffs.push(off); if(ntpOffs.length<10) setTimeout(()=>w.send(JSON.stringify({type:'ntp_ping',t1:Date.now()})),10); else{const s=[...ntpOffs].sort((a,b)=>a-b),avg=s.slice(2,-2).reduce((a,b)=>a+b,0)/Math.max(s.length-4,1); clockOff=avg; perfBase=performance.now(); dateBase=Date.now(); if(ntpResolve){ntpResolve();ntpResolve=null}}}catch{}return}
+        const dv=new DataView(e.data); if(dv.getUint8(0)===0x01){
+          sampleRate=dv.getUint32(1); channels=dv.getUint8(5);
+          if(ctx.state==='suspended') ensureResumed(ctx).catch(()=>{});
+          // NTP
+          ntpOffs=[]; new Promise(r=>{ntpResolve=r; w.send(JSON.stringify({type:'ntp_ping',t1:Date.now()}))}).then(()=>{
+            clearTimeout(to); active=true; updateBtn(); setStatus('Playing','on');
+            w.onmessage=(ev)=>{
+              if(typeof ev.data==='string'){try{const m=JSON.parse(ev.data); if(m.type==='ntp_pong'){const t3=Date.now(),rtt=t3-m.t1,off=m.t2-m.t1-rtt/2; ntpOffs.push(off); if(ntpOffs.length<10) setTimeout(()=>w.send(JSON.stringify({type:'ntp_ping',t1:Date.now()})),10); else{const s=[...ntpOffs].sort((a,b)=>a-b),avg=s.slice(2,-2).reduce((a,b)=>a+b,0)/Math.max(s.length-4,1); clockOff=avg; perfBase=performance.now(); dateBase=Date.now(); if(ntpResolve){ntpResolve();ntpResolve=null}}}catch{}return}
+              const d=new DataView(ev.data); if(d.getUint8(0)===0x02){const pts=readU64(d,1); feed(pts, ev.data.slice(9))}
+            };
+            res();
+          });
+        }
+      };
+      w.onerror=()=>rej(new Error('ws error'));
+      w.onclose=()=>{if(!active) rej(new Error('ws closed'))};
+    });
+    // keep alive when visible
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden && active && ctx && ctx.state==='suspended') ctx.resume().catch(()=>{})});
+  }
+  function stop(){
+    active=false; accFrames=0; schedEnd=0; updateBtn(); setStatus('Stopped','');
+    if(navigator.mediaSession) try{navigator.mediaSession.playbackState='none'}catch{}
+    if(wakeLock){try{wakeLock.release()}catch{}; wakeLock=null}
+    if(ws){ws.onmessage=null;ws.onclose=null;ws.onerror=null;ws.close();ws=null}
+    if(ctx){try{ctx.suspend()}catch{}; if(ctx.state==='closed') ctx=null}
+  }
+  function updateBtn(){
+    ticon.textContent=active?'■':'▶';
+    tlabel.textContent=active?'Stop':'Connect';
+    toggle.classList.toggle('on',active);
+  }
+  toggle.onclick=()=>{active?stop():start().catch(e=>{setStatus('Error: '+e.message,''); stop()})};
+  vol.oninput=()=>{/* gain is per-buffer, no live update needed for minimal */};
+  // Auto-connect via SSE + polling fallback (low power: poll every 5s when idle)
+  function startSSE(){
+    if(es) try{es.close()}catch{}
+    const url=`/media-stream?device_id=${encodeURIComponent(deviceId)}`;
+    es=new EventSource(url);
+    es.onmessage=(e)=>{
+      try{
+        const d=JSON.parse(e.data);
+        if(d.type==='stream_command'){
+          if(d.action==='start' && autoc.checked && !active) start().catch(()=>{});
+          if(d.action==='stop' && active) stop();
+        }
+      }catch{}
+    };
+    es.onerror=()=>{/* will auto-reconnect via poll fallback */}
+  }
+  function startPoll(){
+    if(pollId) clearInterval(pollId);
+    pollId=setInterval(async()=>{
+      if(document.hidden) return; // save battery when hidden and not auto
+      try{
+        const r=await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`,{cache:'no-store'});
+        const j=await r.json();
+        const bc=!!j.broadcasting;
+        if(bc && autoc.checked && !active){
+          console.log('bg poll: auto-start');
+          start().catch(()=>{});
+        } else if(!bc && active){
+          // optional auto-stop when broadcast ends
+          // stop();
+        }
+      }catch{}
+    }, autoc.checked? 2500: 8000);
+  }
+  // init
+  startSSE();
+  startPoll();
+  autoc.onchange=()=>{startPoll(); if(autoc.checked && !active) setStatus('Idle — auto-connect on','')};
+  // If page is opened via PWA shortcut with ?autostart=1, start immediately
+  if(new URLSearchParams(location.search).get('autostart')==='1') start().catch(()=>{});
+  // Handle page lifecycle: keep EventSource alive, don't pause when hidden
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+      // Keep SSE open but reduce poll frequency to save power
+      if(pollId){clearInterval(pollId); pollId=setInterval(()=>{/* minimal poll while hidden */}, 15000)}
+    } else {
+      startPoll();
+      if(ctx && ctx.state==='suspended' && active) ctx.resume().catch(()=>{});
+    }
+  });
+  // Register service worker for offline and to keep alive
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('/static/service-worker.js').catch(()=>{});
+  setStatus('Idle — waiting for broadcast','');
+  updateBtn();
+})();
+</script>
+</body>
+</html>

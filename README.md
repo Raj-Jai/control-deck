@@ -17,6 +17,8 @@ A web-based local network dashboard for a Linux workstation, served to tablets a
 - **Custom Commands** — configurable CLI commands exposed as toggle buttons (ERP login, WARP, etc.)
 - **Sendkey Tool** — keystroke injection via `/dev/uinput` for shift combos, arrows, F-keys, ctrl combos; optionally raises MPRIS windows via D-Bus
 - **Toggles** — Bluetooth, BT Speaker, WARP, Lock Desktop, Caffeine, ERP Login, Night Light, Audio Stream
+- **Global Hotkey** — `<Control><Alt>b` (configurable via `broadcast_hotkey` in `config.json`) mutes laptop and streams to all devices without opening the dashboard; also `scripts/toggle-broadcast.sh` and `tab-dashboard --toggle-broadcast`
+- **Background Audio Mode** — ultra-lightweight ` /static/background.html` PWA for phones: auto-connects on broadcast, Media Session notification keeps it alive when screen locked, polling fallback if SSE missed, ~624 kB JS, no React overhead, `Add to Home screen` for app-like background use with minimal battery
 - **Command Log** — every action logged with timestamp, displayed in real-time via SSE
 - **Capability Detection** — frontend auto-hides cards whose backend dependencies are missing
 - **Dashboard Lock** — optional PIN lock with 6-hour session
@@ -153,6 +155,19 @@ sudo cp avahi-service.conf /etc/avahi/services/tab-dashboard.service
 
 The dashboard is then discoverable as `control-deck.local`.
 
+### Background Audio on Phone (no need to keep Chrome open)
+
+The full dashboard is heavy; for just listening, use the lightweight background page:
+
+1. On your phone, open `http://<laptop-ip>:8080/static/background.html` (or `https://<laptop-ip>:8443/static/background.html` for PWA)
+2. Tap **Add to Home screen** (Chrome → ⋮ → Add to Home screen). It installs as a standalone app (`Background Audio` shortcut from `manifest.json`).
+3. Open the installed app once and tap **Connect** (or leave **Auto-connect** checked). Grant audio permission if prompted. The page shows “Idle — waiting for broadcast”.
+4. On your laptop, press `<Control><Alt>b` (or `curl -X POST :8080/api/stream/broadcast -d '{"action":"toggle"}'`). The phone will auto-connect within 2 s (SSE + polling fallback) and start playing with a media notification. You can now lock the screen or switch apps — audio keeps playing via Media Session.
+5. If you see “Tap to enable audio”, tap anywhere once — browsers block autoplay until a gesture. After that one tap, all future hotkey toggles work without extra taps (AudioContext is reused).
+6. **Low power**: When idle (no broadcast), the page polls every 8 s and keeps the EventSource open but otherwise sleeps; when hidden it backs off to 15 s. No React, no polling of media state — ~5 MB RAM, negligible CPU. Enable **Keep screen awake** only if you want to prevent sleep.
+
+Troubleshooting: If the first hotkey shows glow but no sound, ensure the background app was opened at least once and you tapped the page after install (autoplay unlock). Subsequent hotkeys will then be instant.
+
 ## Configuration
 
 All user-specific settings in `config.json`:
@@ -164,6 +179,7 @@ All user-specific settings in `config.json`:
 | `ping_target` | Host to ping for internet connectivity check |
 | `http_port` / `https_port` | Listen ports |
 | `caffeine_schema_dir` | Override GSettings schema dir for Caffeine (auto-derived from `$HOME` if empty) |
+| `broadcast_hotkey` | Global hotkey to toggle mute+stream (default `<Control><Alt>b`, `"disabled"` to turn off auto-registration) |
 | `custom_commands` | Extra CLI commands exposed as toggle/deck actions |
 
 Override without modifying `config.json`:

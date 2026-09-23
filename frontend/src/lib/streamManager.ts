@@ -270,6 +270,20 @@ class SyncedAudioPlayer {
             clearTimeout(timeout);
             this.active = true;
             this.notify();
+            // Media Session so Android keeps audio alive in background / lock screen
+            if ('mediaSession' in navigator) {
+              try {
+                (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
+                  title: 'Control Deck — Laptop Audio',
+                  artist: 'Live stream',
+                  album: 'Tab Dashboard',
+                });
+                (navigator as any).mediaSession.playbackState = 'playing';
+                try { (navigator as any).mediaSession.setActionHandler('stop', () => this.stop()); } catch {}
+                try { (navigator as any).mediaSession.setActionHandler('pause', () => this.stop()); } catch {}
+                try { (navigator as any).mediaSession.setActionHandler('play', () => {}); } catch {}
+              } catch {}
+            }
 
             w.onmessage = (ev) => {
               if (typeof ev.data === 'string') {
@@ -347,6 +361,9 @@ class SyncedAudioPlayer {
       this.flushBatch();
     }
     this.active = false;
+    if ('mediaSession' in navigator) {
+      try { (navigator as any).mediaSession.playbackState = 'none'; (navigator as any).mediaSession.metadata = null; } catch {}
+    }
     if (this.ws) {
       this.ws.onmessage = null;
       this.ws.onclose = null;
@@ -360,7 +377,7 @@ class SyncedAudioPlayer {
       try { this.ctx.suspend(); } catch {}
       // Don't null it immediately; keep it for next start, but clear scheduling state.
       // If the context was closed externally, it will be recreated on next start.
-      if (this.ctx.state === 'closed') {
+      if ((this.ctx.state as any) === 'closed') {
         this.ctx = null;
       }
     }

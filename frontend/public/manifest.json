@@ -2,12 +2,14 @@
   "id": "/static/",
   "name": "Control Deck",
   "short_name": "Deck",
-  "description": "Desktop media & system dashboard",
+  "description": "Desktop media & system dashboard — background audio",
   "start_url": "/static/",
   "scope": "/static/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+  "orientation": "any",
   "icons": [
     {
       "src": "/static/icon-192.png",
@@ -21,5 +23,31 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Background Audio",
+      "short_name": "BG Audio",
+      "description": "Ultra-lightweight background listener — auto-starts on hotkey, low power",
+      "url": "/static/background.html",
+      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Full control deck",
+      "url": "/static/",
+      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+deck",
+      "url": "/static/background.html?device=%s"
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" },
+  "handle_links": "preferred",
+  "categories": ["music", "utilities"],
+  "edge_side_panel": { "preferred_width": 380 }
 }
