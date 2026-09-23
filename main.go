@@ -1210,6 +1210,13 @@ func doBroadcastStart() {
 	broadcasting = true
 	broadcastingMu.Unlock()
 	go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1").Run()
+	// Proactively start ffmpeg so the laptop is already capturing when the phone connects.
+	// Previously ffmpeg only started when the first WebSocket client connected, so a hotkey
+	// pressed before any phone had an EventSource would appear to do nothing until the
+	// phone manually toggled and forced a reconnect.
+	if err := streamMgr.start(); err != nil {
+		log.Printf("broadcast: audio-stream start failed: %v", err)
+	}
 	sseDeviceChansMu.RLock()
 	chans := make([]chan string, 0, len(sseDeviceChans))
 	for _, ch := range sseDeviceChans {
@@ -1229,6 +1236,17 @@ func doBroadcastStop() {
 	broadcastingMu.Unlock()
 	go exec.Command("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0").Run()
 	remoteStopAllStreams()
+	// Also stop the ffmpeg pipeline if it was proactively started and no WebSocket ever connected
+	go func() {
+		// Give WebSockets a moment to clean up via removeListener, then force stop if still running
+		time.Sleep(200 * time.Millisecond)
+		streamMgr.mu.Lock()
+		shouldStop := streamMgr.ffCmd != nil && len(streamMgr.listeners) == 0
+		streamMgr.mu.Unlock()
+		if shouldStop {
+			streamMgr.Stop()
+		}
+	}()
 	sseDeviceChansMu.RLock()
 	chans := make([]chan string, 0, len(sseDeviceChans))
 	for _, ch := range sseDeviceChans {

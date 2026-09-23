@@ -37,6 +37,8 @@
     <input type="range" min="0" max="100" value="80" class="vol" id="vol">
   </div>
   <p class="hint" id="hint">Install this page as an app: Chrome → ⋮ → Add to Home screen.<br>It will run with minimal power, auto-starts on broadcast, and shows a media notification so it stays alive when screen is locked.</p>
+  <button class="btn" id="installBtn" style="display:none">⬇ Install as app</button>
+  <p class="hint" id="installHint" style="display:none;font-size:10px;color:#94a3b8"></p>
   <a href="/static/">← Open full dashboard</a>
 </div>
 <script>
@@ -274,10 +276,35 @@
       if(ctx && ctx.state==='suspended' && active) ctx.resume().catch(()=>{});
     }
   });
-  // Register service worker for offline and to keep alive
-  if('serviceWorker' in navigator) navigator.serviceWorker.register('/static/service-worker.js').catch(()=>{});
+  // PWA install handling for LAN http vs https
+  let deferredPrompt=null;
+  window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; $('installBtn').style.display='flex'; const h=$('installHint'); h.textContent='Tap Install to add “Deck BG” to home screen — will auto-start on laptop hotkey.'; h.style.display='block'; console.log('beforeinstallprompt fired'); });
+  $('installBtn').onclick=async()=>{
+    if(deferredPrompt){ deferredPrompt.prompt(); const {outcome}=await deferredPrompt.userChoice; console.log('install',outcome); deferredPrompt=null; $('installBtn').style.display='none'; }
+    else{
+      const h=$('installHint');
+      if(location.protocol==='http:' && location.hostname!=='localhost' && !location.hostname.startsWith('127.')){
+        h.textContent='No Install prompt (http LAN). Use https://'+location.hostname+':8443/static/background.html and accept the self-signed cert, then Add to Home screen will work as full PWA. For now, Chrome ⋮ → Add to Home screen still creates a shortcut.';
+      } else {
+        h.textContent='If no Install button: Chrome ⋮ → Add to Home screen (or Install app).';
+      }
+      h.style.display='block';
+    }
+  };
+  if(location.protocol==='http:' && location.hostname!=='localhost' && !location.hostname.startsWith('127.')){
+    const h=$('installHint'); h.textContent='You are on http://'+location.host+' — for best background (offline, lock-screen) open https://'+location.hostname+':8443/static/background.html and accept cert, then install.'; h.style.display='block';
+  }
+  // Also show install button if PWA criteria not met but http shortcut is still available
+  if(!deferredPrompt) setTimeout(()=>{ if(!$('installBtn').style.display || $('installBtn').style.display==='none'){ /* keep hidden until prompt */ } }, 2000);
+
+  // Register service worker for offline and to keep alive (requires https or localhost, will fail on http LAN — that's ok, page still works via polling)
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('/static/service-worker.js').then(()=>console.log('bg SW registered')).catch(e=>{console.log('bg SW register failed (expected on http LAN)',e);});
+  }
   setStatus('Idle — waiting for broadcast','');
   updateBtn();
+  // Debug helper: show last poll time
+  console.log('bg deviceId',deviceId,'host',location.host,'protocol',location.protocol);
 })();
 </script>
 </body>

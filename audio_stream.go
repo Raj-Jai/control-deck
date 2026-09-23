@@ -140,6 +140,12 @@ func (m *StreamManager) stopLocked() {
 	log.Println("audio-stream: stopped")
 }
 
+func (m *StreamManager) Stop() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stopLocked()
+}
+
 func (m *StreamManager) readLoop() {
 	buf := make([]byte, frameBytes)
 	ptsTracker := NewPTSTracker(emaAlpha)
