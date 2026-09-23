@@ -1,0 +1,29 @@
+{
+  "id": "/static/background.html",
+  "name": "Deck — Background Audio",
+  "short_name": "Deck BG",
+  "description": "Lightweight background listener — auto-starts on hotkey, low power",
+  "start_url": "/static/background.html",
+  "scope": "/static/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["music", "utilities"],
+  "launch_handler": { "client_mode": "focus-existing" }
+}

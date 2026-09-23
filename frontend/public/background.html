@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0f172a">
 <title>Deck — Background Audio</title>
-<link rel="manifest" href="/static/manifest.json">
+<link rel="manifest" href="/static/manifest-bg.json">
 <link rel="icon" href="/static/icon-192.png">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -189,53 +189,88 @@
   }
   toggle.onclick=()=>{active?stop():start().catch(e=>{setStatus('Error: '+e.message,''); stop()})};
   vol.oninput=()=>{/* gain is per-buffer, no live update needed for minimal */};
-  // Auto-connect via SSE + polling fallback (low power: poll every 5s when idle)
+  // Auto-connect via SSE + polling fallback (polls even when hidden, low power)
+  let sseOk=false;
   function startSSE(){
     if(es) try{es.close()}catch{}
     const url=`/media-stream?device_id=${encodeURIComponent(deviceId)}`;
-    es=new EventSource(url);
+    try{ es=new EventSource(url); }catch(e){ console.log('bg SSE error',e); setStatus('SSE failed, using poll','wait'); return; }
+    sseOk=false;
+    es.onopen=()=>{ sseOk=true; console.log('bg SSE open'); setStatus('Idle — waiting for broadcast',''); };
     es.onmessage=(e)=>{
+      sseOk=true;
       try{
         const d=JSON.parse(e.data);
         if(d.type==='stream_command'){
-          if(d.action==='start' && autoc.checked && !active) start().catch(()=>{});
+          console.log('bg SSE stream_command',d.action);
+          if(d.action==='start' && autoc.checked && !active) start().catch(err=>{console.log('bg auto-start via SSE failed',err); setStatus('Error: '+err.message,'')});
           if(d.action==='stop' && active) stop();
         }
       }catch{}
     };
-    es.onerror=()=>{/* will auto-reconnect via poll fallback */}
+    es.onerror=(e)=>{ sseOk=false; console.log('bg SSE error/reconnect',e); /* EventSource will auto-reconnect, poll fallback covers gap */ };
   }
   function startPoll(){
     if(pollId) clearInterval(pollId);
+    const interval = autoc.checked ? 2500 : 8000;
     pollId=setInterval(async()=>{
-      if(document.hidden) return; // save battery when hidden and not auto
+      // Always poll, even when hidden, but use longer interval when hidden to save battery (handled via separate hidden handler below)
+      // This ensures background auto-start works without manually opening the page
       try{
         const r=await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`,{cache:'no-store'});
+        if(!r.ok){ console.log('bg poll: http',r.status); return; }
         const j=await r.json();
         const bc=!!j.broadcasting;
+        // Update dot to show poll is alive
+        if(!active && bc) console.log('bg poll: broadcasting=true, auto-start?',autoc.checked);
         if(bc && autoc.checked && !active){
           console.log('bg poll: auto-start');
-          start().catch(()=>{});
+          start().catch(err=>{console.log('bg poll auto-start failed',err); setStatus('Error: '+err.message,'')});
         } else if(!bc && active){
-          // optional auto-stop when broadcast ends
-          // stop();
+          // Don't auto-stop immediately — user may want to keep listening until they press stop or hotkey again
+          // But if broadcast stopped on laptop, we should stop to save power
+          console.log('bg poll: broadcast stopped, stopping locally');
+          stop();
         }
-      }catch{}
-    }, autoc.checked? 2500: 8000);
+        // If SSE is dead and we are idle, show idle status
+        if(!sseOk && !active && !bc) setStatus('Idle — waiting for broadcast','');
+      }catch(e){ console.log('bg poll error',e); }
+    }, interval);
+    console.log('bg poll started interval',interval);
   }
   // init
   startSSE();
   startPoll();
+  // Reconnect SSE if it dies when hidden — polling will keep us alive
+  setInterval(()=>{ if(!sseOk && !es) startSSE(); }, 10000);
   autoc.onchange=()=>{startPoll(); if(autoc.checked && !active) setStatus('Idle — auto-connect on','')};
   // If page is opened via PWA shortcut with ?autostart=1, start immediately
   if(new URLSearchParams(location.search).get('autostart')==='1') start().catch(()=>{});
-  // Handle page lifecycle: keep EventSource alive, don't pause when hidden
+  // Handle page lifecycle: keep polling even when hidden, just at lower frequency to save battery
+  let hiddenPollId=null;
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden){
-      // Keep SSE open but reduce poll frequency to save power
-      if(pollId){clearInterval(pollId); pollId=setInterval(()=>{/* minimal poll while hidden */}, 15000)}
+      console.log('bg hidden — switching to low-power poll');
+      if(pollId) clearInterval(pollId);
+      // Poll every 5s even when hidden (still low power, ~0.1% CPU) so hotkey works in background
+      hiddenPollId=setInterval(async()=>{
+        try{
+          const r=await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`,{cache:'no-store'});
+          const j=await r.json();
+          if(j.broadcasting && autoc.checked && !active){
+            console.log('bg hidden poll: auto-start');
+            start().catch(()=>{});
+          }
+        }catch{}
+      }, 5000);
+      // Also try to resume audio if it was suspended
+      if(ctx && ctx.state==='suspended' && active) ctx.resume().catch(()=>{});
     } else {
+      console.log('bg visible — restoring normal poll');
+      if(hiddenPollId) clearInterval(hiddenPollId);
+      hiddenPollId=null;
       startPoll();
+      startSSE();
       if(ctx && ctx.state==='suspended' && active) ctx.resume().catch(()=>{});
     }
   });
