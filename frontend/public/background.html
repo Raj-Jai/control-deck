@@ -42,269 +42,637 @@
   <a href="/static/">← Open full dashboard</a>
 </div>
 <script>
-(() => {
-  const $ = (id) => document.getElementById(id);
-  const dot = $('dot'), stext = $('stext'), toggle = $('toggle'), ticon = $('ticon'), tlabel = $('tlabel'), autoc = $('autoc'), wake = $('wake'), vol = $('vol'), hint = $('hint');
-  let deviceId = (()=>{try{let id=localStorage.getItem('deck_bg_device');if(!id){id=crypto.randomUUID();localStorage.setItem('deck_bg_device',id)}return id}catch{return 'bg-'+Math.random().toString(36).slice(2)}})();
-  let ws=null, ctx=null, active=false, es=null, pollId=null, wakeLock=null;
-  let accCh=[], accFrames=0, firstPTS=0, schedEnd=0, clockOff=0, perfBase=0, dateBase=0;
-  let sampleRate=48000, channels=2, ntpOffs=[], ntpResolve=null;
+(function () {
+  'use strict';
 
-  const FRAME_SAMPLES=2048, BATCH=3, TARGET_DELAY=500, TARGET_BUF=350, PI_KP=0.000008, PI_KI=0.0000003, PI_MAX=0.003, PI_LIM=500;
-  let curRate=1, intErr=0;
+  function $(id) { return document.getElementById(id); }
 
-  function setStatus(txt, state){
-    stext.textContent=txt;
-    dot.className='dot'+(state? ' '+state:'');
-    if(state==='wait') hint.textContent='Browser blocked autoplay — tap anywhere to enable audio.';
-    else if(state==='on') hint.textContent='Playing in background. You can lock the screen or switch apps.';
-    else if(!state) hint.textContent='Idle. Will auto-connect when you press the laptop hotkey (<C-A-b>).';
+  var dot = $('dot');
+  var stext = $('stext');
+  var toggle = $('toggle');
+  var ticon = $('ticon');
+  var tlabel = $('tlabel');
+  var autoc = $('autoc');
+  var wake = $('wake');
+  var vol = $('vol');
+  var hint = $('hint');
+  var installBtn = $('installBtn');
+  var installHint = $('installHint');
+
+  var deviceId = 'bg-' + Math.random().toString(36).slice(2);
+  try {
+    var saved = localStorage.getItem('deck_bg_device');
+    if (!saved) {
+      saved = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : deviceId;
+      localStorage.setItem('deck_bg_device', saved);
+    }
+    deviceId = saved;
+  } catch (e) { /* private mode: keep random id */ }
+
+  var ws = null;
+  var ctx = null;
+  var active = false;
+  var es = null;
+  var pollId = null;
+  var hiddenPollId = null;
+  var wakeLock = null;
+
+  var accCh = [];
+  var accFrames = 0;
+  var firstPTS = 0;
+  var schedEnd = 0;
+  var clockOff = 0;
+  var perfBase = 0;
+  var dateBase = 0;
+  var sampleRate = 48000;
+  var channels = 2;
+  var ntpOffs = [];
+  var ntpResolve = null;
+  var curRate = 1;
+  var intErr = 0;
+
+  var FRAME_SAMPLES = 2048;
+  var BATCH = 3;
+  var TARGET_DELAY = 500;
+  var TARGET_BUF = 350;
+  var PI_KP = 0.000008;
+  var PI_KI = 0.0000003;
+  var PI_MAX = 0.003;
+  var PI_LIM = 500;
+  var FADE_SEC = 0.002;
+
+  function volume() {
+    var v = parseInt(vol.value, 10);
+    if (isNaN(v)) { v = 80; }
+    if (v < 0) { v = 0; }
+    if (v > 100) { v = 100; }
+    return v / 100;
   }
-  function hostMs(){return (performance.now()-perfBase)+dateBase+clockOff}
-  function pcmToFloat(buf){
-    const i16=new Int16Array(buf);
-    const per=i16.length/channels, out=[];
-    for(let ch=0;ch<channels;ch++){
-      const c=new Float32Array(per);
-      for(let i=0;i<per;i++) c[i]=i16[i*channels+ch]/32768;
+
+  function setStatus(txt, state) {
+    stext.textContent = txt;
+    dot.className = 'dot' + (state ? ' ' + state : '');
+    if (state === 'wait') {
+      hint.textContent = 'Browser blocked autoplay — tap anywhere to enable audio.';
+    } else if (state === 'on') {
+      hint.textContent = 'Playing in background. You can lock the screen or switch apps.';
+    } else if (!state) {
+      hint.textContent = 'Idle. Will auto-connect when you press the laptop hotkey (<C-A-b>).';
+    }
+  }
+
+  function updateBtn() {
+    ticon.textContent = active ? '■' : '▶';
+    tlabel.textContent = active ? 'Stop' : 'Connect';
+    if (active) {
+      toggle.classList.add('on');
+    } else {
+      toggle.classList.remove('on');
+    }
+  }
+
+  function hostMs() {
+    return (performance.now() - perfBase) + dateBase + clockOff;
+  }
+
+  function readU64(dv, off) {
+    return dv.getUint32(off) * 4294967296 + dv.getUint32(off + 4);
+  }
+
+  function pcmToFloat(buf) {
+    var i16 = new Int16Array(buf);
+    var per = Math.floor(i16.length / channels);
+    var out = [];
+    var ch;
+    var i;
+    for (ch = 0; ch < channels; ch++) {
+      var c = new Float32Array(per);
+      for (i = 0; i < per; i++) {
+        c[i] = i16[i * channels + ch] / 32768;
+      }
       out.push(c);
     }
     return out;
   }
-  async function ensureResumed(){
-    if(!ctx) return;
-    if(ctx.state==='running') return;
-    try{await ctx.resume()}catch{}
-    if(ctx.state==='running') return;
-    setStatus('Tap to enable audio','wait');
-    if(navigator.mediaSession) navigator.mediaSession.playbackState='paused';
-    await new Promise(res=>{
-      const fn=async()=>{
-        try{await ctx.resume()}catch{}
-        if(ctx.state==='running'){
-          document.removeEventListener('click',fn);document.removeEventListener('touchend',fn);document.removeEventListener('keydown',fn);
-          setStatus('Audio unlocked','on');
-          if(navigator.mediaSession) navigator.mediaSession.playbackState='playing';
-          res();
+
+  function ensureResumed() {
+    if (!ctx) { return Promise.resolve(); }
+    if (ctx.state === 'running') { return Promise.resolve(); }
+    var p = ctx.resume().then(function () {
+      if (ctx.state === 'running') { return; }
+      setStatus('Tap to enable audio', 'wait');
+      if (navigator.mediaSession) {
+        try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {}
+      }
+      return new Promise(function (resolve) {
+        function fn() {
+          ctx.resume().then(function () {
+            if (ctx.state === 'running') {
+              document.removeEventListener('click', fn);
+              document.removeEventListener('touchend', fn);
+              document.removeEventListener('keydown', fn);
+              setStatus('Audio unlocked', 'on');
+              if (navigator.mediaSession) {
+                try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+              }
+              resolve();
+            }
+          }).catch(function (e) {});
         }
-      };
-      document.addEventListener('click',fn,{passive:true});document.addEventListener('touchend',fn,{passive:true});document.addEventListener('keydown',fn,{passive:true});
-      fn();
+        document.addEventListener('click', fn, { passive: true });
+        document.addEventListener('touchend', fn, { passive: true });
+        document.addEventListener('keydown', fn, { passive: true });
+        fn();
+      });
+    });
+    return p.catch(function (e) {});
+  }
+
+  function flush() {
+    if (!ctx || accFrames === 0) { return; }
+    if (ctx.state !== 'running') {
+      ensureResumed();
+      return;
+    }
+    var total = accFrames * FRAME_SAMPLES;
+    var buf;
+    try {
+      buf = ctx.createBuffer(channels, total, sampleRate);
+    } catch (e) {
+      accFrames = 0;
+      return;
+    }
+    var ch;
+    for (ch = 0; ch < channels; ch++) {
+      try {
+        buf.getChannelData(ch).set(accCh[ch]);
+      } catch (e) {
+        accFrames = 0;
+        return;
+      }
+    }
+    var t;
+    var dur;
+    var v = volume();
+    if (schedEnd === 0) {
+      curRate = 1;
+      intErr = 0;
+      var target = firstPTS + TARGET_DELAY;
+      var now = hostMs();
+      var d = target - now;
+      if (d < 0) {
+        accFrames = 0;
+        // Reset clock so the next batch can anchor fresh instead of
+        // discarding forever while PTS runs ahead of us.
+        schedEnd = 0;
+        return;
+      }
+      t = ctx.currentTime + d / 1000;
+      dur = total / sampleRate;
+    } else {
+      var ahead = (schedEnd - ctx.currentTime) * 1000;
+      var err = ahead - TARGET_BUF;
+      intErr = Math.max(-PI_LIM, Math.min(PI_LIM, intErr + err * 0.05));
+      var adj = err * PI_KP + intErr * PI_KI;
+      adj = Math.max(-PI_MAX, Math.min(PI_MAX, adj));
+      curRate = 1 + adj;
+      dur = total / (sampleRate * curRate);
+      t = schedEnd;
+      // If we fell too far behind (tab was throttled), re-anchor.
+      if (t < ctx.currentTime - 0.5) {
+        t = ctx.currentTime + 0.05;
+        schedEnd = 0;
+      }
+    }
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = curRate;
+    var g = ctx.createGain();
+    var st = t;
+    var et = t + dur;
+    g.gain.setValueAtTime(0.0001, st);
+    g.gain.linearRampToValueAtTime(Math.max(0.0001, v), st + FADE_SEC);
+    g.gain.setValueAtTime(Math.max(0.0001, v), Math.max(st + FADE_SEC, et - FADE_SEC));
+    g.gain.linearRampToValueAtTime(0.0001, et);
+    src.connect(g);
+    g.connect(ctx.destination);
+    try {
+      src.start(st);
+    } catch (e) {
+      accFrames = 0;
+      return;
+    }
+    schedEnd = et;
+    accFrames = 0;
+  }
+
+  function feed(pts, pcm) {
+    if (!ctx || !active) { return; }
+    var chs = pcmToFloat(pcm);
+    var ch;
+    if (accFrames === 0) {
+      firstPTS = pts;
+      accCh = [];
+      for (ch = 0; ch < chs.length; ch++) {
+        accCh.push(new Float32Array(chs[ch]));
+      }
+    } else {
+      for (ch = 0; ch < channels; ch++) {
+        var old = accCh[ch];
+        var n = old.length + chs[ch].length;
+        var m = new Float32Array(n);
+        m.set(old);
+        m.set(chs[ch], old.length);
+        accCh[ch] = m;
+      }
+    }
+    accFrames++;
+    if (accFrames >= BATCH) { flush(); }
+  }
+
+  function handleNtpPong(msg) {
+    var t3 = Date.now();
+    var rtt = t3 - msg.t1;
+    var off = msg.t2 - msg.t1 - rtt / 2;
+    ntpOffs.push(off);
+    if (ntpOffs.length < 10) {
+      if (ws) {
+        setTimeout(function () {
+          if (ws) { ws.send(JSON.stringify({ type: 'ntp_ping', t1: Date.now() })); }
+        }, 10);
+      }
+      return;
+    }
+    var sorted = ntpOffs.slice().sort(function (a, b) { return a - b; });
+    var mid = sorted.slice(2, -2);
+    var sum = 0;
+    var i;
+    for (i = 0; i < mid.length; i++) { sum += mid[i]; }
+    clockOff = sum / Math.max(mid.length, 1);
+    perfBase = performance.now();
+    dateBase = Date.now();
+    if (ntpResolve) {
+      var r = ntpResolve;
+      ntpResolve = null;
+      r();
+    }
+  }
+
+  function startNtp() {
+    return new Promise(function (resolve) {
+      ntpOffs = [];
+      ntpResolve = resolve;
+      if (ws) { ws.send(JSON.stringify({ type: 'ntp_ping', t1: Date.now() })); }
     });
   }
-  function flush(){
-    if(!ctx||accFrames===0) return;
-    if(ctx.state!=='running'){ensureResumed().catch(()=>{});return}
-    const total=accFrames*FRAME_SAMPLES;
-    const buf=ctx.createBuffer(channels,total,sampleRate);
-    for(let ch=0;ch<channels;ch++) buf.getChannelData(ch).set(accCh[ch]);
-    let t, dur;
-    if(schedEnd===0){
-      curRate=1;intErr=0;
-      const target=firstPTS+TARGET_DELAY, now=hostMs(), d=target-now;
-      if(d<0){accFrames=0;return}
-      t=ctx.currentTime+d/1000;dur=total/sampleRate;
-    }else{
-      const ahead=(schedEnd-ctx.currentTime)*1000, err=ahead-TARGET_BUF;
-      intErr=Math.max(-PI_LIM,Math.min(PI_LIM,intErr+err*0.05));
-      let adj=err*PI_KP+intErr*PI_KI; adj=Math.max(-PI_MAX,Math.min(PI_MAX,adj)); curRate=1+adj;
-      dur=total/(sampleRate*curRate); t=schedEnd;
-    }
-    const src=ctx.createBufferSource(); src.buffer=buf; src.playbackRate.value=curRate;
-    const g=ctx.createGain(); const st=t, et=t+dur;
-    g.gain.setValueAtTime(0,st); g.gain.linearRampToValueAtTime(1,st+0.002); g.gain.setValueAtTime(1,et-0.002); g.gain.linearRampToValueAtTime(0,et);
-    // volume
-    const v=Math.max(0,Math.min(100,parseInt(vol.value)||80))/100;
-    g.gain.value=v;
-    src.connect(g); g.connect(ctx.destination); src.start(st);
-    schedEnd=et; accFrames=0;
+
+  function setMediaSession() {
+    if (!('mediaSession' in navigator)) { return; }
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Control Deck — Background Audio',
+        artist: 'Laptop stream',
+        album: 'Tab Dashboard'
+      });
+      navigator.mediaSession.playbackState = 'playing';
+      navigator.mediaSession.setActionHandler('stop', function () { stop(); });
+      navigator.mediaSession.setActionHandler('pause', function () { stop(); });
+    } catch (e) {}
   }
-  function feed(pts, pcm){
-    if(!ctx||!active) return;
-    const chs=pcmToFloat(pcm);
-    if(accFrames===0){firstPTS=pts; accCh=chs.map(c=>new Float32Array(c))}
-    else{for(let ch=0;ch<channels;ch++){const o=accCh[ch], n=o.length+chs[ch].length, m=new Float32Array(n); m.set(o); m.set(chs[ch],o.length); accCh[ch]=m}}
-    accFrames++; if(accFrames>=BATCH) flush();
+
+  function requestWakeLock() {
+    if (!wake.checked) { return; }
+    if (!('wakeLock' in navigator)) { return; }
+    try {
+      var p = navigator.wakeLock.request('screen');
+      if (p && p.then) {
+        p.then(function (lock) { wakeLock = lock; }).catch(function (e) {});
+      }
+    } catch (e) {}
   }
-  function readU64(dv,off){return dv.getUint32(off)*4294967296+dv.getUint32(off+4)}
-  async function start(){
-    if(active){console.log('bg: already active');return}
-    setStatus('Connecting…','wait');
-    let c=ctx;
-    if(!c||c.state==='closed'){
-      try{c=new AudioContext({sampleRate:48000})}catch{c=new AudioContext()}
-      ctx=c;
-    }
-    accFrames=0; schedEnd=0; curRate=1; intErr=0;
-    if(c.state==='suspended'){try{await c.resume()}catch{}; if(c.state==='suspended') ensureResumed(c).catch(()=>{})}
-    // media session so Android keeps audio alive in background
-    if('mediaSession' in navigator){
-      try{
-        navigator.mediaSession.metadata=new MediaMetadata({title:'Control Deck — Background Audio',artist:'Laptop stream',album:'Tab Dashboard'});
-        navigator.mediaSession.playbackState='playing';
-        navigator.mediaSession.setActionHandler('stop',()=>stop());
-        navigator.mediaSession.setActionHandler('pause',()=>stop());
-      }catch{}
-    }
-    // wake lock (optional, low power when off)
-    if(wake.checked && 'wakeLock' in navigator){
-      try{wakeLock=await navigator.wakeLock.request('screen')}catch{}
-    }
-    const proto=location.protocol==='https:'?'wss:':'ws:';
-    const url=`${proto}//${location.host}/api/audio-stream/ws?device_id=${encodeURIComponent(deviceId)}`;
-    const w=new WebSocket(url); w.binaryType='arraybuffer'; ws=w;
-    await new Promise((res,rej)=>{
-      const to=setTimeout(()=>rej(new Error('init timeout')),10000);
-      w.onmessage=(e)=>{
-        if(typeof e.data==='string'){try{const m=JSON.parse(e.data);if(m.type==='ntp_pong'){const t3=Date.now(),rtt=t3-m.t1,off=m.t2-m.t1-rtt/2; ntpOffs.push(off); if(ntpOffs.length<10) setTimeout(()=>w.send(JSON.stringify({type:'ntp_ping',t1:Date.now()})),10); else{const s=[...ntpOffs].sort((a,b)=>a-b),avg=s.slice(2,-2).reduce((a,b)=>a+b,0)/Math.max(s.length-4,1); clockOff=avg; perfBase=performance.now(); dateBase=Date.now(); if(ntpResolve){ntpResolve();ntpResolve=null}}}catch{}return}
-        const dv=new DataView(e.data); if(dv.getUint8(0)===0x01){
-          sampleRate=dv.getUint32(1); channels=dv.getUint8(5);
-          if(ctx.state==='suspended') ensureResumed(ctx).catch(()=>{});
-          // NTP
-          ntpOffs=[]; new Promise(r=>{ntpResolve=r; w.send(JSON.stringify({type:'ntp_ping',t1:Date.now()}))}).then(()=>{
-            clearTimeout(to); active=true; updateBtn(); setStatus('Playing','on');
-            w.onmessage=(ev)=>{
-              if(typeof ev.data==='string'){try{const m=JSON.parse(ev.data); if(m.type==='ntp_pong'){const t3=Date.now(),rtt=t3-m.t1,off=m.t2-m.t1-rtt/2; ntpOffs.push(off); if(ntpOffs.length<10) setTimeout(()=>w.send(JSON.stringify({type:'ntp_ping',t1:Date.now()})),10); else{const s=[...ntpOffs].sort((a,b)=>a-b),avg=s.slice(2,-2).reduce((a,b)=>a+b,0)/Math.max(s.length-4,1); clockOff=avg; perfBase=performance.now(); dateBase=Date.now(); if(ntpResolve){ntpResolve();ntpResolve=null}}}catch{}return}
-              const d=new DataView(ev.data); if(d.getUint8(0)===0x02){const pts=readU64(d,1); feed(pts, ev.data.slice(9))}
-            };
-            res();
-          });
+
+  function openStreamSocket() {
+    return new Promise(function (resolve, reject) {
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var url = proto + '//' + location.host + '/api/audio-stream/ws?device_id=' + encodeURIComponent(deviceId);
+      var w;
+      try {
+        w = new WebSocket(url);
+      } catch (e) {
+        reject(new Error('websocket failed: ' + e.message));
+        return;
+      }
+      w.binaryType = 'arraybuffer';
+      ws = w;
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) {
+          done = true;
+          reject(new Error('init timeout (no audio frames from laptop)'));
+        }
+      }, 10000);
+
+      w.onmessage = function (e) {
+        if (typeof e.data === 'string') {
+          var m = null;
+          try { m = JSON.parse(e.data); } catch (err) { return; }
+          if (m && m.type === 'ntp_pong') { handleNtpPong(m); }
+          return;
+        }
+        var dv;
+        try {
+          dv = new DataView(e.data);
+        } catch (err) { return; }
+        if (dv.byteLength < 1) { return; }
+        if (dv.getUint8(0) !== 0x01) { return; }
+        try {
+          sampleRate = dv.getUint32(1);
+          channels = dv.getUint8(5);
+        } catch (err) { return; }
+        if (ctx && ctx.state === 'suspended') { ensureResumed(); }
+        startNtp().then(function () {
+          if (done) { return; }
+          done = true;
+          clearTimeout(timer);
+          active = true;
+          updateBtn();
+          setStatus('Playing', 'on');
+          w.onmessage = onAudioMessage;
+          resolve();
+        });
+      };
+
+      w.onerror = function () {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          reject(new Error('websocket error — is the laptop server running?'));
         }
       };
-      w.onerror=()=>rej(new Error('ws error'));
-      w.onclose=()=>{if(!active) rej(new Error('ws closed'))};
-    });
-    // keep alive when visible
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden && active && ctx && ctx.state==='suspended') ctx.resume().catch(()=>{})});
-  }
-  function stop(){
-    active=false; accFrames=0; schedEnd=0; updateBtn(); setStatus('Stopped','');
-    if(navigator.mediaSession) try{navigator.mediaSession.playbackState='none'}catch{}
-    if(wakeLock){try{wakeLock.release()}catch{}; wakeLock=null}
-    if(ws){ws.onmessage=null;ws.onclose=null;ws.onerror=null;ws.close();ws=null}
-    if(ctx){try{ctx.suspend()}catch{}; if(ctx.state==='closed') ctx=null}
-  }
-  function updateBtn(){
-    ticon.textContent=active?'■':'▶';
-    tlabel.textContent=active?'Stop':'Connect';
-    toggle.classList.toggle('on',active);
-  }
-  toggle.onclick=()=>{active?stop():start().catch(e=>{setStatus('Error: '+e.message,''); stop()})};
-  vol.oninput=()=>{/* gain is per-buffer, no live update needed for minimal */};
-  // Auto-connect via SSE + polling fallback (polls even when hidden, low power)
-  let sseOk=false;
-  function startSSE(){
-    if(es) try{es.close()}catch{}
-    const url=`/media-stream?device_id=${encodeURIComponent(deviceId)}`;
-    try{ es=new EventSource(url); }catch(e){ console.log('bg SSE error',e); setStatus('SSE failed, using poll','wait'); return; }
-    sseOk=false;
-    es.onopen=()=>{ sseOk=true; console.log('bg SSE open'); setStatus('Idle — waiting for broadcast',''); };
-    es.onmessage=(e)=>{
-      sseOk=true;
-      try{
-        const d=JSON.parse(e.data);
-        if(d.type==='stream_command'){
-          console.log('bg SSE stream_command',d.action);
-          if(d.action==='start' && autoc.checked && !active) start().catch(err=>{console.log('bg auto-start via SSE failed',err); setStatus('Error: '+err.message,'')});
-          if(d.action==='stop' && active) stop();
+
+      w.onclose = function () {
+        if (!done) {
+          done = true;
+          clearTimeout(timer);
+          reject(new Error('websocket closed before audio started'));
+        } else if (active) {
+          setStatus('Disconnected — retrying…', 'wait');
+          active = false;
+          updateBtn();
         }
-      }catch{}
-    };
-    es.onerror=(e)=>{ sseOk=false; console.log('bg SSE error/reconnect',e); /* EventSource will auto-reconnect, poll fallback covers gap */ };
+      };
+    });
   }
-  function startPoll(){
-    if(pollId) clearInterval(pollId);
-    const interval = autoc.checked ? 2500 : 8000;
-    pollId=setInterval(async()=>{
-      // Always poll, even when hidden, but use longer interval when hidden to save battery (handled via separate hidden handler below)
-      // This ensures background auto-start works without manually opening the page
-      try{
-        const r=await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`,{cache:'no-store'});
-        if(!r.ok){ console.log('bg poll: http',r.status); return; }
-        const j=await r.json();
-        const bc=!!j.broadcasting;
-        // Update dot to show poll is alive
-        if(!active && bc) console.log('bg poll: broadcasting=true, auto-start?',autoc.checked);
-        if(bc && autoc.checked && !active){
+
+  function onAudioMessage(ev) {
+    if (typeof ev.data === 'string') {
+      var m = null;
+      try { m = JSON.parse(ev.data); } catch (err) { return; }
+      if (m && m.type === 'ntp_pong') { handleNtpPong(m); }
+      return;
+    }
+    var dv;
+    try {
+      dv = new DataView(ev.data);
+    } catch (err) { return; }
+    if (dv.byteLength < 10) { return; }
+    if (dv.getUint8(0) !== 0x02) { return; }
+    var pts = readU64(dv, 1);
+    feed(pts, ev.data.slice(9));
+  }
+
+  function start() {
+    if (active) { return Promise.resolve(); }
+    setStatus('Connecting…', 'wait');
+    var c = ctx;
+    if (!c || c.state === 'closed') {
+      try {
+        if (window.AudioContext) {
+          c = new AudioContext({ sampleRate: 48000 });
+        } else {
+          c = new window.webkitAudioContext();
+        }
+      } catch (e) {
+        setStatus('Error: Web Audio not supported', '');
+        return Promise.reject(e);
+      }
+      ctx = c;
+    }
+    accFrames = 0;
+    schedEnd = 0;
+    curRate = 1;
+    intErr = 0;
+    return ensureResumed().then(function () {
+      setMediaSession();
+      requestWakeLock();
+      return openStreamSocket();
+    }).catch(function (e) {
+      setStatus('Error: ' + (e && e.message ? e.message : e), '');
+      stop();
+      throw e;
+    });
+  }
+
+  function stop() {
+    active = false;
+    accFrames = 0;
+    schedEnd = 0;
+    updateBtn();
+    setStatus('Stopped', '');
+    if (navigator.mediaSession) {
+      try { navigator.mediaSession.playbackState = 'none'; } catch (e) {}
+    }
+    if (wakeLock) {
+      try { wakeLock.release(); } catch (e) {}
+      wakeLock = null;
+    }
+    if (ws) {
+      try {
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      } catch (e) {}
+      ws = null;
+    }
+    if (ctx) {
+      try { ctx.suspend(); } catch (e) {}
+      if (ctx.state === 'closed') { ctx = null; }
+    }
+  }
+
+  function checkBroadcastOnce() {
+    return fetch('/api/clients?device_id=' + encodeURIComponent(deviceId), { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) { throw new Error('http ' + r.status); }
+        return r.json();
+      })
+      .then(function (j) {
+        var bc = !!(j && j.broadcasting);
+        if (bc && autoc.checked && !active) {
           console.log('bg poll: auto-start');
-          start().catch(err=>{console.log('bg poll auto-start failed',err); setStatus('Error: '+err.message,'')});
-        } else if(!bc && active){
-          // Don't auto-stop immediately — user may want to keep listening until they press stop or hotkey again
-          // But if broadcast stopped on laptop, we should stop to save power
+          start().catch(function (err) {
+            console.log('bg poll auto-start failed', err);
+            setStatus('Error: ' + (err && err.message ? err.message : err), '');
+          });
+        } else if (!bc && active) {
           console.log('bg poll: broadcast stopped, stopping locally');
           stop();
+        } else if (!bc && !active && !sseOk) {
+          setStatus('Idle — waiting for broadcast', '');
         }
-        // If SSE is dead and we are idle, show idle status
-        if(!sseOk && !active && !bc) setStatus('Idle — waiting for broadcast','');
-      }catch(e){ console.log('bg poll error',e); }
-    }, interval);
-    console.log('bg poll started interval',interval);
+      })
+      .catch(function (e) {
+        console.log('bg poll error', e);
+      });
   }
-  // init
-  startSSE();
-  startPoll();
-  // Reconnect SSE if it dies when hidden — polling will keep us alive
-  setInterval(()=>{ if(!sseOk && !es) startSSE(); }, 10000);
-  autoc.onchange=()=>{startPoll(); if(autoc.checked && !active) setStatus('Idle — auto-connect on','')};
-  // If page is opened via PWA shortcut with ?autostart=1, start immediately
-  if(new URLSearchParams(location.search).get('autostart')==='1') start().catch(()=>{});
-  // Handle page lifecycle: keep polling even when hidden, just at lower frequency to save battery
-  let hiddenPollId=null;
-  document.addEventListener('visibilitychange',()=>{
-    if(document.hidden){
-      console.log('bg hidden — switching to low-power poll');
-      if(pollId) clearInterval(pollId);
-      // Poll every 5s even when hidden (still low power, ~0.1% CPU) so hotkey works in background
-      hiddenPollId=setInterval(async()=>{
-        try{
-          const r=await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`,{cache:'no-store'});
-          const j=await r.json();
-          if(j.broadcasting && autoc.checked && !active){
-            console.log('bg hidden poll: auto-start');
-            start().catch(()=>{});
-          }
-        }catch{}
-      }, 5000);
-      // Also try to resume audio if it was suspended
-      if(ctx && ctx.state==='suspended' && active) ctx.resume().catch(()=>{});
-    } else {
-      console.log('bg visible — restoring normal poll');
-      if(hiddenPollId) clearInterval(hiddenPollId);
-      hiddenPollId=null;
-      startPoll();
-      startSSE();
-      if(ctx && ctx.state==='suspended' && active) ctx.resume().catch(()=>{});
+
+  function startPoll(intervalMs) {
+    if (pollId) { clearInterval(pollId); }
+    pollId = setInterval(checkBroadcastOnce, intervalMs);
+    console.log('bg poll every', intervalMs, 'ms');
+  }
+
+  var sseOk = false;
+
+  function startSSE() {
+    if (es) {
+      try { es.close(); } catch (e) {}
+      es = null;
     }
-  });
-  // PWA install handling for LAN http vs https
-  let deferredPrompt=null;
-  window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; $('installBtn').style.display='flex'; const h=$('installHint'); h.textContent='Tap Install to add “Deck BG” to home screen — will auto-start on laptop hotkey.'; h.style.display='block'; console.log('beforeinstallprompt fired'); });
-  $('installBtn').onclick=async()=>{
-    if(deferredPrompt){ deferredPrompt.prompt(); const {outcome}=await deferredPrompt.userChoice; console.log('install',outcome); deferredPrompt=null; $('installBtn').style.display='none'; }
-    else{
-      const h=$('installHint');
-      if(location.protocol==='http:' && location.hostname!=='localhost' && !location.hostname.startsWith('127.')){
-        h.textContent='No Install prompt (http LAN). Use https://'+location.hostname+':8443/static/background.html and accept the self-signed cert, then Add to Home screen will work as full PWA. For now, Chrome ⋮ → Add to Home screen still creates a shortcut.';
-      } else {
-        h.textContent='If no Install button: Chrome ⋮ → Add to Home screen (or Install app).';
+    var url = '/media-stream?device_id=' + encodeURIComponent(deviceId);
+    try {
+      es = new EventSource(url);
+    } catch (e) {
+      console.log('bg SSE failed, using poll', e);
+      setStatus('SSE failed, using poll', 'wait');
+      return;
+    }
+    sseOk = false;
+    es.onopen = function () {
+      sseOk = true;
+      console.log('bg SSE open');
+      if (!active) { setStatus('Idle — waiting for broadcast', ''); }
+    };
+    es.onmessage = function (e) {
+      sseOk = true;
+      var d = null;
+      try { d = JSON.parse(e.data); } catch (err) { return; }
+      if (d && d.type === 'stream_command') {
+        console.log('bg SSE stream_command', d.action);
+        if (d.action === 'start' && autoc.checked && !active) {
+          start().catch(function (err) {
+            console.log('bg auto-start via SSE failed', err);
+          });
+        } else if (d.action === 'stop' && active) {
+          stop();
+        }
       }
-      h.style.display='block';
+    };
+    es.onerror = function () {
+      sseOk = false;
+      console.log('bg SSE error/reconnect — poll covers the gap');
+    };
+  }
+
+  // --- wiring ---
+  toggle.onclick = function () {
+    if (active) {
+      stop();
+    } else {
+      start().catch(function (e) {
+        setStatus('Error: ' + (e && e.message ? e.message : e), '');
+        stop();
+      });
     }
   };
-  if(location.protocol==='http:' && location.hostname!=='localhost' && !location.hostname.startsWith('127.')){
-    const h=$('installHint'); h.textContent='You are on http://'+location.host+' — for best background (offline, lock-screen) open https://'+location.hostname+':8443/static/background.html and accept cert, then install.'; h.style.display='block';
-  }
-  // Also show install button if PWA criteria not met but http shortcut is still available
-  if(!deferredPrompt) setTimeout(()=>{ if(!$('installBtn').style.display || $('installBtn').style.display==='none'){ /* keep hidden until prompt */ } }, 2000);
 
-  // Register service worker for offline and to keep alive (requires https or localhost, will fail on http LAN — that's ok, page still works via polling)
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('/static/service-worker.js').then(()=>console.log('bg SW registered')).catch(e=>{console.log('bg SW register failed (expected on http LAN)',e);});
+  autoc.onchange = function () {
+    startPoll(autoc.checked ? 2500 : 8000);
+    if (autoc.checked && !active) { setStatus('Idle — auto-connect on', ''); }
+  };
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      console.log('bg hidden — low-power poll');
+      if (pollId) { clearInterval(pollId); pollId = null; }
+      if (hiddenPollId) { clearInterval(hiddenPollId); }
+      hiddenPollId = setInterval(checkBroadcastOnce, 5000);
+    } else {
+      console.log('bg visible — normal poll');
+      if (hiddenPollId) { clearInterval(hiddenPollId); hiddenPollId = null; }
+      startPoll(autoc.checked ? 2500 : 8000);
+      startSSE();
+      if (ctx && ctx.state === 'suspended' && active) {
+        ctx.resume().catch(function (e) {});
+      }
+    }
+  });
+
+  // PWA install handling (Add to Home screen needs https or localhost;
+  // plain http LAN still works as a normal shortcut).
+  var deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.style.display = 'flex';
+    installHint.textContent = 'Tap Install to add “Deck BG” to home screen — will auto-start on laptop hotkey.';
+    installHint.style.display = 'block';
+  });
+  installBtn.onclick = function () {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      if (deferredPrompt.userChoice && deferredPrompt.userChoice.then) {
+        deferredPrompt.userChoice.then(function (choice) {
+          console.log('install', choice.outcome);
+        }).catch(function (e) {});
+      }
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+      return;
+    }
+    if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname.indexOf('127.') !== 0) {
+      installHint.textContent = 'No Install prompt on http LAN. Use https://' + location.hostname + ':8443/static/background.html and accept the self-signed cert for the full PWA. Or use Chrome ⋮ → Add to Home screen for a plain shortcut.';
+    } else {
+      installHint.textContent = 'If no Install button: Chrome ⋮ → Add to Home screen (or Install app).';
+    }
+    installHint.style.display = 'block';
+  };
+  if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname.indexOf('127.') !== 0) {
+    installHint.textContent = 'You are on http://' + location.host + ' — for installable PWA + lock-screen audio open https://' + location.hostname + ':8443/static/background.html and accept the cert, then install.';
+    installHint.style.display = 'block';
   }
-  setStatus('Idle — waiting for broadcast','');
+
+  if ('serviceWorker' in navigator) {
+    try {
+      var swp = navigator.serviceWorker.register('/static/service-worker.js');
+      if (swp && swp.then) {
+        swp.then(function () {
+          console.log('bg SW registered');
+        }).catch(function (e) {
+          console.log('bg SW register failed (expected on http LAN)', e);
+        });
+      }
+    } catch (e) {
+      console.log('bg SW register failed (expected on http LAN)', e);
+    }
+  }
+
+  // --- init ---
+  startSSE();
+  startPoll(2500);
+  checkBroadcastOnce();
+  setInterval(function () {
+    if (!sseOk && !es) { startSSE(); }
+  }, 10000);
+  try {
+    if (new URLSearchParams(location.search).get('autostart') === '1') {
+      start().catch(function (e) {});
+    }
+  } catch (e) {}
+  setStatus('Idle — waiting for broadcast', '');
   updateBtn();
-  // Debug helper: show last poll time
-  console.log('bg deviceId',deviceId,'host',location.host,'protocol',location.protocol);
+  console.log('bg deviceId', deviceId, 'host', location.host, 'protocol', location.protocol);
 })();
 </script>
 </body>
