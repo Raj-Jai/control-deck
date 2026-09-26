@@ -143,9 +143,28 @@ export default function ConnectedDevicesCard() {
     }
   };
 
+  const header = (
+    <div className="flex items-center gap-2.5">
+      <Monitor size={16} className="text-deck-accent" />
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim">
+        Connected Devices
+      </span>
+      <span className="text-[10px] text-deck-muted/40 font-medium">{data?.count ?? 0}</span>
+    </div>
+  );
+
+  // The card used to return null with no clients, so it silently disappeared:
+  // a backend failure looked identical to "nothing is connected", and the
+  // column below it jumped. Always render the frame and name the state.
   if (!data || data.clients.length === 0) {
-    if (ctrlErr) return <div className="deck-card"><p className="text-[10px] text-red-400">{ctrlErr}</p></div>;
-    return null;
+    return (
+      <div className="deck-card flex flex-col gap-2.5" role="status">
+        {header}
+        <p className={`text-[11px] ${ctrlErr ? 'text-red-400' : 'text-deck-muted/60'}`}>
+          {ctrlErr || 'No other devices connected'}
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -158,6 +177,7 @@ export default function ConnectedDevicesCard() {
         <span className="text-[10px] text-deck-muted/40 font-medium">{data.count}</span>
         <button
           onClick={toggleBroadcast}
+          aria-label={data.broadcasting ? 'Stop broadcast' : 'Broadcast to all devices'}
           className={`icon-btn w-7 h-7 flex-shrink-0 ${
             data.broadcasting
               ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'

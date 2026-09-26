@@ -48,31 +48,36 @@ export default function ServiceStatsBar() {
   if (services.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 px-1 py-1 text-[11px] text-deck-text/80 font-medium select-none overflow-x-auto flex-nowrap">
+    <div
+      className="flex items-center gap-2 py-1 text-[11px] text-deck-text/80 font-medium select-none flex-nowrap"
+      role="status"
+      aria-label="Service status"
+    >
       {services.map(s => {
         const running = s.status === 'running';
         return (
           <span key={s.name}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.06]">
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04]
+              border border-white/[0.06] whitespace-nowrap shrink-0">
             <span className={`w-2 h-2 rounded-full ${running ? 'bg-green-400 shadow-sm shadow-green-400/40' : 'bg-red-400'}`} />
-            <span className="font-bold text-deck-text">{s.name}</span>
+            <span className="font-bold text-deck-text truncate max-w-[9rem]" title={s.name}>{s.name}</span>
             {running ? (
               <>
-                <span className="text-deck-muted/70 flex items-center gap-0.5">
+                <span className="text-deck-muted/70 flex items-center gap-0.5 whitespace-nowrap">
                   <Activity size={11} className="text-cyan-400" />
                   {s.cpu_percent.toFixed(1)}%
                 </span>
-                <span className="text-deck-muted/70 flex items-center gap-0.5">
+                <span className="text-deck-muted/70 flex items-center gap-0.5 whitespace-nowrap">
                   <HardDrive size={11} className="text-purple-400" />
                   {fmtMem(s.mem_rss_kb)}
                 </span>
-                <span className="text-deck-muted/70 flex items-center gap-0.5">
+                <span className="text-deck-muted/70 flex items-center gap-0.5 whitespace-nowrap">
                   <Clock size={11} className="text-deck-muted/50" />
                   {fmtUptime(s.uptime_secs)}
                 </span>
               </>
             ) : (
-              <span className="text-red-400/80">stopped</span>
+              <span className="text-red-400/80 whitespace-nowrap">stopped</span>
             )}
           </span>
         );

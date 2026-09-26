@@ -2,15 +2,27 @@ import { DECK_CONFIG } from '../config/deckConfig';
 
 const { api } = DECK_CONFIG;
 
-export async function triggerCommand(cmd: string, player?: string): Promise<void> {
+/**
+ * Fire a registered command. Returns whether the host accepted it: the
+ * response status was previously ignored, so a rejected or unknown command was
+ * indistinguishable from a successful one. Callers that do not care can keep
+ * ignoring the result.
+ */
+export async function triggerCommand(cmd: string, player?: string): Promise<boolean> {
   try {
-    await fetch(api.command, {
+    const res = await fetch(api.command, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command: cmd, ...(player ? { player } : {}) }),
     });
+    if (!res.ok) {
+      console.error(`Command ${cmd} rejected: HTTP ${res.status}`);
+      return false;
+    }
+    return true;
   } catch (err) {
     console.error('Command failed:', err);
+    return false;
   }
 }
 

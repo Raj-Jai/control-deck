@@ -225,7 +225,8 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         className="w-full seek"
         disabled={isOffline || isIdle}
       />
-      <div className="flex justify-between text-[11px] text-deck-dim mt-1">
+      <div className="flex justify-between text-[11px] text-deck-dim mt-1
+        [@media(max-height:720px)]:hidden">
         <span>{formatTime(displayVal)}</span>
         <span>{len > 0 ? formatTime(len) : '--:--'}</span>
       </div>
@@ -264,10 +265,12 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   };
 
   return (
-    <div className={`deck-card flex flex-col gap-3 transition-all duration-300 ${cardBorder}`}>
+    <div className={`deck-card flex flex-col gap-3 transition-all duration-300
+      [@media(max-height:720px)]:gap-2 ${cardBorder}`}>
       {/* Header: art + metadata */}
       <div className="flex items-center gap-3">
-        <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0 bg-deck-surface2">
+        <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0
+          bg-deck-surface2 [@media(max-height:720px)]:w-12 [@media(max-height:720px)]:h-12">
           {artUrl && !artError ? (
             <img
               src={artUrl}
@@ -286,7 +289,8 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           <h2 className="text-sm font-semibold truncate">{displayTitle}</h2>
           <p className="text-xs text-deck-dim truncate mt-0.5">{displayArtist}</p>
           <span
-            className={`inline-flex items-center gap-1 text-[11px] font-medium mt-1.5 px-2 py-0.5 rounded-full ${
+            className={`inline-flex items-center gap-1 text-[11px] font-medium mt-1.5 px-2 py-0.5 rounded-full
+              [@media(max-height:720px)]:hidden ${
               isOffline || isIdle
                 ? 'bg-deck-surface2 text-deck-muted'
                 : status === 'Playing'
@@ -334,7 +338,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
 
           <button
             onClick={() => setShowFullLyrics(true)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-none text-deck-dim opacity-60 hover:opacity-100 hover:text-[var(--art-primary,#00f2fe)] cursor-pointer transition-all duration-200 p-1"
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center bg-transparent border-none text-deck-dim opacity-60 hover:opacity-100 hover:text-[var(--art-primary,#00f2fe)] cursor-pointer transition-all duration-200"
             title="Full lyrics"
           >
             <Maximize2 size={16} />
@@ -355,7 +359,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           </div>
           <button
             onClick={() => setShowFullLyrics(true)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-none text-deck-dim opacity-60 hover:opacity-100 hover:text-[var(--art-primary,#00f2fe)] cursor-pointer transition-all duration-200 p-1"
+            className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center bg-transparent border-none text-deck-dim opacity-60 hover:opacity-100 hover:text-[var(--art-primary,#00f2fe)] cursor-pointer transition-all duration-200"
             title="Full lyrics"
           >
             <Maximize2 size={16} />
@@ -384,9 +388,6 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         <div className="flex justify-center items-center gap-2.5">
           {playControls()}
         </div>
-        {(((caps.mpv && caps.yt_dlp) || (!isOffline && !isIdle)) || state) && (
-          <div className="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
-        )}
         {/* Utility cluster */}
         <div className="flex justify-center items-center gap-2">
           {caps.mpv && caps.yt_dlp && (

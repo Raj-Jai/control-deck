@@ -110,7 +110,7 @@ export default function ToggleGrid({ state }: ToggleGridProps) {
             {/* Bluetooth connect button */}
             {cfg.id === 'bt' && (
               <button
-                className="absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center
+                className="absolute bottom-1 right-1 w-10 h-10 rounded-full flex items-center justify-center
                   bg-deck-surface2 border border-white/10 text-deck-dim
                   hover:bg-deck-accent hover:text-white hover:border-deck-accent
                   transition-all duration-100 z-[2] active:scale-85"

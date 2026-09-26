@@ -6,7 +6,10 @@ interface Props {
 }
 
 export default function CommandLogCard({ log }: Props) {
-  if (!log || log.length === 0) return null;
+  // An empty log used to render nothing at all, so the Home deck's right
+  // column changed height every time a command ran — the card moved under
+  // the user's finger. Render the frame with an explicit empty state.
+  const empty = !log || log.length === 0;
 
   return (
     <div className="deck-card">
@@ -16,14 +19,18 @@ export default function CommandLogCard({ log }: Props) {
           Command Log
         </span>
       </div>
-      <div className="max-h-[200px] overflow-y-auto space-y-0.5 font-mono text-[11px] leading-relaxed">
-        {[...log].reverse().map((e, i) => (
-          <div key={i} className="flex gap-2 text-deck-dim">
-            <span className="text-deck-muted shrink-0">{e.time}</span>
-            <span className="text-deck-text/80 truncate">{e.command}</span>
-          </div>
-        ))}
-      </div>
+      {empty ? (
+        <p className="text-[11px] text-deck-muted/50 py-1">No commands yet</p>
+      ) : (
+        <div className="max-h-[200px] min-h-[72px] overflow-y-auto space-y-0.5 font-mono text-[12px] leading-relaxed">
+          {[...log].reverse().map((e) => (
+            <div key={`${e.time}-${e.command}`} className="flex gap-2 text-deck-dim">
+              <span className="text-deck-muted shrink-0">{e.time}</span>
+              <span className="text-deck-text/80 truncate">{e.command}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -24,12 +24,30 @@
 
   /* Large touch-friendly range slider */
   input[type='range'] {
-    @apply w-full appearance-none cursor-pointer rounded-full;
-    height: 10px;
-    background: #1e293b;
+    @apply w-full appearance-none cursor-pointer;
+    height: 44px;
+    background: transparent;
     outline: none;
     touch-action: none;
     transition: opacity 0.15s;
+  }
+
+  input[type='range']::-webkit-slider-runnable-track {
+    height: 10px;
+    background: #1e293b;
+    border-radius: 999px;
+  }
+
+  input[type='range']::-moz-range-track {
+    height: 10px;
+    background: #1e293b;
+    border-radius: 999px;
+  }
+
+  input[type='range']::-moz-range-progress {
+    height: 10px;
+    background: #1e293b;
+    border-radius: 999px;
   }
 
   input[type='range']::-webkit-slider-thumb {
@@ -63,6 +81,15 @@
 
   /* Slim seek variant for media progress (volume sliders keep the big thumb) */
   input[type='range'].seek {
+    height: 44px;
+  }
+
+  input[type='range'].seek::-webkit-slider-runnable-track {
+    height: 6px;
+  }
+
+  input[type='range'].seek::-moz-range-track,
+  input[type='range'].seek::-moz-range-progress {
     height: 6px;
   }
 
@@ -160,6 +187,7 @@
     border-color: rgba(255, 255, 255, 0.12);
   }
 
+
   .icon-btn:active {
     transform: scale(0.85);
   }
@@ -191,6 +219,12 @@
   .status-dot.playing {
     animation: pulseDot 1.5s ease-in-out infinite;
     background: #06b6d4;
+  }
+
+  /* Same override set as the rest of the themed elements, so nothing inside a
+     card keeps the unthemed brand colour. */
+  .art-themed .status-dot.playing {
+    background: var(--art-accent) !important;
   }
 }
 
@@ -285,4 +319,16 @@
 
 .art-themed .media-btn:active {
   background: var(--art-accent) !important;
+}
+
+/* Touch devices get a real 44px target without changing the visual size on a
+   mouse-driven desktop. A min- constraint beats the explicit width and height
+   utilities, so the 20-40px icon buttons across the app all become
+   thumb-sized here instead of at dozens of call sites. */
+@media (pointer: coarse) {
+  .icon-btn,
+  .media-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

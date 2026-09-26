@@ -66,17 +66,24 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
     >
       {players.length > 1 && (
         <>
+          {/* Inside the card and 44px: at left-0/-translate-x-2 they straddled
+              the border, sat on the seek time labels, and were clipped by the
+              viewport edge on a 360px phone. */}
           <button
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 text-white/70 hover:bg-black/50 hover:text-white"
+            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center
+              justify-center rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
             onClick={() => go(clampedIdx - 1)}
+            aria-label="Previous player"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={20} />
           </button>
           <button
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/30 text-white/70 hover:bg-black/50 hover:text-white"
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center
+              justify-center rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
             onClick={() => go(clampedIdx + 1)}
+            aria-label="Next player"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={20} />
           </button>
         </>
       )}
@@ -88,8 +95,10 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
           {players.map((p, i) => (
             <button
               key={p.id}
-              className="p-2 -my-2 flex items-center justify-center"
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center"
               onClick={() => setIdx(i)}
+              aria-label={`Show ${p.title || `player ${i + 1}`}`}
+              aria-current={i === clampedIdx ? 'true' : undefined}
             >
               <span className={`w-1.5 h-1.5 rounded-full block transition-colors ${
                 i === clampedIdx ? 'bg-deck-accent' : 'bg-deck-dim/30'

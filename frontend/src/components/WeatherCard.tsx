@@ -38,10 +38,36 @@ function dayLabel(dateStr: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
+const COORD_KEY = 'dash_weather_coords';
+const COORD_TTL_MS = 30 * 86400000;
+const DEFAULT_COORDS = { lat: 28.6139, lon: 77.2090, label: 'New Delhi' };
+
+function readCachedCoords(): { lat: number; lon: number; label?: string } | null {
+  try {
+    const raw = localStorage.getItem(COORD_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    if (typeof c?.lat !== 'number' || typeof c?.lon !== 'number') return null;
+    if (Date.now() - (c.at ?? 0) > COORD_TTL_MS) return null;
+    return c;
+  } catch {
+    return null;
+  }
+}
+
+function cacheCoords(lat: number, lon: number, label?: string) {
+  try {
+    localStorage.setItem(COORD_KEY, JSON.stringify({ lat, lon, label, at: Date.now() }));
+  } catch { /* private mode */ }
+}
+
 export default function WeatherCard() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [place, setPlace] = useState<string>(DEFAULT_COORDS.label);
+  // 'idle' until we have something to show: the location prompt is opt-in.
+  const [needsLocation, setNeedsLocation] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,35 +103,102 @@ export default function WeatherCard() {
       if (!cancelled) setLoading(false);
     };
 
-    // Try browser geolocation, fall back to a default coordinate
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-        () => fetchWeather(28.6139, 77.2090), // fallback
-        { timeout: 5000, enableHighAccuracy: false }
-      );
+    const cached = readCachedCoords();
+    if (cached) {
+      setPlace(cached.label || DEFAULT_COORDS.label);
+      fetchWeather(cached.lat, cached.lon);
     } else {
-      fetchWeather(28.6139, 77.2090); // fallback
+      // Show the fallback immediately and offer the prompt, rather than firing
+      // a permission dialog nobody asked for on page load.
+      setLoading(false);
+      setNeedsLocation(true);
+      fetchWeather(DEFAULT_COORDS.lat, DEFAULT_COORDS.lon);
     }
 
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading) return null;
-  if (error) return null;
-  if (!weather) return null;
+  const useMyLocation = () => {
+    if (!('geolocation' in navigator)) {
+      setError('This browser cannot share a location');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        cacheCoords(pos.coords.latitude, pos.coords.longitude, 'My location');
+        setPlace('My location');
+        setNeedsLocation(false);
+      },
+      (err) => {
+        setLoading(false);
+        setError(err.code === err.PERMISSION_DENIED
+          ? 'Location permission denied — showing the default city'
+          : 'Could not get a location fix');
+      },
+      { timeout: 8000, enableHighAccuracy: false }
+    );
+  };
+
+  // Both `loading` and `error` used to return null, so the card did not exist
+  // and then popped in, shifting the layout under the user. Always render the
+  // frame and say what is happening inside it.
+  const header = (
+    <div className="flex items-center gap-2.5 mb-3">
+      <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
+      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
+        Weather
+      </span>
+      <div className="flex-1 h-px bg-white/[0.04]" />
+    </div>
+  );
+
+  if (!weather) {
+    return (
+      <div className="deck-card" role="status">
+        {header}
+        {loading ? (
+          <div className="flex items-center gap-2 text-[12px] text-deck-dim py-1">
+            <span className="inline-block w-3 h-3 rounded-full border-2 border-deck-accent/40 border-t-deck-accent animate-spin" />
+            Loading weather…
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 py-1">
+            <p className="text-[12px] text-deck-dim">
+              {error || 'Weather unavailable — check your connection'}
+            </p>
+            <p className="text-[11px] text-deck-muted/60">Showing {place}</p>
+            <button
+              type="button"
+              onClick={useMyLocation}
+              className="self-start min-h-[44px] px-3 rounded-lg border border-deck-accent/30
+                text-deck-accent text-[12px] hover:bg-deck-accent/10"
+            >
+              Use my location
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const { current, daily } = weather;
 
   return (
     <div className="deck-card">
-      <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
-          Weather
-        </span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
-      </div>
+      {header}
+      {needsLocation && (
+        <button
+          type="button"
+          onClick={useMyLocation}
+          className="mb-2 min-h-[44px] w-full px-3 rounded-lg border border-white/10
+            text-[12px] text-deck-dim hover:bg-white/5"
+        >
+          Showing {place} — use my location
+        </button>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">

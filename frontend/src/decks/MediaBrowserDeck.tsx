@@ -88,12 +88,12 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
         {/* Speed Up / Down */}
         <div className="flex gap-2 mb-3">
           <button onClick={() => triggerCommand('speed_down', playerId)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] rounded-md
+            className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 text-[11px] rounded-md
               bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-95">
             <ChevronDown size={14} /> Slower
           </button>
           <button onClick={() => triggerCommand('speed_up', playerId)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] rounded-md
+            className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 text-[11px] rounded-md
               bg-deck-accent/15 border border-deck-accent/25 text-deck-accent hover:bg-deck-accent/25 active:scale-95">
             <ChevronUp size={14} /> Faster
           </button>

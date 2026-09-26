@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Lock, Music, LayoutDashboard, ArrowLeft } from 'lucide-react';
 
 type AuthMode = 'dashboard' | 'media';
@@ -31,49 +31,59 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
   const [step, setStep] = useState<'pick' | 'pin'>('pick');
   const [mode, setMode] = useState<AuthMode>('dashboard');
   const [pin, setPin] = useState<string[]>([]);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<'wrong' | 'offline' | null>(null);
   const [loading, setLoading] = useState(false);
+  // A ref, not state: a 150ms state update was long enough for backspace and
+  // Clear to be accepted after the 4th digit, then wiped by the submit.
+  const submitting = useRef(false);
 
   const submit = async (p: string[]) => {
-    if (p.length !== 4) return;
+    if (p.length !== 4 || submitting.current) return;
+    submitting.current = true;
     setLoading(true);
-    setError(false);
+    setError(null);
     const endpoint = mode === 'media' ? '/api/auth-media' : '/api/auth';
+    // Without a timeout a hung request disables the keypad permanently.
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 10000);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin: p.join('') }),
+        signal: ac.signal,
       });
       const data = await res.json();
       if (data.ok) {
         setStoredMode(mode);
         onAuth(mode);
-      } else {
-        setError(true);
-        setTimeout(() => { setPin([]); setError(false); }, 600);
+        return;
       }
+      setError('wrong');
+      setTimeout(() => { setPin([]); setError(null); }, 600);
     } catch {
-      setError(true);
-      setTimeout(() => { setPin([]); setError(false); }, 600);
+      // A network failure is not a wrong PIN, and saying so sends people
+      // hunting for a typo that does not exist.
+      setError('offline');
+    } finally {
+      clearTimeout(timer);
+      submitting.current = false;
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const press = (d: string) => {
-    if (pin.length >= 4 || loading) return;
+    if (pin.length >= 4 || loading || submitting.current) return;
     const next = [...pin, d];
     setPin(next);
-    setError(false);
-    if (next.length === 4) {
-      setTimeout(() => submit(next), 150);
-    }
+    setError(null);
+    if (next.length === 4) submit(next);
   };
 
   const backspace = () => {
-    if (pin.length === 0 || loading) return;
+    if (pin.length === 0 || loading || submitting.current) return;
     setPin(prev => prev.slice(0, -1));
-    setError(false);
+    setError(null);
   };
 
   return (
@@ -118,7 +128,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
         ) : (
           <>
             <button
-              onClick={() => { setStep('pick'); setPin([]); setError(false); }}
+              onClick={() => { setStep('pick'); setPin([]); setError(null); }}
               aria-label="Back to mode selection"
               className="self-start -mt-2 -ml-2 w-8 h-8 flex items-center justify-center rounded-lg
                 text-deck-dim hover:text-deck-text hover:bg-white/5 transition-colors"
@@ -131,6 +141,9 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 {mode === 'media' ? 'Media Streamer' : 'Dashboard'}
               </div>
               <div className="text-[11px] text-deck-dim mt-1">Enter PIN to unlock</div>
+              <p className="text-[10px] text-deck-muted/50 mt-2 max-w-[240px] text-center leading-snug">
+                This locks the screen on this device only. It does not protect the host.
+              </p>
             </div>
 
             <div className="flex gap-3" role="status" aria-label={`PIN ${pin.length} of 4 digits entered`}>
@@ -142,7 +155,23 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 }`} />
               ))}
             </div>
-            {error && <div className="text-xs text-red-400 -mt-3" role="alert">Wrong PIN</div>}
+            {error === 'wrong' && (
+              <div className="text-xs text-red-400 -mt-3" role="alert">Wrong PIN</div>
+            )}
+            {error === 'offline' && (
+              <div className="flex flex-col items-center gap-2 -mt-3" role="alert">
+                <p className="text-xs text-amber-300 text-center">
+                  Can&apos;t reach the deck — is it still running?
+                </p>
+                <button
+                  onClick={() => { setPin([]); setError(null); }}
+                  className="min-h-[44px] px-4 rounded-lg border border-white/10
+                    text-[12px] text-deck-dim hover:bg-white/5"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-3 w-full max-w-[220px]">
               {['1','2','3','4','5','6','7','8','9'].map(n => (

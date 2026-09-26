@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Maximize2, Minimize2, Monitor } from 'lucide-react';
+import { Maximize2, Minimize2, Monitor, ChevronDown, ChevronUp } from 'lucide-react';
 import AuthScreen, { getStoredMode } from './components/AuthScreen';
 import { useMediaStream } from './hooks/useMediaStream';
 import { useCapabilities } from './hooks/useCapabilities';
-import { useFeatures } from './hooks/useFeatures';
+import { useFeatureFlags } from './hooks/useFeatures';
 import type { FeatureKey } from './config/features';
 import { useArtTheming } from './hooks/useArtTheming';
 import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
@@ -60,18 +60,27 @@ export default function App() {
   const { state, loading, error } = useMediaStream(deviceId);
   const { appType } = useActiveWindow();
   const caps = useCapabilities();
-  const features = useFeatures();
+  const [features, flagsReady] = useFeatureFlags();
   useArtTheming(state?.art_url);
   const [full, setFull] = useState(false);
   const [page, setPage] = useState(0);
   const [autoFocus, setAutoFocus] = useState(true);
   const [dragging, setDragging] = useState(false);
+  // Secondary Home cards stay collapsed between sessions: the deck used to
+  // need up to six screens of scrolling, dominated by a niche GPS canvas.
+  const [showMore, setShowMore] = useState(() => {
+    try { return localStorage.getItem('dash_home_more') === '1'; } catch { return false; }
+  });
   const [clientCount, setClientCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef(0);
   const dragStripRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ startX: number; startScrollLeft: number } | null>(null);
   const moveRAF = useRef(0);
+
+  useEffect(() => {
+    try { localStorage.setItem('dash_home_more', showMore ? '1' : '0'); } catch { /* private mode */ }
+  }, [showMore]);
 
   useEffect(() => {
     const cb = () => setFull(!!document.fullscreenElement);
@@ -102,7 +111,13 @@ export default function App() {
     // Deck switch resets vertical scroll — otherwise a scrolled-down page
     // leaves the new deck showing blank space below its content.
     // Skipped when re-tapping the active page so the user's scroll is kept.
-    if (clamped !== page) window.scrollTo(0, 0);
+    // Deferred by a frame: clicking a nav dot focuses it, and the browser's
+    // own scroll-into-view runs after this handler, which is what used to dump
+    // the user 200-350px down the page on every deck change.
+    if (clamped !== page) {
+      window.scrollTo(0, 0);
+      requestAnimationFrame(() => window.scrollTo(0, 0));
+    }
     setPage(clamped);
   };
 
@@ -161,8 +176,61 @@ export default function App() {
     return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
+  // Deck-container drag. The carousel used to be mouse-inert: the pointer
+  // handlers lived only on the bottom strip, so on desktop opening the FAB
+  // menu was the only way to change decks.
+  const deckDrag = useRef<{ startX: number; startY: number; startScrollLeft: number; engaged: boolean } | null>(null);
+
+  const onDeckPointerDown = (e: React.PointerEvent) => {
+    if (!e.isPrimary || e.pointerType === 'touch') return; // touch already scrubs natively
+    const el = scrollRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    deckDrag.current = { startX: e.clientX, startY: e.clientY, startScrollLeft: el.scrollLeft, engaged: false };
+  };
+
+  const onDeckPointerMove = (e: React.PointerEvent) => {
+    const ds = deckDrag.current;
+    const el = scrollRef.current;
+    if (!ds || !el) return;
+    const dx = e.clientX - ds.startX;
+    const dy = e.clientY - ds.startY;
+    if (!ds.engaged) {
+      // Claim the gesture only once it is unambiguously sideways, otherwise a
+      // vertical scroll or a slider drag gets hijacked.
+      if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) {
+        if (Math.abs(dy) > 8) deckDrag.current = null;
+        return;
+      }
+      ds.engaged = true;
+      el.style.scrollSnapType = 'none';
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragging(true);
+    }
+    cancelAnimationFrame(moveRAF.current);
+    moveRAF.current = requestAnimationFrame(() => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = Math.max(0, Math.min(maxScroll, ds.startScrollLeft - dx));
+    });
+  };
+
+  const onDeckPointerUp = () => {
+    const ds = deckDrag.current;
+    deckDrag.current = null;
+    if (!ds || !ds.engaged) return;
+    const el = scrollRef.current;
+    cancelAnimationFrame(moveRAF.current);
+    setDragging(false);
+    if (!el) return;
+    el.style.scrollSnapType = '';
+    scrollTo(Math.round(el.scrollLeft / el.clientWidth), true);
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (!e.isPrimary) return;
+    // The dots are real buttons. setPointerCapture on this container would
+    // retarget their click to the strip, so taps would do nothing at all —
+    // which is exactly how the dots ended up being indicators only.
+    if ((e.target as HTMLElement).closest('button')) return;
     const el = scrollRef.current;
     if (!el) return;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -202,25 +270,30 @@ export default function App() {
   return (
     <>
       <div className={`min-h-[100dvh] flex flex-col relative ${showMini ? 'pb-[6.5rem]' : 'pb-14'}`}>
-        <button
-          onClick={toggleFull}
-          className="fixed top-[30px] right-3 z-50 w-10 h-10 rounded-lg flex items-center justify-center
-            bg-black/40 backdrop-blur border border-white/10 text-deck-dim
-            hover:bg-deck-accent/20 hover:text-deck-accent hover:border-deck-accent/30
-            transition-all duration-100 active:scale-90"
-          title={full ? 'Exit fullscreen' : 'Fullscreen'}
-        >
-          {full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
-
-        {/* Service process stats bar */}
-        {features.service_stats && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06] pt-[env(safe-area-inset-top)]">
-          <div className="w-full max-w-6xl mx-auto px-3 sm:px-4">
-            <ServiceStatsBar />
+        {/* Top strip. Owns the fullscreen control, so the two can never
+            overlap: body already applies the top safe-area inset, so this must
+            not add it again. */}
+        <div className="sticky top-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06]">
+          <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 flex items-center gap-2">
+            {features.service_stats ? (
+              <div className="min-w-0 flex-1 overflow-x-auto no-scrollbar">
+                <ServiceStatsBar />
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
+            <button
+              onClick={toggleFull}
+              className="shrink-0 w-11 h-11 -my-0.5 rounded-lg flex items-center justify-center
+                text-deck-dim hover:bg-deck-accent/20 hover:text-deck-accent
+                transition-all duration-100 active:scale-90"
+              title={full ? 'Exit fullscreen' : 'Fullscreen'}
+              aria-label={full ? 'Exit fullscreen' : 'Enter fullscreen'}
+            >
+              {full ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
           </div>
         </div>
-        )}
 
         <div className="flex-1 w-full max-w-6xl mx-auto relative">
           {loading && (
@@ -242,38 +315,65 @@ export default function App() {
             </div>
           )}
 
-          {/* Swipeable pages */}
+          {/* Swipeable pages. Nothing mounts until the feature set is known:
+              a deck that is about to be hidden must not start a PTY or take
+              focus on the way in. */}
+          {!flagsReady && (
+            <div className="text-center text-deck-dim text-sm py-8">Loading…</div>
+          )}
+          {flagsReady && (
           <div
             ref={scrollRef}
             onScroll={handleScroll}
+            onPointerDown={onDeckPointerDown}
+            onPointerMove={onDeckPointerMove}
+            onPointerUp={onDeckPointerUp}
+            onPointerCancel={onDeckPointerUp}
             className={`flex overflow-x-auto no-scrollbar h-full ${
               dragging ? '' : 'snap-x snap-mandatory scroll-smooth'
             }`}
             style={{ scrollbarWidth: 'none' }}
           >
-            {/* Page 0: Home */}
+            {/* Page 0: Home — primary controls first, the rest behind a toggle */}
             <div className={pageClass('home')}>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
-                {/* LEFT */}
+                {/* PRIMARY: what a person reaches for daily */}
                 <div className="flex flex-col gap-4 min-w-0">
                   {features.mixer && <MixerCard state={state} caps={caps} />}
+                  {features.quick_settings && <QuickSettings state={state} />}
+                </div>
+
+                <div className="flex flex-col gap-4 min-w-0">
+                  {features.system_stats && <SystemStatsCard state={state} />}
+                  {features.connected_devices && <ConnectedDevicesCard />}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowMore(v => !v)}
+                aria-expanded={showMore}
+                aria-controls="home-secondary"
+                className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl
+                  border border-white/[0.08] bg-white/[0.03] text-[12px] font-medium text-deck-dim
+                  hover:bg-white/[0.06] hover:text-deck-text transition-colors"
+              >
+                {showMore ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                {showMore ? 'Fewer' : 'More controls'}
+              </button>
+
+              {showMore && (
+              <div id="home-secondary"
+                className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
+                <div className="flex flex-col gap-4 min-w-0">
                   {features.geo_survey && <GeoSurveyCard />}
                   {features.ble_proximity && <BleProximityCard />}
                 </div>
-
-                {/* RIGHT */}
                 <div className="flex flex-col gap-4 min-w-0">
-                  {features.quick_settings && <QuickSettings state={state} />}
-                  {features.connected_devices && <ConnectedDevicesCard />}
                   {features.weather && <WeatherCard />}
                   {features.clipboard && <ClipboardCard />}
                   {features.command_log && <CommandLogCard log={state?.cmd_log ?? []} />}
                 </div>
-              </div>
-
-              {features.system_stats && (
-              <div className="mt-4 mb-3">
-                <SystemStatsCard state={state} />
               </div>
               )}
             </div>
@@ -306,6 +406,7 @@ export default function App() {
             </div>
             )}
           </div>
+          )}
         </div>
 
       </div>
@@ -319,7 +420,7 @@ export default function App() {
           {/* Draggable page dots */}
           <div
             ref={dragStripRef}
-            className="flex items-center justify-center gap-6 select-none touch-none py-2 -my-2 w-full transition-transform duration-100"
+            className="flex items-center justify-center gap-6 select-none touch-none py-1 w-full transition-transform duration-100"
             data-dragging={dragging || undefined}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -327,16 +428,24 @@ export default function App() {
             onPointerCancel={onPointerUp}
           >
             {pages.map((p, i) => (
-              <span
+              <button
                 key={p.id}
-                className={`block rounded-full transition-all duration-200 ${
-                  dragging
-                    ? 'bg-white/40 w-3 h-3'
-                    : i === page
-                      ? 'bg-deck-accent w-6 h-2'
-                      : 'bg-white/20 w-2 h-2'
-                }`}
-              />
+                type="button"
+                onClick={() => scrollTo(i, true)}
+                aria-label={`Go to ${p.label} deck`}
+                aria-current={i === page ? 'page' : undefined}
+                className="min-w-[44px] min-h-[44px] flex items-center justify-center"
+              >
+                <span
+                  className={`block rounded-full transition-all duration-200 ${
+                    dragging
+                      ? 'bg-white/40 w-3 h-3'
+                      : i === page
+                        ? 'bg-deck-accent w-6 h-2'
+                        : 'bg-white/20 w-2 h-2'
+                  }`}
+                />
+              </button>
             ))}
           </div>
           {clientCount > 0 && (
@@ -349,6 +458,7 @@ export default function App() {
       </div>
 
       <FloatingNav
+        raised={showMini}
         pages={pages}
         currentPage={page}
         scrollTo={scrollTo}

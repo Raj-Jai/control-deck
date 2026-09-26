@@ -127,6 +127,11 @@ export default function TerminalDeck({ caps }: Props) {
       {/* Terminal fills the space */}
       <div className="flex-1 deck-card !p-0 overflow-hidden relative flex flex-col min-h-[200px]">
         <div ref={termRef} className="flex-1 min-h-0" />
+        {!connected && (
+          <div className="absolute inset-0 flex items-center justify-center bg-deck-bg/70 backdrop-blur-[1px]">
+            <p className="text-[12px] text-red-400">Disconnected — is the deck service running?</p>
+          </div>
+        )}
         <div className={`absolute top-2 right-3 text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors ${
           connected ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'
         }`}>
@@ -134,8 +139,10 @@ export default function TerminalDeck({ caps }: Props) {
         </div>
       </div>
 
-      {/* Bottom toolbar */}
-      <div className="deck-card p-2.5">
+      {/* Bottom toolbar — disabled while the socket is down, because every
+          button here would otherwise swallow the tap silently. */}
+      <div className={`deck-card p-2.5 ${connected ? '' : 'opacity-40 pointer-events-none'}`}
+        aria-disabled={!connected}>
         <div className="flex items-center gap-2 mb-2">
           <div className="w-0.5 h-3 rounded-full bg-deck-accent/30" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Actions</span>

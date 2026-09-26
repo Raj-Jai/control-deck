@@ -61,7 +61,11 @@ function extractColors(img: HTMLImageElement): { primary: string; accent: string
   const [h, s, l] = rgbToHsl(pc.r, pc.g, pc.b);
   const ah = (h + 180) % 360;
   const primary = `hsl(${h.toFixed(0)}, ${Math.min(70, s).toFixed(0)}%, ${Math.max(55, Math.min(80, l)).toFixed(0)}%)`;
-  const accent = `hsl(${ah.toFixed(0)}, 80%, 55%)`;
+  // Clamp lightness into a band that stays legible against the dark surfaces
+  // and never approaches the foreground colour.
+  const accentL = Math.max(52, Math.min(64, l));
+  const accentS = Math.max(45, Math.min(80, s));
+  const accent = `hsl(${ah.toFixed(0)}, ${accentS.toFixed(0)}%, ${accentL.toFixed(0)}%)`;
   return { primary, accent };
 }
 

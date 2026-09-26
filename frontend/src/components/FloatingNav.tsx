@@ -7,9 +7,12 @@ interface FloatingNavProps {
   scrollTo: (index: number) => void;
   autoFocus: boolean;
   onToggleAutoFocus: () => void;
+  /** True when the MiniPlayer is docked at the bottom, so the FAB can sit
+   *  clear of it instead of covering the next-track button. */
+  raised?: boolean;
 }
 
-export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, onToggleAutoFocus }: FloatingNavProps) {
+export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, onToggleAutoFocus, raised }: FloatingNavProps) {
   const [open, setOpen] = useState(false);
 
   const handleNav = useCallback((i: number) => {
@@ -18,7 +21,7 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
   }, [scrollTo]);
 
   return (
-    <div className="fixed bottom-16 right-3 z-50">
+    <div className={`fixed right-3 z-50 transition-[bottom] duration-200 ${raised ? 'bottom-[7.5rem]' : 'bottom-[4.75rem]'}`}>
       {/* Backdrop overlay */}
       {open && (
         <div
@@ -40,8 +43,9 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
             {pages.map((p, i) => (
               <button
                 key={p.id}
+                role="menuitem"
                 onClick={() => handleNav(i)}
-                className={`px-3 py-2 text-[12px] rounded-lg text-left transition-all ${
+                className={`px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center text-left transition-all ${
                   i === currentPage
                     ? 'bg-deck-accent/20 text-deck-accent font-semibold'
                     : 'text-deck-dim hover:text-deck-text hover:bg-white/5'
@@ -55,8 +59,9 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
           <div className="h-px bg-white/[0.06] my-1.5" />
 
           <button
+            role="menuitem"
             onClick={onToggleAutoFocus}
-            className="w-full flex items-center justify-between px-3 py-2 text-[12px] rounded-lg
+            className="w-full flex items-center justify-between px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center
               text-deck-dim hover:text-deck-text hover:bg-white/5 transition-all"
           >
             <span>Auto-focus</span>
@@ -68,8 +73,9 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
           </button>
 
           <button
+            role="menuitem"
             onClick={() => location.reload()}
-            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] rounded-lg
+            className="w-full flex items-center gap-2 px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center
               text-deck-dim hover:text-deck-text hover:bg-white/5 transition-all"
           >
             <RefreshCw size={12} />

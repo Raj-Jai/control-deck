@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { fetchVideoStatus, sendVideoCommand, triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX, MonitorX } from 'lucide-react';
 
 interface Props { state: MediaState | null; caps: Capabilities }
 
@@ -78,16 +78,37 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
     setVolume(sliderToValue(latestVol.current / 100, 1));
   };
 
+  // Every control on this deck injects keystrokes into whatever window has
+  // focus. With no player detected that means a mis-tap types into the user's
+  // editor, so nothing here may stay live.
+  const noPlayer = player === 'unknown';
+
+  if (noPlayer) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="deck-card flex flex-col items-center gap-3 text-center py-8 px-4">
+          <MonitorX size={28} className="text-deck-muted/50" />
+          <div>
+            <p className="text-sm font-semibold text-deck-text">No video player detected</p>
+            <p className="text-[12px] text-deck-dim mt-1 max-w-sm">
+              These controls send keystrokes to the focused window, so they stay
+              disabled until mpv or VLC is running. Open a video, then come back.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-deck-muted/50 uppercase tracking-wider">Player:</span>
         <span className={`text-[10px] font-semibold uppercase px-2.5 py-1 rounded-full border ${
           player === 'mpv' ? 'bg-blue-500/20 text-blue-300 border-blue-500/20' :
-          player === 'vlc' ? 'bg-orange-500/20 text-orange-300 border-orange-500/20' :
-          'bg-amber-500/[0.07] text-amber-300/80 border-amber-500/15'
+          'bg-orange-500/20 text-orange-300 border-orange-500/20'
         }`}>
-          {player === 'unknown' ? 'Not detected' : player}
+          {player}
         </span>
       </div>
 
