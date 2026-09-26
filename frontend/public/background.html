@@ -72,14 +72,23 @@
   var ws = null;
   var ctx = null;
   var active = false;
+  // True when a tap on this page started the stream, so the auto-connect
+  // poll and SSE stop-commands leave it alone.
+  var userIntent = false;
   var es = null;
   var pollId = null;
   var hiddenPollId = null;
   var wakeLock = null;
 
-  var accCh = [];
-  var accFrames = 0;
+  // Pending frames, one entry per frame per channel. Kept as a list (not a
+  // growing merged buffer) so a suspended AudioContext costs bounded memory and
+  // concatenation happens once per batch instead of once per frame.
+  var accFrames = [];          // array of Float32Array[] (per channel)
   var firstPTS = 0;
+  var lastPTS = 0;
+  var gaps = 0;
+  var drops = 0;
+  var connecting = false;      // guard: one socket at a time
   var schedEnd = 0;
   var clockOff = 0;
   var perfBase = 0;
@@ -92,13 +101,19 @@
   var intErr = 0;
 
   var FRAME_SAMPLES = 2048;
+  var FRAME_MS = (FRAME_SAMPLES * 1000) / 48000;   // 42.667
   var BATCH = 3;
   var TARGET_DELAY = 500;
-  var TARGET_BUF = 350;
-  var PI_KP = 0.000008;
-  var PI_KI = 0.0000003;
-  var PI_MAX = 0.003;
-  var PI_LIM = 500;
+  var TARGET_BUF = 0.35;      // seconds, scheduled ahead of the render clock
+  var MAX_LATENCY = 0.75;     // hard ceiling; beyond this we re-anchor
+  var MAX_PENDING = 24;        // frames retained while autoplay is blocked
+  // Gains in seconds, not milliseconds. The old ms-based values needed a 375 ms
+  // error before the proportional term saturated and capped authority at 0.3 %,
+  // which drains 50 ms in ~167 s and never recovers a real stall.
+  var PI_KP = 0.3;
+  var PI_KI = 0.01;
+  var PI_MAX = 0.02;          // 2 % playback-rate authority
+  var PI_LIM = 1.0;           // seconds
   var FADE_SEC = 0.002;
 
   function volume() {
@@ -112,7 +127,10 @@
   function setStatus(txt, state) {
     stext.textContent = txt;
     dot.className = 'dot' + (state ? ' ' + state : '');
-    if (state === 'wait') {
+    if (txt.indexOf('Playing') === 0 && (gaps || drops)) {
+      hint.textContent = 'Streaming — ' + gaps + ' gap' + (gaps === 1 ? '' : 's') +
+        ', ' + drops + ' drop' + (drops === 1 ? '' : 's') + ' (network or host load).';
+    } else if (state === 'wait') {
       hint.textContent = 'Browser blocked autoplay — tap anywhere to enable audio.';
     } else if (state === 'on') {
       hint.textContent = 'Playing in background. You can lock the screen or switch apps.';
@@ -155,62 +173,93 @@
     return out;
   }
 
+  // resumeWaiter is a single shared promise for "waiting for a gesture".
+  // Autoplay policy can refuse resume() outright, so the gesture listeners are
+  // installed unconditionally rather than only on the success path: otherwise a
+  // refused resume leaves the page waiting forever with no way to recover.
+  var resumeWaiter = null;
+  var resumeDetach = null;
+
   function ensureResumed() {
     if (!ctx) { return Promise.resolve(); }
     if (ctx.state === 'running') { return Promise.resolve(); }
-    var p = ctx.resume().then(function () {
-      if (ctx.state === 'running') { return; }
-      setStatus('Tap to enable audio', 'wait');
-      if (navigator.mediaSession) {
-        try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {}
+    if (resumeWaiter) { return resumeWaiter; }
+
+    resumeWaiter = new Promise(function (resolve) {
+      function detach() {
+        document.removeEventListener('click', onGesture);
+        document.removeEventListener('touchend', onGesture);
+        document.removeEventListener('keydown', onGesture);
+        resumeDetach = null;
       }
-      return new Promise(function (resolve) {
-        function fn() {
-          ctx.resume().then(function () {
-            if (ctx.state === 'running') {
-              document.removeEventListener('click', fn);
-              document.removeEventListener('touchend', fn);
-              document.removeEventListener('keydown', fn);
-              setStatus('Audio unlocked', 'on');
-              if (navigator.mediaSession) {
-                try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
-              }
-              resolve();
-            }
-          }).catch(function (e) {});
+      function onUnlocked() {
+        detach();
+        resumeWaiter = null;
+        setStatus('Playing', 'on');
+        if (navigator.mediaSession) {
+          try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
         }
-        document.addEventListener('click', fn, { passive: true });
-        document.addEventListener('touchend', fn, { passive: true });
-        document.addEventListener('keydown', fn, { passive: true });
-        fn();
-      });
+        resolve();
+      }
+      function onGesture() {
+        ctx.resume().then(function () {
+          if (ctx.state === 'running') { onUnlocked(); }
+        }).catch(function (e) {});
+      }
+      function askForGesture() {
+        setStatus('Tap to enable audio', 'wait');
+        if (navigator.mediaSession) {
+          try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {}
+        }
+      }
+      resumeDetach = detach;
+      document.addEventListener('click', onGesture, { passive: true });
+      document.addEventListener('touchend', onGesture, { passive: true });
+      document.addEventListener('keydown', onGesture, { passive: true });
+
+      ctx.resume().then(function () {
+        if (ctx.state === 'running') { onUnlocked(); } else { askForGesture(); }
+      }).catch(function () { askForGesture(); });
     });
-    return p.catch(function (e) {});
+    return resumeWaiter;
+  }
+
+  function releaseResumeWaiter() {
+    if (resumeDetach) { resumeDetach(); }
+    resumeWaiter = null;
   }
 
   function flush() {
-    if (!ctx || accFrames === 0) { return; }
+    if (!ctx || accFrames.length === 0) { return; }
     if (ctx.state !== 'running') {
+      // Autoplay blocked: keep only the newest MAX_PENDING frames so memory
+      // stays bounded while the user decides whether to tap.
+      var excess = accFrames.length - MAX_PENDING;
+      if (excess > 0) { accFrames.splice(0, excess); drops += excess; }
       ensureResumed();
       return;
     }
-    var total = accFrames * FRAME_SAMPLES;
+    var total = accFrames.length * FRAME_SAMPLES;
     var buf;
     try {
       buf = ctx.createBuffer(channels, total, sampleRate);
     } catch (e) {
-      accFrames = 0;
+      accFrames = [];
       return;
     }
-    var ch;
-    for (ch = 0; ch < channels; ch++) {
-      try {
-        buf.getChannelData(ch).set(accCh[ch]);
-      } catch (e) {
-        accFrames = 0;
-        return;
+    var off = 0;
+    for (var i = 0; i < accFrames.length; i++) {
+      for (var c = 0; c < channels; c++) {
+        try {
+          buf.getChannelData(c).set(accFrames[i][c], off);
+        } catch (e) {
+          accFrames = [];
+          return;
+        }
       }
+      off += FRAME_SAMPLES;
     }
+    accFrames = [];
     var t;
     var dur;
     var v = volume();
@@ -221,16 +270,16 @@
       var now = hostMs();
       var d = target - now;
       if (d < 0) {
-        accFrames = 0;
-        // Reset clock so the next batch can anchor fresh instead of
-        // discarding forever while PTS runs ahead of us.
-        schedEnd = 0;
-        return;
+        // PTS already behind us (woke from sleep, long stall). Re-seed from now
+        // instead of discarding forever while PTS runs ahead.
+        t = ctx.currentTime + 0.02;
+        firstPTS = hostMs();
+      } else {
+        t = ctx.currentTime + d / 1000;
       }
-      t = ctx.currentTime + d / 1000;
       dur = total / sampleRate;
     } else {
-      var ahead = (schedEnd - ctx.currentTime) * 1000;
+      var ahead = schedEnd - ctx.currentTime;
       var err = ahead - TARGET_BUF;
       intErr = Math.max(-PI_LIM, Math.min(PI_LIM, intErr + err * 0.05));
       var adj = err * PI_KP + intErr * PI_KI;
@@ -238,8 +287,14 @@
       curRate = 1 + adj;
       dur = total / (sampleRate * curRate);
       t = schedEnd;
-      // If we fell too far behind (tab was throttled), re-anchor.
-      if (t < ctx.currentTime - 0.5) {
+      // Hard ceiling: past this, re-anchor rather than let latency grow for the
+      // rest of the session. Without it a single stall desyncs this device
+      // permanently, because the compensator cannot drain a backlog in time.
+      if (t - ctx.currentTime > MAX_LATENCY) {
+        t = ctx.currentTime + 0.05;
+        schedEnd = 0;
+      } else if (t < ctx.currentTime - 0.5) {
+        // Fell behind (tab was throttled) — re-anchor too.
         t = ctx.currentTime + 0.05;
         schedEnd = 0;
       }
@@ -259,35 +314,27 @@
     try {
       src.start(st);
     } catch (e) {
-      accFrames = 0;
+      accFrames = [];
       return;
     }
     schedEnd = et;
-    accFrames = 0;
   }
 
   function feed(pts, pcm) {
     if (!ctx || !active) { return; }
-    var chs = pcmToFloat(pcm);
-    var ch;
-    if (accFrames === 0) {
-      firstPTS = pts;
-      accCh = [];
-      for (ch = 0; ch < chs.length; ch++) {
-        accCh.push(new Float32Array(chs[ch]));
-      }
-    } else {
-      for (ch = 0; ch < channels; ch++) {
-        var old = accCh[ch];
-        var n = old.length + chs[ch].length;
-        var m = new Float32Array(n);
-        m.set(old);
-        m.set(chs[ch], old.length);
-        accCh[ch] = m;
-      }
+    // Use the PTS we are sent: a step that is not one frame means a frame was
+    // lost or duplicated, and appending blindly would shift this device out of
+    // sync with every other one for good.
+    if (lastPTS !== 0) {
+      var step = pts - lastPTS;
+      if (step < FRAME_MS * 0.5) { drops++; return; }     // duplicate/reorder
+      if (step > FRAME_MS * 1.5) { gaps++; schedEnd = 0; } // gap -> re-anchor
     }
-    accFrames++;
-    if (accFrames >= BATCH) { flush(); }
+    lastPTS = pts;
+    if (accFrames.length === 0) { firstPTS = pts; }
+    accFrames.push(pcmToFloat(pcm));
+    while (accFrames.length > MAX_PENDING) { accFrames.shift(); drops++; }
+    if (accFrames.length >= BATCH) { flush(); }
   }
 
   function handleNtpPong(msg) {
@@ -377,6 +424,13 @@
           var m = null;
           try { m = JSON.parse(e.data); } catch (err) { return; }
           if (m && m.type === 'ntp_pong') { handleNtpPong(m); }
+          if (m && m.type === 'error') {
+            if (!done) {
+              done = true;
+              clearTimeout(timer);
+              reject(new Error(m.message || m.reason || 'host reported a capture error'));
+            }
+          }
           return;
         }
         var dv;
@@ -396,7 +450,15 @@
           clearTimeout(timer);
           active = true;
           updateBtn();
-          setStatus('Playing', 'on');
+          if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') {
+            // Connected, but the browser is withholding playback until a
+            // gesture. Say so on the status line instead of claiming to play
+            // audio nobody can hear, or leaving it stuck on "Connecting".
+            setStatus('Tap to enable audio', 'wait');
+            ensureResumed();
+          } else {
+            setStatus('Playing', 'on');
+          }
           w.onmessage = onAudioMessage;
           resolve();
         });
@@ -441,8 +503,13 @@
     feed(pts, ev.data.slice(9));
   }
 
-  function start() {
-    if (active) { return Promise.resolve(); }
+  function start(source) {
+    if (source === 'user') { userIntent = true; }
+    // Guard on `connecting` as well as `active`: `active` only becomes true
+    // after the init frame and the NTP handshake, so a poll tick landing
+    // inside that window used to open a second socket and leak the first.
+    if (active || connecting) { return Promise.resolve(); }
+    connecting = true;
     setStatus('Connecting…', 'wait');
     var c = ctx;
     if (!c || c.state === 'closed') {
@@ -453,30 +520,41 @@
           c = new window.webkitAudioContext();
         }
       } catch (e) {
+        connecting = false;
         setStatus('Error: Web Audio not supported', '');
         return Promise.reject(e);
       }
       ctx = c;
     }
-    accFrames = 0;
+    accFrames = [];
     schedEnd = 0;
+    lastPTS = 0;
     curRate = 1;
     intErr = 0;
-    return ensureResumed().then(function () {
-      setMediaSession();
-      requestWakeLock();
-      return openStreamSocket();
+    // Do NOT await resume() before connecting: with autoplay blocked it only
+    // settles after a gesture, which would leave the auto-connect path stuck
+    // with no socket and no prompt. Ask for the gesture and connect anyway.
+    ensureResumed();
+    setMediaSession();
+    requestWakeLock();
+    return openStreamSocket().then(function () {
+      connecting = false;
     }).catch(function (e) {
+      connecting = false;
       setStatus('Error: ' + (e && e.message ? e.message : e), '');
       stop();
       throw e;
     });
   }
 
-  function stop() {
+  function stop(source) {
+    if (source === 'user') { userIntent = false; }
+    releaseResumeWaiter();
     active = false;
-    accFrames = 0;
+    connecting = false;
+    accFrames = [];
     schedEnd = 0;
+    lastPTS = 0;
     updateBtn();
     setStatus('Stopped', '');
     if (navigator.mediaSession) {
@@ -511,13 +589,15 @@
         var bc = !!(j && j.broadcasting);
         if (bc && autoc.checked && !active) {
           console.log('bg poll: auto-start');
-          start().catch(function (err) {
+          start('auto').catch(function (err) {
             console.log('bg poll auto-start failed', err);
             setStatus('Error: ' + (err && err.message ? err.message : err), '');
           });
-        } else if (!bc && active) {
-          console.log('bg poll: broadcast stopped, stopping locally');
-          stop();
+        } else if (!bc && active && !userIntent) {
+          // Only an auto-joined stream ends when the broadcast ends. A stream
+          // the user started by hand is theirs to stop from this page.
+          console.log('bg poll: broadcast stopped, stopping auto-joined stream');
+          stop('auto');
         } else if (!bc && !active && !sseOk) {
           setStatus('Idle — waiting for broadcast', '');
         }
@@ -561,11 +641,11 @@
       if (d && d.type === 'stream_command') {
         console.log('bg SSE stream_command', d.action);
         if (d.action === 'start' && autoc.checked && !active) {
-          start().catch(function (err) {
+          start('auto').catch(function (err) {
             console.log('bg auto-start via SSE failed', err);
           });
-        } else if (d.action === 'stop' && active) {
-          stop();
+        } else if (d.action === 'stop' && active && !userIntent) {
+          stop('auto');
         }
       }
     };
@@ -577,12 +657,18 @@
 
   // --- wiring ---
   toggle.onclick = function () {
+    if (active && ctx && ctx.state !== 'running' && ctx.state !== 'closed') {
+      // Streamed in but still blocked: this tap is the gesture we were waiting
+      // for, so unlock rather than tearing the connection down.
+      ensureResumed();
+      return;
+    }
     if (active) {
-      stop();
+      stop('user');
     } else {
-      start().catch(function (e) {
+      start('user').catch(function (e) {
         setStatus('Error: ' + (e && e.message ? e.message : e), '');
-        stop();
+        stop('user');
       });
     }
   };

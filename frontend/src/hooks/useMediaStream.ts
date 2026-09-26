@@ -123,10 +123,12 @@ export function useMediaStream(deviceId?: string): UseMediaStreamResult {
       try {
         const data = JSON.parse(e.data);
         if (data.type === 'stream_command') {
+          // Host-driven, not a local user action: mark it as an auto-join so
+          // a stream the user started by hand is not later overridden.
           if (data.action === 'start') {
-            import('../lib/streamManager').then(m => m.start());
+            import('../lib/streamManager').then(m => m.start('auto'));
           } else if (data.action === 'stop') {
-            import('../lib/streamManager').then(m => m.stop());
+            import('../lib/streamManager').then(m => m.stop('auto'));
           }
           return;
         }

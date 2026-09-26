@@ -55,23 +55,21 @@ export default function ConnectedDevicesCard() {
     return () => clearInterval(id);
   }, []);
 
-  // Fallback: if SSE stream_command was missed (e.g. buffered channel race or
-  // hotkey pressed before SSE was ready), polling will still see
-  // broadcasting=true and can auto-start the audio stream.
-  // This also handles the hotkey-first-press case where the AudioContext
-  // was suspended — the start() will wait for a tap and then play.
+  // Fallback for a missed SSE stream_command (buffered-channel race, or the
+  // hotkey pressed before this client's EventSource was ready).
+  //
+  // Only ever drives *auto-joined* streams. If the user started or stopped the
+  // stream from this device, the poll must not override that — otherwise a
+  // manual Stream is torn down within 2 s when the broadcast flag flips, and a
+  // manual Stop is silently undone by the next poll that sees broadcasting.
   useEffect(() => {
     if (!data) return;
     import('../lib/streamManager').then(m => {
+      if (m.isUserDriven()) return;
       if (data.broadcasting && !m.isActive()) {
-        console.log('ConnectedDevicesCard: auto-start via polling fallback (broadcasting=true)');
-        m.start();
+        m.start('auto');
       } else if (!data.broadcasting && m.isActive()) {
-        // Optional: auto-stop when broadcast ends, so hotkey stop also works via polling
-        // Don't auto-stop if the user manually started via AudioStreamCard — but that
-        // case is rare; the SSE stop will also fire, so this is just a safety net.
-        console.log('ConnectedDevicesCard: auto-stop via polling fallback (broadcasting=false)');
-        m.stop();
+        m.stop('auto');
       }
     });
   }, [data?.broadcasting]);
