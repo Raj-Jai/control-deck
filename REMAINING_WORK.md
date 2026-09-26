@@ -13,7 +13,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 |---|------|--------|--------|
 | 0 | Tracker created | [x] | (this file) |
 | 1 | SEC-007 root file server → allow-list | [x] | (this commit) |
-| 2 | SEC-001/002/003 geo path traversal | [ ] | |
+| 2 | SEC-001/002/003 geo path traversal | [x] | (this commit) |
 | 3 | SEC-004 CSRF guard on mutating endpoints | [ ] | |
 | 4 | SEC-005/SEC-011 WebSocket origin verification | [ ] | |
 | 5 | SEC-006/008/009/010 clipboard + PIN brute force + gate | [ ] | |
@@ -43,9 +43,11 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       (both PINs), `server.key`, `server.log`, `.git/` and the source tree. Replaced with
       `newStaticHandler()`: only `/static/**` is reachable, dotfiles and sensitive names are
       refused, and every path is containment-checked. Covered by `static_server_test.go`.
-- [ ] **SEC-001** (Critical) `/api/geo/session` traversal → arbitrary file read.
-- [ ] **SEC-002** (Critical) same handler → arbitrary file delete.
-- [ ] **SEC-003** (High) same handler → arbitrary file write outside `geo_sessions/`.
+- [x] **SEC-001** (Critical) `/api/geo/session` traversal → arbitrary file read. Now
+      `geoSessionPath()` with an allow-list charset and a post-resolution containment check.
+- [x] **SEC-002** (Critical) same handler → arbitrary file delete. Same containment.
+- [x] **SEC-003** (High) same handler → arbitrary file write outside `geo_sessions/`. Same
+      containment; `handleGeoSave` appends the extension after validating the base name.
 - [ ] **SEC-004** (Critical) `POST /api/command` accepts `text/plain`, no Origin check,
       dispatches `git push` / `git reset HEAD~1` / `lock-session` → cross-origin RCE.
 - [ ] **SEC-005** (Critical) `/ws/terminal` accepts any Origin → unauthenticated `$SHELL`.
@@ -59,7 +61,7 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **SEC-013** (Info) command-injection review — **no exploitable shell injection found**.
 - [ ] **SEC-014** (Medium) unbounded, publicly served log containing window titles.
 - [ ] **SEC-015** (High) `device_id` empty over plain-HTTP LAN → per-device controls dead.
-- [ ] **SEC-016** (Low) `services/geo_sessions` written 0755/0644, world-readable.
+- [x] **SEC-016** (Low) `geo_sessions` was created 0755 with 0644 files. Now 0700/0600.
 
 ## 2. Backend reliability
 

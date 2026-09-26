@@ -384,9 +384,14 @@ func handleGeoSave(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		req.Name = time.Now().Format("2006-01-02_15-04-05")
 	}
-	os.MkdirAll(geoDir, 0755)
+	target, err := geoSessionPath(req.Name, ".json")
+	if err != nil {
+		http.Error(w, "Invalid session name", http.StatusBadRequest)
+		return
+	}
 	data, _ := json.MarshalIndent(req.Points, "", "  ")
-	if err := os.WriteFile(geoDir+"/"+req.Name+".json", data, 0644); err != nil {
+	// 0600: session recordings carry location history.
+	if err := os.WriteFile(target, data, 0o600); err != nil {
 		http.Error(w, "Save failed", http.StatusInternalServerError)
 		return
 	}
@@ -397,7 +402,7 @@ func handleGeoSessions(w http.ResponseWriter, r *http.Request) {
 	if !requireFeature(w, FeatureGeoSurvey) {
 		return
 	}
-	os.MkdirAll(geoDir, 0755)
+	os.MkdirAll(geoDir, 0o700)
 	entries, err := os.ReadDir(geoDir)
 	if err != nil {
 		json.NewEncoder(w).Encode([]string{})
@@ -419,22 +424,32 @@ func handleGeoSession(w http.ResponseWriter, r *http.Request) {
 	if !requireFeature(w, FeatureGeoSurvey) {
 		return
 	}
-	if r.Method == http.MethodDelete {
-		name := r.URL.Query().Get("name")
-		if name == "" {
-			http.Error(w, "Missing name", http.StatusBadRequest)
-			return
-		}
-		os.Remove(geoDir + "/" + name)
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
-		return
-	}
 	name := r.URL.Query().Get("name")
 	if name == "" {
 		http.Error(w, "Missing name", http.StatusBadRequest)
 		return
 	}
-	data, err := os.ReadFile(geoDir + "/" + name)
+
+	if r.Method == http.MethodDelete {
+		target, err := geoSessionPath(name, "")
+		if err != nil {
+			http.Error(w, "Invalid session name", http.StatusBadRequest)
+			return
+		}
+		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+			http.Error(w, "Delete failed", http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		return
+	}
+
+	target, err := geoSessionPath(name, "")
+	if err != nil {
+		http.Error(w, "Invalid session name", http.StatusBadRequest)
+		return
+	}
+	data, err := os.ReadFile(target)
 	if err != nil {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return
