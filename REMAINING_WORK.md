@@ -12,7 +12,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | # | Unit | Status | Commit |
 |---|------|--------|--------|
 | 0 | Tracker created | [x] | (this file) |
-| 1 | SEC-007 root file server → allow-list | [ ] | |
+| 1 | SEC-007 root file server → allow-list | [x] | (this commit) |
 | 2 | SEC-001/002/003 geo path traversal | [ ] | |
 | 3 | SEC-004 CSRF guard on mutating endpoints | [ ] | |
 | 4 | SEC-005/SEC-011 WebSocket origin verification | [ ] | |
@@ -39,8 +39,10 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 The project has no authorization boundary. A path-traversal class plus a CSRF class
 together give unauthenticated RCE and arbitrary file access to anyone who can reach the port.
 
-- [ ] **SEC-007** (Critical) `http.FileServer(http.Dir("."))` at the root serves `config.json`
-      (both PINs), `server.key`, `server.log`, `.git/`, the whole source tree.
+- [x] **SEC-007** (Critical) `http.FileServer(http.Dir("."))` at the root served `config.json`
+      (both PINs), `server.key`, `server.log`, `.git/` and the source tree. Replaced with
+      `newStaticHandler()`: only `/static/**` is reachable, dotfiles and sensitive names are
+      refused, and every path is containment-checked. Covered by `static_server_test.go`.
 - [ ] **SEC-001** (Critical) `/api/geo/session` traversal → arbitrary file read.
 - [ ] **SEC-002** (Critical) same handler → arbitrary file delete.
 - [ ] **SEC-003** (High) same handler → arbitrary file write outside `geo_sessions/`.

@@ -499,8 +499,11 @@ func main() {
 		}
 	}()
 
-	// Serve frontend assets
-	http.Handle("/", trackMiddleware(http.FileServer(http.Dir("."))))
+	// Serve the built frontend, and nothing else. The previous
+	// http.FileServer(http.Dir(".")) exposed config.json (both PINs),
+	// server.key, server.log, .git/ and the whole source tree to anyone who
+	// could reach the port.
+	http.Handle("/", trackMiddleware(newStaticHandler()))
 
 	// API Routes
 	http.HandleFunc("/api/capabilities", handleCapabilities)
