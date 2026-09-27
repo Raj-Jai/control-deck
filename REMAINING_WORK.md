@@ -77,6 +77,34 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       `BASE` is hardcoded to port 18085/18095 while the port is a separate variable, so
       pointing it at a different instance silently kept testing the original one. It now
       asserts its own precondition.
+- [x] **UI-001** visual pass over seven viewports (iPhone SE/14/14 Pro Max, Pixel 7,
+      iPad mini, iPad, iPad landscape) in both themes. What it turned up, all fixed:
+  - `bg-deck-surface2` was used 17 times but the token is `surface-2`, so Tailwind
+    dropped the class and those elements — the PIN pad keys, the transport buttons, the
+    clipboard rows, the stat bars, the quick tiles, the mini player art — rendered with
+    no background at all. Nothing errored; it just looked unstyled. A test now walks the
+    source and fails on any undefined `deck-*` colour.
+  - The stats card used three columns, so a fourth reading wrapped onto a row of its
+    own with dead space beside it. Two columns on a phone, four from `sm` up.
+  - Light-mode cards were white at 60% over near-white with an 8% border, so they had no
+    edge and no body. Light now gets opaque cards and a 14% edge; dark keeps the glass.
+  - The slider and meter tracks used `surface-2`, which in light mode equals the page
+    background — 1.02:1 against a white card, so the track was invisible. Dedicated
+    track token per theme.
+  - The top and bottom strips were 80% and 70% opaque, so light mode showed card edges
+    through them. Both opaque now.
+  - The navigation button floated at a fixed position and landed on top of the mixer and
+    the More controls button. Docked in the bottom strip.
+  - The Bluetooth tile's pair action was a 44px badge in the corner of a
+    one-third-width tile, on top of its own label. 44px is the touch-target floor so it
+    could not be shrunk; it now takes two columns as a peer tile.
+  - The master and per-app audio rows had different structures, so no slider or readout
+    lined up. They share one column template.
+  - No `Cache-Control` was set on any static response, so the browser guessed from
+    `Last-Modified` and a phone with the dashboard installed could keep rendering the
+    previous build. Hashed assets under `assets/` are now immutable for a year; the
+    shell, worker and manifest are `no-cache`. This is the most likely reason a UI
+    change looked like it had not deployed.
 - [ ] **OPS-01** a device on the LAN cannot complete the HTTPS handshake. The journal holds
       1,165 `TLS handshake error from 10.42.0.150: remote error: tls: unknown
       certificate`, the earliest on Sep 25 05:21 under PID 4242 — so it predates every
