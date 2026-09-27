@@ -211,7 +211,15 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       host. `onKeyUp` and `onBlur` now commit on every slider.
 - [x] **BUG-009** one failed artwork load left the placeholder up for every subsequent track.
       The failure now resets when the artwork URL changes.
-- [ ] **BUG-018** the service worker's scope excludes every request its fetch handler serves.
+- [x] **BUG-018** the service worker's scope excludes every request its fetch handler serves.
+      It is served from `/static/` but registered with `Service-Worker-Allowed: /`, so its
+      scope is the whole origin and its handler saw every request the page made - Open-Meteo
+      forecasts, YouTube thumbnails and the rest. Each of those got a cache lookup, and
+      because the "is this the shell" test matched any pathname ending in `/`, some were
+      written into our cache as well. The handler now returns immediately for a different
+      origin. This also retires **PERF-24**, which was the same defect seen as a wasted
+      round trip. Verified in a browser: after driving a cross-origin fetch, the cache
+      contains only the five same-origin precache entries.
 - [x] **BUG-019** the HTML shell was cache-first under a fixed cache name, so an installed PWA
       kept being served the previous `index.html` — which points at asset hashes the rebuild
       replaced. HTML is network-first now, and the cache name is stamped with the emitted
@@ -275,7 +283,17 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       manager, a settings dialog, a browser tab. Unrecognised windows now leave the deck alone.
 - [x] **BUG-040** a capability-fetch failure hides every capability-gated card, no retry.
       *(done: capabilities fail open and the card offers a retry)*
-- [ ] **BUG-042** art theming silently fails for any art host without CORS, and sticks.
+- [x] **BUG-042** art theming silently fails for any art host without CORS, and sticks.
+      The `art-themed` class was removed only in the image's `onerror` handler, so a host
+      without CORS headers - or anything thrown while reading the pixels - left the previous
+      cover's palette on screen with nothing to indicate the colours were stale. The
+      palette is now cleared on *every* transition, before the new cover is even requested,
+      and a null result or a throw falls back to the theme's own accent. The arithmetic moved
+      into `lib/artPalette.ts` and the class/property handling into `lib/artTheme.ts` so
+      both are testable without a DOM: 12 tests cover the palette (solid fields, dominant
+      hue, complementary accent, greys, transparency, the legibility clamp) and the
+      never-stick property specifically - a success followed by a failure leaves neither the
+      class nor either custom property behind.
       *(partially done: accent contrast clamp only)*
 - [x] **BUG-044** `speed_*` injected `shift+.` / `shift+,` with no idea which player they
       would reach, so pressing "Faster" while the focus was in an editor typed into the

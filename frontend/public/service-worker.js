@@ -28,6 +28,16 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
+  // Same origin only. The worker is served from /static/ but registered with
+  // Service-Worker-Allowed: /, so its scope is the whole origin and this
+  // handler was seeing every request the page made - Open-Meteo forecasts,
+  // YouTube thumbnails and the rest. Each of those got a cache lookup and,
+  // because the shell test matched any pathname ending in '/', some of them
+  // were written into our cache as well (BUG-018, PERF-24). A worker has no
+  // business holding a third party's response, and it added a hop to every
+  // request for no benefit.
+  if (url.origin !== self.location.origin) return;
+
   // Never touch live data: the audio socket, the event stream, or anything
   // under /api/. Caching any of those would replay a stale position or a stale
   // session, and the deck would show numbers that are not true.
