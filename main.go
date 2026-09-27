@@ -1387,15 +1387,40 @@ var (
 	videoWmClasses    = []string{"vlc", "mpv", "celluloid", "totem", "snapshop", "io.mpv", "org.videolan.vlc"}
 )
 
+// The window watcher polls every second. Logging on every tick wrote a line
+// per second containing the user's window titles - a document title is private
+// data, and the log grew without bound (SEC-014). Detection itself is
+// unchanged; only the logging is quietened.
+var (
+	lastDetectedMu    sync.Mutex
+	lastDetectedCls   string
+	lastDetectedTitle string
+)
+
+func logFocusDetection(source, cls, title string) {
+	lastDetectedMu.Lock()
+	changed := cls != lastDetectedCls || title != lastDetectedTitle
+	lastDetectedCls, lastDetectedTitle = cls, title
+	lastDetectedMu.Unlock()
+	if !changed {
+		return
+	}
+	if title == "" {
+		log.Printf("focus change: %s → %s", source, cls)
+		return
+	}
+	log.Printf("focus change: %s → %s | %s", source, cls, title)
+}
+
 func detectFocusedWindow() (string, string) {
 	cls, title := detectByDBusExtension()
 	if cls != "" {
-		log.Printf("win detect: D-Bus extension → %s | %s", cls, title)
+		logFocusDetection("D-Bus extension", cls, title)
 		return cls, title
 	}
 
 	cls, _ = detectByProcessList()
-	log.Printf("win detect: process list → %s", cls)
+	logFocusDetection("process list", cls, "")
 	return cls, cls
 }
 
