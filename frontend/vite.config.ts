@@ -24,7 +24,13 @@ function stampServiceWorker(): Plugin {
 
       let stamp = 'dev';
       try {
-        const js = readdirSync(join(staticDir, 'assets')).find((f) => f.endsWith('.js'));
+        // The entry chunk specifically. Once the build is split, the assets
+        // directory holds a deck chunk per deck, and an unordered find picked
+        // up whichever came first - so the cache name was derived from
+        // IdeDeck's hash, and any build that left the deck chunks unchanged
+        // would keep serving the old HTML and the old entry bundle.
+        const js = readdirSync(join(staticDir, 'assets'))
+          .find((f) => f.startsWith('index-') && f.endsWith('.js'));
         if (js) stamp = js.replace(/^index-/, '').replace(/\.js$/, '');
       } catch {
         // Keep the fallback rather than failing the build.

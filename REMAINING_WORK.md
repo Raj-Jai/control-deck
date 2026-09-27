@@ -315,7 +315,17 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       40px on both: the terminal toolbar, key modifiers, cursor pad and quick chips, and the
       video frame-step, track, aspect and speed controls. All are now at least 44x44, and the
       full 59-check responsive suite is clean.
-- [ ] Single 656 kB bundle, no code splitting. *(gzip is done; the split is not)*
+- [x] Single 656 kB bundle, no code splitting.
+      Each deck is a `React.lazy` chunk fetched the first time its page is opened. The entry
+      chunk is now 295 kB (86 kB gzip) instead of 656 kB (183 kB gzip) - 53% less on the
+      critical path - and the terminal's 343 kB (88 kB gzip, mostly @xterm/xterm) is only
+      paid for by someone who opens a terminal. Video is 10 kB, Media 5 kB, IDE 3 kB.
+- [x] **BUG (found by the split)** the service-worker cache stamp took whichever `.js` file
+      came first in the assets directory. Once the build was split that was a deck chunk, so
+      the cache name was derived from `IdeDeck`'s hash - and a build that changed only the
+      entry chunk would have kept the same cache name, serving the old HTML and old bundle to
+      an installed PWA. It now looks for `index-*.js` specifically.
+- [x] `xterm@5` was a dependency alongside `@xterm/xterm@6` and imported nowhere. Removed.
 - [x] **MAINT-01** `ToggleGrid.tsx` (139 lines) was dead - nothing imported it - and it was the
       only remaining reason `.toggle-ripple`, `@keyframes rippleAnim` and their art-themed
       override existed. Deleted the component and all three CSS rules. This also retires

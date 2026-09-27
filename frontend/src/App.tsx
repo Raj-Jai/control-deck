@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { Maximize2, Minimize2, Monitor, ChevronDown, ChevronUp } from 'lucide-react';
 import AuthScreen, { getStoredMode } from './components/AuthScreen';
 import { useMediaStream } from './hooks/useMediaStream';
@@ -20,10 +20,15 @@ import CommandLogCard from './components/CommandLogCard';
 import ClipboardCard from './components/ClipboardCard';
 import ConnectedDevicesCard from './components/ConnectedDevicesCard';
 import FloatingNav from './components/FloatingNav';
-import MediaBrowserDeck from './decks/MediaBrowserDeck';
-import VideoPlayerDeck from './decks/VideoPlayerDeck';
-import IdeDeck from './decks/IdeDeck';
-import TerminalDeck from './decks/TerminalDeck';
+// Split by deck. TerminalDeck in particular pulls in @xterm/xterm and
+// @xterm/addon-fit, which together were the largest thing in a single 656 kB
+// chunk that every page load downloaded even though most sessions never open a
+// terminal (PERF-16/17). Each deck is now fetched the first time it is opened,
+// and the body is only mounted while its page is on screen.
+const MediaBrowserDeck = lazy(() => import('./decks/MediaBrowserDeck'));
+const VideoPlayerDeck = lazy(() => import('./decks/VideoPlayerDeck'));
+const IdeDeck = lazy(() => import('./decks/IdeDeck'));
+const TerminalDeck = lazy(() => import('./decks/TerminalDeck'));
 import MediaStreamerPage from './components/MediaStreamerPage';
 import GeoSurveyCard from './components/GeoSurveyCard';
 import BleProximityCard from './components/BleProximityCard';
@@ -414,6 +419,10 @@ export default function App() {
               )}
             </div>
 
+            {/* Each deck is a separate chunk fetched on first open, so the
+                fallback has to occupy the page without shifting layout when the
+                chunk lands. */}
+            <Suspense fallback={<div className="deck-card h-full min-h-[200px]" aria-busy="true" />}>
             {/* The page shells stay mounted so the carousel can scroll between
                 them, but each body renders only while its page is the one on
                 screen. Building all five at once meant the terminal's PTY, the
@@ -453,6 +462,7 @@ export default function App() {
               {currentPageId === 'terminal' && <TerminalDeck caps={caps} />}
             </div>
             )}
+            </Suspense>
           </div>
           )}
         </div>
