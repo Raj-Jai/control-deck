@@ -13,7 +13,7 @@ interface Props {
 
 export default function MediaStreamerPage({ deviceId }: Props) {
   const { state, loading, error } = useMediaStream(deviceId);
-  const caps = useCapabilities();
+  const { caps } = useCapabilities();
   useArtTheming(state?.art_url);
 
   return (

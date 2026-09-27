@@ -37,7 +37,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
-  const caps = useCapabilities();
+  const { caps } = useCapabilities();
   const dragging = useRef(false);
   const seekRef = useRef(0);
   const [localPos, setLocalPos] = useState<number | null>(null);

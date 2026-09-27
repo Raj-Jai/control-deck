@@ -14,7 +14,7 @@ const iconMap: Record<string, any> = {
 };
 
 export default function QuickSettings({ state }: QuickSettingsProps) {
-  const caps = useCapabilities();
+  const { caps } = useCapabilities();
   const { toggles } = DECK_CONFIG;
   const caffeineOn = state?.caffeine_on ?? false;
   const caffeineCustom = state?.caffeine_custom ?? false;

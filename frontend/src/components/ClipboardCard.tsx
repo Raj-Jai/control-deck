@@ -89,9 +89,15 @@ export default function ClipboardCard() {
         el.style.opacity = '0';
         document.body.appendChild(el);
         el.select();
-        document.execCommand('copy');
+        // execCommand reports false rather than throwing when the browser
+        // refuses, which is what happens without a secure context.
+        const ok = document.execCommand('copy');
         document.body.removeChild(el);
-        showToast('Copied!', 'success');
+        if (ok) {
+          showToast('Copied!', 'success');
+        } else {
+          showToast('Copy blocked by the browser — use HTTPS (port 8443)', 'error');
+        }
       } catch {
         showToast('Copy failed — use HTTPS (port 8443)', 'error');
       }
@@ -110,17 +116,26 @@ export default function ClipboardCard() {
       </div>
 
       {/* Textarea */}
+      <label htmlFor="clipboard-text" className="sr-only">
+        Text to send to the host clipboard
+      </label>
       <textarea
+        id="clipboard-text"
         ref={textareaRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Type or paste text, then push to host…"
         rows={3}
+        maxLength={100000}
         className="w-full bg-deck-surface2/60 border border-white/5 rounded-lg p-2.5
           text-sm text-deck-text placeholder-deck-muted resize-none
           focus:outline-none focus:border-deck-accent/40 focus:ring-1 focus:ring-deck-accent/20
           transition-colors duration-150"
       />
+      <p className="text-[10px] text-deck-muted/50 -mt-1">
+        {text.length.toLocaleString()} / 100,000 characters.
+        {' '}Push writes to the host clipboard, visible to every application.
+      </p>
 
       {/* Action buttons */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -196,6 +211,8 @@ export default function ClipboardCard() {
       {/* Toast */}
       {toast && (
         <div
+          role="status"
+          aria-live="polite"
           className={`absolute bottom-14 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg
             text-xs font-semibold shadow-lg pointer-events-none z-10
             transition-all duration-200 ${

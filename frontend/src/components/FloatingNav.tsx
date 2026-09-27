@@ -10,10 +10,16 @@ interface FloatingNavProps {
   /** True when the MiniPlayer is docked at the bottom, so the FAB can sit
    *  clear of it instead of covering the next-track button. */
   raised?: boolean;
+  /** True when a broadcast is live, so Refresh can say so before it ends one. */
+  broadcasting?: boolean;
 }
 
-export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, onToggleAutoFocus, raised }: FloatingNavProps) {
+export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, onToggleAutoFocus, raised, broadcasting = false }: FloatingNavProps) {
   const [open, setOpen] = useState(false);
+  // A reload drops this client's socket, which ends the broadcast for every
+  // device, not just this one. So Refresh always takes two taps, and the second
+  // one says what it will cost.
+  const [armed, setArmed] = useState(false);
 
   const handleNav = useCallback((i: number) => {
     scrollTo(i);
@@ -26,7 +32,7 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
       {open && (
         <div
           className="fixed inset-0 -z-10"
-          onClick={() => setOpen(false)}
+          onClick={() => { setOpen(false); setArmed(false); }}
           aria-hidden="true"
         />
       )}
@@ -74,12 +80,23 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
 
           <button
             role="menuitem"
-            onClick={() => location.reload()}
+            onClick={() => {
+              if (armed) {
+                setArmed(false);
+                location.reload();
+                return;
+              }
+              setArmed(true);
+            }}
             className="w-full flex items-center gap-2 px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center
               text-deck-dim hover:text-deck-text hover:bg-white/5 transition-all"
           >
             <RefreshCw size={12} />
-            <span>Refresh</span>
+            <span className="text-left">
+              {armed
+                ? (broadcasting ? 'Tap again — this ends the live broadcast' : 'Tap again to reload')
+                : (broadcasting ? 'Refresh (ends the broadcast)' : 'Refresh')}
+            </span>
           </button>
         </div>
       )}

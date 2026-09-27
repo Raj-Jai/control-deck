@@ -31,7 +31,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 13 | BUG-041/022/SUS-001 feature-flag contract + command registration | [x] | (this commit) |
 | 14a | BUG-034 IDE debugger keys | [x] | (this commit) |
 | 14b | BUG-031/033 video track cycling + honest failures | [x] | (this commit) |
-| 14c | BUG-035/036/037/039/040/044/054/055 remaining functional | [ ] | |
+| 14c | BUG-035/036/039/040/024/008/019 terminal, refresh, auto-focus, capabilities, clipboard | [x] | (this commit) |
+| 14d | BUG-004/005/006/007/009/018/030/037/044/054/055 remaining | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -159,7 +160,8 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-009** the mini player never recovers from a failed artwork load.
 - [ ] **BUG-018** the service worker's scope excludes every request its fetch handler serves.
 - [ ] **BUG-019** cache-first HTML breaks installed PWAs after a rebuild.
-- [ ] **BUG-024** clipboard copy reports success even when the copy failed.
+- [x] **BUG-024** clipboard copy reported success even when `document.execCommand('copy')`
+      returned false, which is what it does without a secure context. The result is now checked.
 - [ ] **BUG-028** geo calibration is an O(n²) render and memory loop.
 - [ ] **BUG-029** the BLE advertised name is never set; `stop()` never stops watching.
 - [ ] **BUG-030** music-search responses can arrive out of order and overwrite newer results.
@@ -175,12 +177,17 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       and "Toggle Breakpoint" shelled out to `playerctl play-pause` and paused the user's
       music. The comments claimed keys the code never sent. The bindings are now VS Code's
       real ones, and `sendkey` learned `ctrl+` / `shift+` prefixes so they can be expressed.
-- [ ] **BUG-035** the terminal reconnects forever every 2 s and floods `[disconnected]`.
-- [ ] **BUG-036** "Refresh" in the nav menu silently kills an active audio broadcast.
+- [x] **BUG-035** the terminal reconnected on a flat 2 s forever and appended a
+      `[disconnected]` line every 2 s, so the scrollback filled with them. Bounded exponential
+      backoff now, and it says "disconnected — retrying" once.
+- [x] **BUG-036** "Refresh" was `location.reload()` with no confirmation, which drops the
+      client's socket and ends the broadcast for *every* device. It now always takes two taps
+      and names the consequence when a broadcast is live.
 - [ ] **BUG-037** the LRC parser rejects single-digit minutes, mis-parses multi-timestamp lines.
 - [ ] **BUG-038** `triggerCommand`/`seekTo`/`setVolume`/`setBrightness` never check the response.
       *(partially done: `triggerCommand` only)*
-- [ ] **BUG-039** auto-focus yanks the deck to Home for any unrecognised window.
+- [x] **BUG-039** auto-focus snapped the deck to Home for any window we do not map — a file
+      manager, a settings dialog, a browser tab. Unrecognised windows now leave the deck alone.
 - [ ] **BUG-040** a capability-fetch failure hides every capability-gated card, no retry.
 - [ ] **BUG-042** art theming silently fails for any art host without CORS, and sticks.
       *(partially done: accent contrast clamp only)*
@@ -238,7 +245,9 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **§8.5** the IDE deck has no result surface and runs in the dashboard's CWD, not the
       focused project's.
 - [ ] **§8.6** the terminal's `rebuild` button overwrites the binary with no confirmation.
-- [ ] **§8.8** the clipboard card has no label, no `role="status"`, no size cap.
+- [x] **§8.8** the clipboard card had a placeholder but no label, a toast with no live region,
+      and no size cap. All three fixed, with a character count and a note that Push writes to
+      the host clipboard.
 - [ ] **§8.10** the geo canvas has no `devicePixelRatio` scaling; no recording cap or auto-save;
       delete fires on `pointerDown` with no confirm.
 - [ ] **§8.11** the BLE meter shows 62% green before any scan; unmounting stops advertising

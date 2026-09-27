@@ -67,7 +67,7 @@ function isToggleActive(id: string, state: MediaState | null): boolean {
 
 export default function ToggleGrid({ state }: ToggleGridProps) {
   const { toggles } = DECK_CONFIG;
-  const caps = useCapabilities();
+  const { caps } = useCapabilities();
 
   const visible = toggles.filter(t => !t.cap || caps[t.cap as keyof typeof caps]);
 

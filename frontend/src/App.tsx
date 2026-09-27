@@ -55,7 +55,7 @@ export default function App() {
   const unlocked = authMode !== null;
   const { state, loading, error } = useMediaStream(deviceId, unlocked);
   const { appType } = useActiveWindow(unlocked);
-  const caps = useCapabilities(unlocked);
+  const { caps, capabilitiesReady, retryCapabilities } = useCapabilities(unlocked);
   const [features, flagsReady] = useFeatureFlags(unlocked);
   useArtTheming(state?.art_url);
   const [full, setFull] = useState(false);
@@ -68,6 +68,7 @@ export default function App() {
     try { return localStorage.getItem('dash_home_more') === '1'; } catch { return false; }
   });
   const [clientCount, setClientCount] = useState(0);
+  const [broadcasting, setBroadcasting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollRAF = useRef(0);
   const dragStripRef = useRef<HTMLDivElement>(null);
@@ -121,6 +122,11 @@ export default function App() {
   // deps so manual navigation (dots/nav menu) is never yanked back.
   useEffect(() => {
     if (!autoFocus || !appType) return;
+    // "default" means the focused window is not one we map to a deck. Snapping
+    // to Home for every unrecognised window - a file manager, a settings
+    // dialog, a browser tab - pulled the user away from whatever they were
+    // looking at (BUG-039). Stay put instead.
+    if (appType === 'default') return;
     const allTarget = ALL_PAGES[appToPageIndex(appType)];
     if (!allTarget) return;
     const visible = pages.findIndex(p => p.id === allTarget.id);
@@ -163,7 +169,10 @@ export default function App() {
       try {
         const res = await fetch(`/api/clients?device_id=${encodeURIComponent(deviceId)}`);
         const data = await res.json();
-        if (!cancelled) setClientCount(data.count);
+        if (!cancelled) {
+          setClientCount(data.count);
+          setBroadcasting(!!data.broadcasting);
+        }
       } catch {}
     };
     poll();
@@ -298,6 +307,11 @@ export default function App() {
           )}
           {error && (
             <div className="text-center text-red-400 text-sm py-2 mb-2">{error} — retrying…</div>
+          )}
+          {!capabilitiesReady && (
+            <div className="text-center text-deck-dim text-xs py-2 mb-2" role="status">
+              Checking which host tools are available…
+            </div>
           )}
 
           {/* Now Playing — full on Home/Media/Video, mini on Code/Terminal */}
@@ -456,8 +470,20 @@ export default function App() {
         </div>
       </div>
 
+      {!capabilitiesReady && (
+        <button
+          onClick={retryCapabilities}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 min-h-[44px] px-4
+            rounded-xl border border-white/10 bg-deck-bg/90 text-[12px] text-deck-dim
+            hover:text-deck-text"
+        >
+          Retry tool check
+        </button>
+      )}
+
       <FloatingNav
         raised={showMini}
+        broadcasting={broadcasting}
         pages={pages}
         currentPage={page}
         scrollTo={scrollTo}

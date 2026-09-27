@@ -99,11 +99,21 @@ export default function TerminalDeck({ caps }: Props) {
         }
       };
 
+      // Bounded exponential backoff, and say "reconnecting" once rather than
+      // appending a line every two seconds for as long as the host is down.
+      let attempt = 0;
+      let saidOffline = false;
+
       ws.onclose = () => {
         wsRef.current = null;
         setConnected(false);
-        term.write('\r\n\x1b[31m[disconnected]\x1b[0m\r\n');
-        reconnectTimer = setTimeout(connect, 2000);
+        if (!saidOffline) {
+          saidOffline = true;
+          term.write('\r\n\x1b[31m[disconnected — retrying]\x1b[0m\r\n');
+        }
+        const delay = Math.min(30000, 1000 * 2 ** Math.min(attempt, 5));
+        attempt++;
+        reconnectTimer = setTimeout(connect, delay);
       };
 
       ws.onerror = () => { ws.close(); };
