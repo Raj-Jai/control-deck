@@ -14,7 +14,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 0 | Tracker created | [x] | (this file) |
 | 1 | SEC-007 root file server → allow-list | [x] | (this commit) |
 | 2 | SEC-001/002/003 geo path traversal | [x] | (this commit) |
-| 3 | SEC-004 CSRF guard on mutating endpoints | [ ] | |
+| 3 | SEC-004/006/008/009 session tokens + CSRF guard + rate limit | [x] | (this commit) |
 | 4 | SEC-005/SEC-011 WebSocket origin verification | [ ] | |
 | 5 | SEC-006/008/009/010 clipboard + PIN brute force + gate | [ ] | |
 | 6 | SEC-012/014/016 proxy header, log growth, file modes | [ ] | |
@@ -48,13 +48,19 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **SEC-002** (Critical) same handler → arbitrary file delete. Same containment.
 - [x] **SEC-003** (High) same handler → arbitrary file write outside `geo_sessions/`. Same
       containment; `handleGeoSave` appends the extension after validating the base name.
-- [ ] **SEC-004** (Critical) `POST /api/command` accepts `text/plain`, no Origin check,
-      dispatches `git push` / `git reset HEAD~1` / `lock-session` → cross-origin RCE.
+- [x] **SEC-004** (Critical) `POST /api/command` accepted `text/plain` with no preflight and
+      no Origin check, dispatching `git push` / `git reset HEAD~1` / `lock-session` from any
+      web page the user visited. Now: every guarded route requires a session token, mutating
+      requests must carry `X-Control-Deck-CSRF: 1` (a custom header, so cross-origin needs a
+      preflight, and no `Access-Control-*` header is ever returned), and bodies must be JSON.
 - [ ] **SEC-005** (Critical) `/ws/terminal` accepts any Origin → unauthenticated `$SHELL`.
-- [ ] **SEC-006** (High) clipboard read/write unauthenticated.
+- [x] **SEC-006** (High) clipboard read/write unauthenticated — now behind the session.
 - [ ] **SEC-007a** (Critical) rotate `server.key`, `pin`, `media_pin` — readable on the LAN.
-- [ ] **SEC-008** (High) no brute-force protection on the PIN endpoints.
-- [ ] **SEC-009** (High) the dashboard lock is a client-side gate protecting nothing.
+- [x] **SEC-008** (High) no brute-force protection on the PIN endpoints — now 5 attempts then
+      a doubling lockout per client IP, cleared on success, `Retry-After` on 429.
+- [x] **SEC-009** (High) the dashboard lock was a client-side gate protecting nothing — every
+      endpoint now requires a server-minted token, the remembered mode is only honoured while a
+      live token exists, and the four data hooks do not connect while locked.
 - [ ] **SEC-010** (Medium) "Media Streamer" mode is not actually restricted.
 - [ ] **SEC-011** (Medium) audio WebSocket has no Origin check.
 - [ ] **SEC-012** (Medium) `X-Forwarded-For` trusted unconditionally.
@@ -153,6 +159,18 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       *(done in the audio commit)*
 - [ ] **PERF-37** `resolveArtURL`'s single-entry cache re-base64s a file every 500 ms.
 - [ ] Single 625 kB bundle, no code splitting.
+
+### Session model (added with unit 3)
+
+- `POST /api/auth` and `/api/auth-media` mint a 32-byte hex token on a correct PIN.
+- Tokens live 12 h, are capped at 64 live sessions, and are reaped every 10 min.
+- Public: `/api/auth`, `/api/auth-media`, `/api/capabilities`, `/api/features`, `/api/ping`,
+  everything under `/static/`.
+- Everything else needs `X-Control-Deck-Token` (or `?token=` for EventSource/WebSocket).
+- Mutating requests additionally need `X-Control-Deck-CSRF: 1` and a JSON content type.
+- The token is in `sessionStorage`, so a second tab asks for the PIN again.
+- `background.html` has its own unlock gate and stores its token in `localStorage`.
+- `--toggle-broadcast` mints a token in-process rather than leaving a localhost hole.
 
 ## 8. UX / product leftovers
 

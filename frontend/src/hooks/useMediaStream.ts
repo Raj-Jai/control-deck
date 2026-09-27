@@ -100,12 +100,17 @@ interface UseMediaStreamResult {
   error: string | null;
 }
 
-export function useMediaStream(deviceId?: string): UseMediaStreamResult {
+export function useMediaStream(deviceId?: string, enabled = true): UseMediaStreamResult {
   const [state, setState] = useState<MediaState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Nothing connects while the page is locked.
+    if (!enabled) {
+      setLoading(true);
+      return;
+    }
     const streamUrl = DECK_CONFIG.api.stream + (deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '');
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
@@ -163,7 +168,7 @@ export function useMediaStream(deviceId?: string): UseMediaStreamResult {
       clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, [deviceId]);
+  }, [deviceId, enabled]);
 
   return { state, loading, error };
 }

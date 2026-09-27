@@ -57,10 +57,15 @@ if (deviceId) setDeviceId(deviceId);
 
 export default function App() {
   const [authMode, setAuthMode] = useState<'dashboard' | 'media' | null>(getStoredMode);
-  const { state, loading, error } = useMediaStream(deviceId);
-  const { appType } = useActiveWindow();
-  const caps = useCapabilities();
-  const [features, flagsReady] = useFeatureFlags();
+
+  // Every one of these opens a connection or polls. While the page is locked
+  // they would all be refused (and were, before the session existed), so a
+  // locked page now consumes no server resources and receives no state.
+  const unlocked = authMode !== null;
+  const { state, loading, error } = useMediaStream(deviceId, unlocked);
+  const { appType } = useActiveWindow(unlocked);
+  const caps = useCapabilities(unlocked);
+  const [features, flagsReady] = useFeatureFlags(unlocked);
   useArtTheming(state?.art_url);
   const [full, setFull] = useState(false);
   const [page, setPage] = useState(0);
@@ -160,6 +165,7 @@ export default function App() {
     }`;
 
   useEffect(() => {
+    if (!unlocked) return;
     let cancelled = false;
     const poll = async () => {
       if (document.hidden) return;
@@ -174,7 +180,7 @@ export default function App() {
     const onVisible = () => { if (!document.hidden) poll(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => { cancelled = true; clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
-  }, []);
+  }, [unlocked]);
 
   // Deck-container drag. The carousel used to be mouse-inert: the pointer
   // handlers lived only on the bottom strip, so on desktop opening the FAB

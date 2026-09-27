@@ -28,6 +28,14 @@
 <body>
 <div class="card">
   <h1>🔊 Background Audio</h1>
+  <div id="gate" style="display:flex;flex-direction:column;gap:8px">
+    <span style="font-size:11px;color:#94a3b8">Enter the deck PIN to connect this page</span>
+    <input type="password" inputmode="numeric" maxlength="8" id="pinInput"
+      placeholder="PIN"
+      style="background:#0b1220;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;padding:10px;font-size:16px;letter-spacing:0.2em">
+    <button class="btn" id="unlock">Unlock</button>
+    <p class="hint" id="gateMsg" style="margin:0">Stored on this device so the page can auto-connect later.</p>
+  </div>
   <div class="status" id="status"><span class="dot" id="dot"></span><span id="stext">Connecting…</span></div>
   <button class="btn" id="toggle"><span id="ticon">▶</span> <span id="tlabel">Connect</span></button>
   <label style="font-size:11px;color:#94a3b8;display:flex;align-items:center;gap:8px"><input type="checkbox" id="autoc" checked> Auto-connect when broadcast starts</label>
@@ -46,6 +54,73 @@
   'use strict';
 
   function $(id) { return document.getElementById(id); }
+
+  // Every guarded endpoint needs a session token now. This page stores one
+  // after the first successful PIN entry so the installed PWA can still
+  // auto-connect without a prompt every time it wakes.
+  var TOKEN_KEY = 'deck_bg_token';
+  function getToken() {
+    try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
+  }
+  function setToken(t) {
+    try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  }
+  function withToken(url) {
+    var t = getToken();
+    if (!t) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(t);
+  }
+  function authedFetch(url, opts) {
+    opts = opts || {};
+    var headers = new Headers(opts.headers || {});
+    var t = getToken();
+    if (t) headers.set('X-Control-Deck-Token', t);
+    if (opts.method && opts.method !== 'GET' && opts.method !== 'HEAD') {
+      headers.set('X-Control-Deck-CSRF', '1');
+      if (opts.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    }
+    opts.headers = headers;
+    return fetch(url, opts);
+  }
+
+  var gate = $('gate');
+  var pinInput = $('pinInput');
+  var gateMsg = $('gateMsg');
+  var unlocked = !!getToken();
+
+  function showGate(msg) {
+    gate.style.display = 'flex';
+    gateMsg.textContent = msg || 'Stored on this device so the page can auto-connect later.';
+    $('toggle').disabled = true;
+  }
+  function hideGate() {
+    unlocked = true;
+    gate.style.display = 'none';
+    $('toggle').disabled = false;
+  }
+  function doUnlock() {
+    var pin = (pinInput.value || '').trim();
+    if (!pin) { gateMsg.textContent = 'Enter the deck PIN.'; return; }
+    gateMsg.textContent = 'Checking…';
+    authedFetch('/api/auth-media', { method: 'POST', body: JSON.stringify({ pin: pin }) })
+      .then(function (r) {
+        if (r.status === 429) { gateMsg.textContent = 'Too many attempts. Wait a moment.'; return; }
+        return r.json();
+      })
+      .then(function (j) {
+        if (j && j.ok && j.token) {
+          setToken(j.token);
+          pinInput.value = '';
+          hideGate();
+          startEverything();
+        } else {
+          gateMsg.textContent = 'Wrong PIN.';
+        }
+      })
+      .catch(function () { gateMsg.textContent = "Can't reach the deck."; });
+  }
+  $('unlock').addEventListener('click', doUnlock);
+  pinInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') doUnlock(); });
 
   var dot = $('dot');
   var stext = $('stext');
@@ -401,7 +476,7 @@
   function openStreamSocket() {
     return new Promise(function (resolve, reject) {
       var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      var url = proto + '//' + location.host + '/api/audio-stream/ws?device_id=' + encodeURIComponent(deviceId);
+      var url = withToken(proto + '//' + location.host + '/api/audio-stream/ws?device_id=' + encodeURIComponent(deviceId));
       var w;
       try {
         w = new WebSocket(url);
@@ -580,7 +655,7 @@
   }
 
   function checkBroadcastOnce() {
-    return fetch('/api/clients?device_id=' + encodeURIComponent(deviceId), { cache: 'no-store' })
+    return authedFetch('/api/clients?device_id=' + encodeURIComponent(deviceId), { cache: 'no-store' })
       .then(function (r) {
         if (!r.ok) { throw new Error('http ' + r.status); }
         return r.json();
@@ -620,7 +695,7 @@
       try { es.close(); } catch (e) {}
       es = null;
     }
-    var url = '/media-stream?device_id=' + encodeURIComponent(deviceId);
+    var url = withToken('/media-stream?device_id=' + encodeURIComponent(deviceId));
     try {
       es = new EventSource(url);
     } catch (e) {
@@ -745,9 +820,18 @@
   }
 
   // --- init ---
-  startSSE();
-  startPoll(2500);
-  checkBroadcastOnce();
+  function startEverything() {
+    startPoll(2500);
+    checkBroadcastOnce();
+    startSSE();
+  }
+
+  if (unlocked) {
+    hideGate();
+    startEverything();
+  } else {
+    showGate();
+  }
   setInterval(function () {
     if (!sseOk && !es) { startSSE(); }
   }, 10000);

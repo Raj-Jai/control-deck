@@ -21,11 +21,13 @@ export function appToPageIndex(app: AppType): number {
   return appToPage[app] ?? 0;
 }
 
-export function useActiveWindow() {
+export function useActiveWindow(enabled = true) {
   const [appType, setAppType] = useState<AppType>('default');
   const [windowInfo, setWindowInfo] = useState<WindowFocus | null>(null);
 
   useEffect(() => {
+    // No window-title stream while the page is locked.
+    if (!enabled) return;
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
@@ -52,7 +54,7 @@ export function useActiveWindow() {
       clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, []);
+  }, [enabled]);
 
   return { appType, windowInfo };
 }

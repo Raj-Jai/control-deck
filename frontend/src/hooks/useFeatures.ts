@@ -46,7 +46,7 @@ export function useFeatures(): Features {
  * until the real set is known, falling open after a short grace period so an
  * unreachable backend still shows the UI.
  */
-export function useFeatureFlags(): [Features, boolean] {
+export function useFeatureFlags(enabled = true): [Features, boolean] {
   const [features, setFeatures] = useState<Features>(() => cached ?? { ...defaults });
   const [ready, setReady] = useState(() => cached !== null);
 
@@ -56,13 +56,14 @@ export function useFeatureFlags(): [Features, boolean] {
       setReady(true);
       return;
     }
+    if (!enabled) return;
     let done = false;
     const finish = (f: Features) => { if (!done) { done = true; setFeatures(f); setReady(true); } };
     fetchFeatures().then(finish);
     // Fail open: never hold the UI hostage to a slow or dead backend.
     const t = setTimeout(() => finish(defaults), 1500);
     return () => clearTimeout(t);
-  }, []);
+  }, [enabled]);
 
   return [features, ready];
 }

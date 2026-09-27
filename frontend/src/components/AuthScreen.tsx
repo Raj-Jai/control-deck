@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { setToken, getToken, clearToken } from '../lib/session';
 import { Lock, Music, LayoutDashboard, ArrowLeft } from 'lucide-react';
 
 type AuthMode = 'dashboard' | 'media';
@@ -10,6 +11,11 @@ interface AuthScreenProps {
 const STORAGE_KEY = 'dash_auth_mode';
 
 export function getStoredMode(): AuthMode | null {
+  // The remembered mode is only honoured while a live session token exists.
+  // sessionStorage is per-tab, so opening the dashboard in a second tab now
+  // correctly asks for the PIN instead of rendering an app whose every
+  // request would 401.
+  if (!getToken()) return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -25,6 +31,7 @@ function setStoredMode(mode: AuthMode) {
 
 export function clearAuth() {
   localStorage.removeItem(STORAGE_KEY);
+  clearToken();
 }
 
 export default function AuthScreen({ onAuth }: AuthScreenProps) {
@@ -53,8 +60,15 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
         body: JSON.stringify({ pin: p.join('') }),
         signal: ac.signal,
       });
+      if (res.status === 429) {
+        setError('offline');
+        return;
+      }
       const data = await res.json();
       if (data.ok) {
+        // The server now mints a session token; without it every other
+        // endpoint answers 401.
+        if (data.token) setToken(data.token);
         setStoredMode(mode);
         onAuth(mode);
         return;

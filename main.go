@@ -60,11 +60,11 @@ func buildCommandMap() {
 	}
 
 	commandMap = map[string][]string{
-		"playpause":      {"playerctl", "play-pause"},
-		"next":           {"playerctl", "next"},
-		"previous":       {"playerctl", "previous"},
-		"seekBack10":     {"playerctl", "position", "10-"},
-		"seekFwd10":      {"playerctl", "position", "10+"},
+		"playpause":  {"playerctl", "play-pause"},
+		"next":       {"playerctl", "next"},
+		"previous":   {"playerctl", "previous"},
+		"seekBack10": {"playerctl", "position", "10-"},
+		"seekFwd10":  {"playerctl", "position", "10+"},
 
 		"fullscreen":     {os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey", "f"},
 		"captions":       {os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey", "c"},
@@ -79,12 +79,12 @@ func buildCommandMap() {
 		"btSinkOn":       {"sh", "-c", "bluetoothctl discoverable on && bluetoothctl pairable on"},
 		"btSinkOff":      {"bluetoothctl", "discoverable", "off"},
 		"btConnect":      {"bluetoothctl", "connect", getConfig().BTMAC},
-		"nightOn":  {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
-		"nightOff": {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
-		"caffeineOff": {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
-		"caffeineOn":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
-		"caffeine30":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
-		"caffeine60":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"nightOn":        {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
+		"nightOff":       {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
+		"caffeineOff":    {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
+		"caffeineOn":     {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"caffeine30":     {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"caffeine60":     {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
 	}
 	for k, v := range getConfig().CustomCommands {
 		commandMap[k] = v
@@ -97,14 +97,14 @@ func buildProfileCommandMap() {
 
 	profileCmds := map[string][]string{
 		// IDE: Debugger keys (F5, F10, F11, Shift+F5)
-		"dbg_continue":      {sk, "F5"},
-		"dbg_step_over":     {sk, "F10"},
-		"dbg_step_into":     {sk, "F11"},
-		"dbg_step_out":      {"sh", "-c", sk + " F5"}, // Shift+F5 — handled below
-		"dbg_stop":          {"sh", "-c", sk + " F5"}, // Shift+F5
-		"dbg_restart":       {"sh", "-c", sk + " F5"}, // Ctrl+Shift+F5 via loop
-		"dbg_toggle_break":  {"sh", "-c", "playerctl --player $PLAYER play-pause 2>/dev/null || true"},
-		"dbg_clear_all":     {"sh", "-c", sk + " F9"},
+		"dbg_continue":     {sk, "F5"},
+		"dbg_step_over":    {sk, "F10"},
+		"dbg_step_into":    {sk, "F11"},
+		"dbg_step_out":     {"sh", "-c", sk + " F5"}, // Shift+F5 — handled below
+		"dbg_stop":         {"sh", "-c", sk + " F5"}, // Shift+F5
+		"dbg_restart":      {"sh", "-c", sk + " F5"}, // Ctrl+Shift+F5 via loop
+		"dbg_toggle_break": {"sh", "-c", "playerctl --player $PLAYER play-pause 2>/dev/null || true"},
+		"dbg_clear_all":    {"sh", "-c", sk + " F9"},
 
 		// IDE: Git aliases
 		"git_stage":  {"bash", "-c", "git add -A && git status -s"},
@@ -130,12 +130,12 @@ func buildProfileCommandMap() {
 		"key_enter": {sk, "enter"},
 
 		// Media: YouTube shortcut keys
-		"key_j": {sk, "j"},
-		"key_k": {sk, "k"},
-		"key_l": {sk, "l"},
-		"key_m": {sk, "m"},
-		"key_t": {sk, "t"},
-		"key_c": {sk, "c"},
+		"key_j":     {sk, "j"},
+		"key_k":     {sk, "k"},
+		"key_l":     {sk, "l"},
+		"key_m":     {sk, "m"},
+		"key_t":     {sk, "t"},
+		"key_c":     {sk, "c"},
 		"key_space": {sk, "space"},
 
 		// Terminal: Ctrl+key combos (via sendkey)
@@ -149,13 +149,13 @@ func buildProfileCommandMap() {
 		"key_ctrl_u": {sk, "ctrl_u"},
 
 		// Tmux
-		"tmux_pane_l":  {"bash", "-c", "tmux select-pane -L 2>/dev/null || true"},
-		"tmux_pane_r":  {"bash", "-c", "tmux select-pane -R 2>/dev/null || true"},
-		"tmux_pane_u":  {"bash", "-c", "tmux select-pane -U 2>/dev/null || true"},
-		"tmux_pane_d":  {"bash", "-c", "tmux select-pane -D 2>/dev/null || true"},
-		"tmux_split_h": {"bash", "-c", "tmux split-window -h 2>/dev/null || true"},
-		"tmux_split_v": {"bash", "-c", "tmux split-window -v 2>/dev/null || true"},
-		"tmux_new_win": {"bash", "-c", "tmux new-window 2>/dev/null || true"},
+		"tmux_pane_l":   {"bash", "-c", "tmux select-pane -L 2>/dev/null || true"},
+		"tmux_pane_r":   {"bash", "-c", "tmux select-pane -R 2>/dev/null || true"},
+		"tmux_pane_u":   {"bash", "-c", "tmux select-pane -U 2>/dev/null || true"},
+		"tmux_pane_d":   {"bash", "-c", "tmux select-pane -D 2>/dev/null || true"},
+		"tmux_split_h":  {"bash", "-c", "tmux split-window -h 2>/dev/null || true"},
+		"tmux_split_v":  {"bash", "-c", "tmux split-window -v 2>/dev/null || true"},
+		"tmux_new_win":  {"bash", "-c", "tmux new-window 2>/dev/null || true"},
 		"tmux_win_prev": {"bash", "-c", "tmux previous-window 2>/dev/null || true"},
 		"tmux_win_next": {"bash", "-c", "tmux next-window 2>/dev/null || true"},
 
@@ -184,38 +184,38 @@ func buildProfileCommandMap() {
 }
 
 type SystemStats struct {
-	CPU       float64 `json:"cpu"`
-	RAM       float64 `json:"ram"`
-	RAMUsed   float64 `json:"ram_used"`
-	RAMTotal  float64 `json:"ram_total"`
-	Battery   float64 `json:"battery"`
-	Charging  bool    `json:"charging"`
-	Temp      float64 `json:"temp"`
-	SSID      string  `json:"ssid"`
-	IP        string  `json:"ip"`
-	PingOK    bool    `json:"ping_ok"`
-	GPU       *GPUStats `json:"gpu,omitempty"`
+	CPU      float64   `json:"cpu"`
+	RAM      float64   `json:"ram"`
+	RAMUsed  float64   `json:"ram_used"`
+	RAMTotal float64   `json:"ram_total"`
+	Battery  float64   `json:"battery"`
+	Charging bool      `json:"charging"`
+	Temp     float64   `json:"temp"`
+	SSID     string    `json:"ssid"`
+	IP       string    `json:"ip"`
+	PingOK   bool      `json:"ping_ok"`
+	GPU      *GPUStats `json:"gpu,omitempty"`
 }
 
 type MediaState struct {
-	Title    string  `json:"title"`
-	Artist   string  `json:"artist"`
-	Status   string  `json:"status"`
-	ArtURL   string  `json:"art_url"`
-	Position float64 `json:"position"`
-	Length   float64 `json:"length"`
-	Lyrics   *LyricData `json:"lyrics,omitempty"`
-	Volume     float64 `json:"volume"`
-	Muted      bool    `json:"muted"`
-	Brightness float64 `json:"brightness"`
-	NightLight        bool   `json:"night_light"`
-	CaffeineOn        bool   `json:"caffeine_on"`
-	CaffeineCustom    bool   `json:"caffeine_custom"`
-	CaffeineDuration  int    `json:"caffeine_duration"`
-	BluetoothOn       bool   `json:"bluetooth_on"`
-	WarpOn            bool   `json:"warp_on"`
-	BTSinkOn          bool   `json:"bt_sink_on"`
-	AudioStreamActive bool         `json:"audio_stream_active"`
+	Title             string        `json:"title"`
+	Artist            string        `json:"artist"`
+	Status            string        `json:"status"`
+	ArtURL            string        `json:"art_url"`
+	Position          float64       `json:"position"`
+	Length            float64       `json:"length"`
+	Lyrics            *LyricData    `json:"lyrics,omitempty"`
+	Volume            float64       `json:"volume"`
+	Muted             bool          `json:"muted"`
+	Brightness        float64       `json:"brightness"`
+	NightLight        bool          `json:"night_light"`
+	CaffeineOn        bool          `json:"caffeine_on"`
+	CaffeineCustom    bool          `json:"caffeine_custom"`
+	CaffeineDuration  int           `json:"caffeine_duration"`
+	BluetoothOn       bool          `json:"bluetooth_on"`
+	WarpOn            bool          `json:"warp_on"`
+	BTSinkOn          bool          `json:"bt_sink_on"`
+	AudioStreamActive bool          `json:"audio_stream_active"`
 	Players           []PlayerState `json:"players"`
 	Sinks             []Sink        `json:"sinks"`
 	AppStreams        []AppStream   `json:"app_streams"`
@@ -471,9 +471,28 @@ func main() {
 				port = cfg.HTTPPort
 			}
 		}
+		// Every mutating endpoint needs a session token now. This helper runs
+		// in the same binary and can read the PIN, so it mints a local session
+		// rather than leaving a hole in the endpoint for localhost.
+		cfg, err := loadConfig("config.json")
+		if p := os.Getenv("CONFIG_PATH"); p != "" {
+			if c2, err2 := loadConfig(p); err2 == nil {
+				cfg = c2
+			}
+		}
+		if err != nil && cfg.PIN == "" {
+			fmt.Fprintln(os.Stderr, "toggle: cannot read config to authenticate")
+			os.Exit(1)
+		}
+		tok := newSessionToken("dashboard")
+
 		url := fmt.Sprintf("http://localhost:%d/api/stream/broadcast", port)
 		body := `{"action":"toggle"}`
-		resp, err := http.Post(url, "application/json", strings.NewReader(body))
+		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(csrfHeader, "1")
+		req.Header.Set(sessionHeader, tok)
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "toggle failed: %v\n", err)
 			os.Exit(1)
@@ -521,42 +540,45 @@ func main() {
 	http.Handle("/", trackMiddleware(newStaticHandler()))
 
 	// API Routes
+	// Public: needed before unlock, or carries nothing sensitive.
 	http.HandleFunc("/api/capabilities", handleCapabilities)
 	http.HandleFunc("/api/features", handleFeatures)
 	http.HandleFunc("/api/ping", handlePing)
-	http.HandleFunc("/api/auth", handleAuth)
-	http.HandleFunc("/api/auth-media", handleAuthMedia)
-	http.HandleFunc("/api/command", handleCommand)
-	http.HandleFunc("/api/clients", handleClients)
-	http.HandleFunc("/api/stream/control", handleStreamControl)
-	http.HandleFunc("/api/stream/broadcast", handleStreamBroadcast)
-	http.HandleFunc("/seek", handleSeek)
-	http.HandleFunc("/api/set-volume", handleSetVolume)
-	http.HandleFunc("/api/set-brightness", handleSetBrightness)
-	http.HandleFunc("/media-stream", handleSSE)
-	http.HandleFunc("/api/clipboard/pull", handleClipboardPull)
-	http.HandleFunc("/api/clipboard/push", handleClipboardPush)
-	http.HandleFunc("/api/audio/sinks", handleGetSinks)
-	http.HandleFunc("/api/audio/set-sink", handleSetSink)
-	http.HandleFunc("/api/audio/app-streams", handleGetAppStreams)
-	http.HandleFunc("/api/audio/set-app-stream", handleSetAppStream)
+	http.HandleFunc("/api/auth", handleAuthUnlock("dashboard"))
+	http.HandleFunc("/api/auth-media", handleAuthUnlock("media"))
+	http.HandleFunc("/api/logout", requireSession(handleAuthLogout))
 
-	http.HandleFunc("/api/audio-stream/ws", handleStreamWS)
-	http.HandleFunc("/api/audio-stream/status", handleStreamStatus)
-	http.HandleFunc("/api/window-stream", handleWindowSSE)
-	http.HandleFunc("/api/video/status", handleVideoStatus)
-	http.HandleFunc("/api/video/command", handleVideoCommand)
-	http.HandleFunc("/api/service-stats", handleServiceStats)
-	http.HandleFunc("/api/geo/save", handleGeoSave)
-	http.HandleFunc("/api/geo/sessions", handleGeoSessions)
-	http.HandleFunc("/api/geo/session", handleGeoSession)
-	http.HandleFunc("/api/ble/transmit", handleBleTransmit)
-	http.HandleFunc("/ws/terminal", handleTerminalWS)
-	http.HandleFunc("/api/music/search", handleMusicSearch)
-	http.HandleFunc("/api/music/play", handleMusicPlay)
-	http.HandleFunc("/api/music/open", handleOpenInBrowser)
-	http.HandleFunc("/api/music/handoff", handleHandoffToPhone)
-	http.HandleFunc("/api/music/handoff-devices", handleHandoffDevices)
+	// Everything below needs a valid session token.
+	http.HandleFunc("/api/command", requireSession(handleCommand))
+	http.HandleFunc("/api/clients", requireSession(handleClients))
+	http.HandleFunc("/api/stream/control", requireSession(handleStreamControl))
+	http.HandleFunc("/api/stream/broadcast", requireSession(handleStreamBroadcast))
+	http.HandleFunc("/seek", requireSession(handleSeek))
+	http.HandleFunc("/api/set-volume", requireSession(handleSetVolume))
+	http.HandleFunc("/api/set-brightness", requireSession(handleSetBrightness))
+	http.HandleFunc("/media-stream", requireSession(handleSSE))
+	http.HandleFunc("/api/clipboard/pull", requireSession(handleClipboardPull))
+	http.HandleFunc("/api/clipboard/push", requireSession(handleClipboardPush))
+	http.HandleFunc("/api/audio/sinks", requireSession(handleGetSinks))
+	http.HandleFunc("/api/audio/set-sink", requireSession(handleSetSink))
+	http.HandleFunc("/api/audio/app-streams", requireSession(handleGetAppStreams))
+	http.HandleFunc("/api/audio/set-app-stream", requireSession(handleSetAppStream))
+	http.HandleFunc("/api/audio-stream/ws", requireSession(handleStreamWS))
+	http.HandleFunc("/api/audio-stream/status", requireSession(handleStreamStatus))
+	http.HandleFunc("/api/window-stream", requireSession(handleWindowSSE))
+	http.HandleFunc("/api/video/status", requireSession(handleVideoStatus))
+	http.HandleFunc("/api/video/command", requireSession(handleVideoCommand))
+	http.HandleFunc("/api/service-stats", requireSession(handleServiceStats))
+	http.HandleFunc("/api/geo/save", requireSession(handleGeoSave))
+	http.HandleFunc("/api/geo/sessions", requireSession(handleGeoSessions))
+	http.HandleFunc("/api/geo/session", requireSession(handleGeoSession))
+	http.HandleFunc("/api/ble/transmit", requireSession(handleBleTransmit))
+	http.HandleFunc("/ws/terminal", requireSession(handleTerminalWS))
+	http.HandleFunc("/api/music/search", requireSession(handleMusicSearch))
+	http.HandleFunc("/api/music/play", requireSession(handleMusicPlay))
+	http.HandleFunc("/api/music/open", requireSession(handleOpenInBrowser))
+	http.HandleFunc("/api/music/handoff", requireSession(handleHandoffToPhone))
+	http.HandleFunc("/api/music/handoff-devices", requireSession(handleHandoffDevices))
 
 	// Background tickers
 	go startMediaBroadcaster()
@@ -582,12 +604,13 @@ func main() {
 			httpsPort = ":8443"
 		}
 		log.Printf("HTTPS on https://localhost%s (accept self-signed cert once)", httpsPort)
-		if err := http.ListenAndServeTLS(httpsPort, "server.crt", "server.key", nil); err != nil {
+		if err := http.ListenAndServeTLS(httpsPort, "server.crt", "server.key", authMiddleware(http.DefaultServeMux)); err != nil {
 			log.Printf("TLS server: %v", err)
 		}
 	}()
 
-	if err := http.ListenAndServe(port, nil); err != nil {
+	startSessionReaper()
+	if err := http.ListenAndServe(port, authMiddleware(http.DefaultServeMux)); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
@@ -711,45 +734,6 @@ func checkBattery() bool {
 	return false
 }
 
-func handleAuth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		PIN string `json:"pin"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	configMu.RLock()
-	ok := req.PIN == dashPIN
-	configMu.RUnlock()
-	json.NewEncoder(w).Encode(map[string]bool{"ok": ok})
-}
-
-func handleAuthMedia(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		PIN string `json:"pin"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	configMu.RLock()
-	ok := req.PIN == dashMediaPIN
-	configMu.RUnlock()
-	json.NewEncoder(w).Encode(map[string]bool{"ok": ok})
-}
-
-// Executed when buttons are pressed on the Web Deck
 func handleCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -793,26 +777,26 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	sendkeyBin := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
 
-		go func(cmdArgs []string) {
-			p := req.Player
-			if p == "" {
-				p = findBestPlayer()
+	go func(cmdArgs []string) {
+		p := req.Player
+		if p == "" {
+			p = findBestPlayer()
+		}
+		if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
+			if p != "" && p != cmdArgs[1] {
+				cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
 			}
-			if cmdArgs[0] == "playerctl" && len(cmdArgs) > 1 {
-				if p != "" && p != cmdArgs[1] {
-					cmdArgs = append([]string{cmdArgs[0], "--player", p}, cmdArgs[1:]...)
-				}
-			} else if (req.Command == "fullscreen" || req.Command == "captions") && cmdArgs[0] == sendkeyBin {
-				if p != "" {
-					cmdArgs = []string{cmdArgs[0], cmdArgs[1], p}
-				}
+		} else if (req.Command == "fullscreen" || req.Command == "captions") && cmdArgs[0] == sendkeyBin {
+			if p != "" {
+				cmdArgs = []string{cmdArgs[0], cmdArgs[1], p}
 			}
-			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-			cmd.Env = append(os.Environ(), "PLAYER="+p, "PLAYER_BUS=org.mpris.MediaPlayer2."+p)
-			if out, err := cmd.CombinedOutput(); err != nil {
-				log.Printf("Error executing %v: %v | Output: %s", cmdArgs, err, string(out))
-			}
-		}(args)
+		}
+		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+		cmd.Env = append(os.Environ(), "PLAYER="+p, "PLAYER_BUS=org.mpris.MediaPlayer2."+p)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("Error executing %v: %v | Output: %s", cmdArgs, err, string(out))
+		}
+	}(args)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
@@ -898,9 +882,11 @@ func isIdeCommand(cmd string) bool {
 
 // handleSpeedCommand implements a Shift+. / Shift+, state machine matching YouTube's
 // native 8-speed step array. Accepts:
-//   speed_up       — increment one step
-//   speed_down     — decrement one step
-//   speed_<float>  — jump to exact step (e.g. speed_1.5)
+//
+//	speed_up       — increment one step
+//	speed_down     — decrement one step
+//	speed_<float>  — jump to exact step (e.g. speed_1.5)
+//
 // It sends the required number of shift+. / shift+, keystrokes with 55ms spacing,
 // then broadcasts the updated speed via the window SSE.
 func handleSpeedCommand(cmd string) {
@@ -1150,8 +1136,8 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 	bc := broadcasting
 	broadcastingMu.Unlock()
 	json.NewEncoder(w).Encode(map[string]any{
-		"count":       len(list),
-		"clients":     list,
+		"count":        len(list),
+		"clients":      list,
 		"broadcasting": bc,
 	})
 }
@@ -1395,7 +1381,7 @@ type WindowFocusEvent struct {
 }
 
 var (
-	browserWmClasses = []string{"chromium", "chrome", "firefox", "brave", "mozilla", "org.mozilla.firefox", "org.chromium.Chromium"}
+	browserWmClasses  = []string{"chromium", "chrome", "firefox", "brave", "mozilla", "org.mozilla.firefox", "org.chromium.Chromium"}
 	terminalWmClasses = []string{"gnome-terminal", "kitty", "alacritty", "termite", "foot", "wezterm", "konsole", "windows-terminal", "kgx", "ptyxis", "blackbox", "cool-retro-term"}
 	ideWmClasses      = []string{"code", "code-oss", "jetbrains-idea", "jetbrains-pycharm", "jetbrains-webstorm", "jetbrains-goland", "idea", "pycharm", "webstorm", "goland", "android-studio"}
 	videoWmClasses    = []string{"vlc", "mpv", "celluloid", "totem", "snapshop", "io.mpv", "org.videolan.vlc"}
@@ -2159,22 +2145,22 @@ func fetchMPRISState() MediaState {
 	}
 
 	return MediaState{
-		Title:       title,
-		Artist:      artist,
-		Status:      status,
-		Lyrics:      lyrics,
-		ArtURL:      resolveArtURL(artStr),
-		Position:    posSeconds,
-		Length:      length,
-		Volume:      volume,
-		Muted:       muted,
-		Brightness:  brightness,
-		NightLight:       nightLight,
-		CaffeineOn:       caffeineOn,
-		CaffeineCustom:   caffeineCustom,
-		CaffeineDuration: caffeineDur,
-		BluetoothOn:      btOn,
-		BTSinkOn:         btSinkOn,
+		Title:             title,
+		Artist:            artist,
+		Status:            status,
+		Lyrics:            lyrics,
+		ArtURL:            resolveArtURL(artStr),
+		Position:          posSeconds,
+		Length:            length,
+		Volume:            volume,
+		Muted:             muted,
+		Brightness:        brightness,
+		NightLight:        nightLight,
+		CaffeineOn:        caffeineOn,
+		CaffeineCustom:    caffeineCustom,
+		CaffeineDuration:  caffeineDur,
+		BluetoothOn:       btOn,
+		BTSinkOn:          btSinkOn,
 		WarpOn:            warpOn,
 		AudioStreamActive: streamActive,
 		Players:           players,

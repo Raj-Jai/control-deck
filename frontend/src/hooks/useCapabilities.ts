@@ -39,7 +39,7 @@ async function fetchCaps(): Promise<Capabilities> {
   return pending;
 }
 
-export function useCapabilities(): Capabilities {
+export function useCapabilities(enabled = true): Capabilities {
   const [caps, setCaps] = useState<Capabilities>(() => cached ?? defaultCaps);
 
   useEffect(() => {
@@ -47,8 +47,10 @@ export function useCapabilities(): Capabilities {
       setCaps(cached);
       return;
     }
+    // No capability probe while the page is locked.
+    if (!enabled) return;
     fetchCaps().then(setCaps);
-  }, []);
+  }, [enabled]);
 
   return caps;
 }
