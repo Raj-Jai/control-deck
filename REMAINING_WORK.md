@@ -65,14 +65,18 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       requests must carry `X-Control-Deck-CSRF: 1` (a custom header, so cross-origin needs a
       preflight, and no `Access-Control-*` header is ever returned), and bodies must be JSON.
 - [x] **SEC-006** (High) clipboard read/write unauthenticated — now behind the session.
-- [ ] **BUG-011a** (High) when the audio capture dependency is missing, the stream card
-      still claims to be streaming. Reproduced against an instance deliberately started
-      with `ffmpeg` absent from `PATH` — `/api/capabilities` correctly reports
-      `"ffmpeg": false` — yet tapping the control puts the card into its `Stop` state and
-      no reason is ever shown, so the user is told a stream is running when nothing is
-      being captured. It is also slow to admit it: the UI sits in the streaming state for
-      ~12s before anything changes. This predates the current pass (it reproduces
-      identically on `e006668`) and is untouched by it. Not yet diagnosed.
+- [x] **BUG-011 verified, not broken.** Chased a report that a missing capture dependency
+      left the stream card claiming to be streaming. It does not. Against an instance
+      started with `ffmpeg` absent from `PATH` (`/api/capabilities` correctly reports
+      `"ffmpeg": false`), tapping the control puts the card into
+      `Stream audio — exec: "ffmpeg": executable file not found in $PATH` within 608 ms:
+      a real reason, naming the dependency, with no 10s hang. The server upgrades the
+      socket, immediately sends `{"type":"error","reason":...}` and logs
+      `add listener: exec: "ffmpeg": executable file not found in $PATH`; the client
+      already handles that message. The failure was in the check, not the product — its
+      `BASE` is hardcoded to port 18085/18095 while the port is a separate variable, so
+      pointing it at a different instance silently kept testing the original one. It now
+      asserts its own precondition.
 - [ ] **SEC-007a** (Critical) rotate `server.key`, `pin`, `media_pin` — readable on the LAN.
       **This is the one item that is deliberately not done, because doing it silently locks
       the owner out of their own dashboard.** `server.key` is the private key the running
