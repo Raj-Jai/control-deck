@@ -113,7 +113,8 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
             />
             <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showVol}%</span>
             {hasSinks && (
-              <button onClick={toggleSink} className="icon-btn w-9 h-9 flex-shrink-0">
+              <button onClick={toggleSink} aria-label={activeIsBT ? 'Switch audio output to the built-in speakers' : 'Switch audio output to the paired headset'}
+                className="icon-btn w-9 h-9 flex-shrink-0">
                 {activeIsBT ? <Speaker size={16} /> : <Headphones size={16} />}
               </button>
             )}
@@ -130,6 +131,8 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
               <button
                 className={`icon-btn w-9 h-9 flex-shrink-0 ${nightOn ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
                 onClick={() => triggerCommand(nightOn ? 'nightOff' : 'nightOn')}
+                aria-label={nightOn ? 'Turn night light off' : 'Turn night light on'}
+                aria-pressed={nightOn}
               >
                 <Moon size={16} />
               </button>
@@ -204,6 +207,7 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
               <button
                 className={`icon-btn w-8 h-8 flex-shrink-0 ${s.muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : ''}`}
                 onClick={() => setStream(s.id, { muted: !s.muted })}
+                aria-label={s.muted ? `Unmute ${s.media_name || `stream ${s.id}`}` : `Mute ${s.media_name || `stream ${s.id}`}`}
               >
                 {s.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
               </button>

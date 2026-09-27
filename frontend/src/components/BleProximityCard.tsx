@@ -121,6 +121,8 @@ export default function BleProximityCard() {
         <RadioTower size={13} className="text-deck-muted/40 flex-shrink-0" />
         <span className="text-[10px] text-deck-dim w-20">Advertiser</span>
         <button
+          aria-label={advOn ? 'Stop advertising' : 'Start advertising'}
+          aria-pressed={advOn}
           onPointerDown={toggleAdv}
           className={`icon-btn h-7 px-2.5 text-[10px] font-medium ${advOn ? 'text-green-400 bg-green-500/15 border-green-500/20' : ''}`}
         >
@@ -135,6 +137,8 @@ export default function BleProximityCard() {
         {state === 'scanning' ? <BluetoothSearching size={13} className="text-yellow-400 animate-pulse" /> : <Bluetooth size={13} className="text-deck-muted/40" />}
         <span className="text-[10px] text-deck-dim w-20">Scanner</span>
         <button
+          aria-label={state === 'scanning' ? 'Stop scanning' : 'Start scanning'}
+          aria-pressed={state === 'scanning'}
           onPointerDown={state === 'scanning' ? stop : start}
           className={`icon-btn h-7 px-2.5 text-[10px] font-medium ${state === 'scanning' ? 'text-cyan-400 bg-cyan-500/15 border-cyan-500/20' : ''}`}
         >

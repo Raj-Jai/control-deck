@@ -38,13 +38,15 @@ export default function MiniPlayer({ state }: MiniPlayerProps) {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button className="icon-btn w-10 h-10" onClick={() => triggerCommand('previous')}
+          <button className="icon-btn w-10 h-10" aria-label="Previous track" onClick={() => triggerCommand('previous')}
             disabled={!hasTrack}><SkipBack size={15} /></button>
-          <button className="icon-btn w-10 h-10" onClick={() => triggerCommand('playpause')}
+          <button className="icon-btn w-10 h-10"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            onClick={() => triggerCommand('playpause')}
             disabled={!hasTrack}>
             {isPlaying ? <Pause size={16} /> : <Play size={16} />}
           </button>
-          <button className="icon-btn w-10 h-10" onClick={() => triggerCommand('next')}
+          <button className="icon-btn w-10 h-10" aria-label="Next track" onClick={() => triggerCommand('next')}
             disabled={!hasTrack}><SkipForward size={15} /></button>
         </div>
       </div>

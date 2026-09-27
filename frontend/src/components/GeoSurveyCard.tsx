@@ -331,6 +331,8 @@ export default function GeoSurveyCard() {
         </span>
         <div className="flex-1 h-px bg-white/[0.04]" />
         <button
+          aria-label={gpsEnabled ? 'Turn GPS off' : 'Turn GPS on'}
+          aria-pressed={gpsEnabled}
           onPointerDown={toggleGps}
           className={`icon-btn w-7 h-7 ${gpsEnabled ? 'text-green-400 bg-green-500/15 border-green-500/20' : ''}`}
           title={gpsEnabled ? 'GPS on' : 'GPS off'}
@@ -338,6 +340,8 @@ export default function GeoSurveyCard() {
           <Navigation size={12} />
         </button>
         <button
+          aria-label={recording ? 'Stop recording' : 'Start recording'}
+          aria-pressed={recording}
           onPointerDown={toggleRecording}
           className={`icon-btn w-7 h-7 ${recording ? 'text-red-400 bg-red-500/15 border-red-500/20' : ''}`}
           title={recording ? 'Stop recording' : 'Start recording'}
@@ -439,6 +443,7 @@ export default function GeoSurveyCard() {
             placeholder:text-deck-muted/30 outline-none focus:border-deck-accent/30"
         />
         <button
+          aria-label="Save this session"
           onPointerDown={saveSession}
           disabled={points.length === 0}
           className="icon-btn w-7 h-7 flex-shrink-0 disabled:opacity-30"

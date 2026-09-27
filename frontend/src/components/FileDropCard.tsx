@@ -68,6 +68,7 @@ export default function FileDropCard() {
         </span>
         <div className="flex-1 h-px bg-white/[0.04]" />
         <button
+          aria-label="Refresh file list"
           onClick={refresh}
           className="w-7 h-7 flex items-center justify-center rounded-lg text-deck-dim hover:text-deck-accent hover:bg-white/5 transition-colors"
           title="Refresh list"

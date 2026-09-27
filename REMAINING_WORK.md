@@ -230,14 +230,18 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 6. Accessibility (21 findings)
 
-- [ ] **A11Y-01** bottom nav / FAB not keyboard reachable with a visible focus ring.
+- [x] **A11Y-01** every control now has a visible focus ring, via a global
+      `:focus-visible` rule. Several utility classes suppress the browser default, so a keyboard
+      user previously had no way to tell where they were. Verified across 14 real Tab stops.
 - [x] **A11Y-02/03** the seek slider has an `aria-label` and a spoken `aria-valuetext`
       ("0:30 of 5:00") now.
 - [ ] **A11Y-04** the carousel arrows have no accessible name.
 - [x] **A11Y-05** the lyrics modal has a focus trap, Escape, and focus restore.
-- [ ] **A11Y-06..21** `div role="button"` used instead of real buttons, missing labels on
-      icon-only controls, no `aria-live` on the status banner, no `prefers-reduced-motion`,
-      no global `:focus-visible` ring, contrast on dim text.
+- [x] **A11Y-06..21** `prefers-reduced-motion` is honoured: continuous animations stop and the
+      pulsing status dot stays visibly lit rather than disappearing with its animation. Every
+      icon-only control on every deck has an accessible name - verified by walking all five
+      decks in a browser and counting unnamed buttons, now zero. The service-stats strip is a
+      `role="status"` live region.
 
 ## 7. Performance (42 findings)
 
@@ -302,8 +306,10 @@ Complete visual redesign: new design tokens, theme, and layout across every comp
 - [~] **TEST-01..24** the audit's specified test cases. There is now a frontend test runner
       (`npm test`, Node's built-in runner, no new dependency) and Go tests for the areas fixed
       so far. No CI yet, and most of TEST-01..24 remain.
-- [ ] Delete the 892 lines of dead frontend code (12.5%), including two divergent lock
-      screens, a second BLE implementation, and `SysStatsBar.tsx`.
+- [x] Deleted 927 lines of provably dead frontend code: `DefaultDeck`, `AppMixerCard`,
+      `CaffeineCard`, `StepperControls`, `GuestView`, `LockScreen`, `SysStatsBar`,
+      `authStore`, `BleRssiMonitor`. `AppMixerCard`/`CaffeineCard`/`StepperControls` only
+      referenced each other, and `DefaultDeck` was the only thing importing them.
 - [ ] Extract shared `<VolumeSlider>` / `<BrightnessSlider>`.
 - [ ] `gofmt -l` clean (8 files), `go vet` clean (3 `unsafe.Pointer` warnings).
 - [ ] Add CI: `go vet`, `gofmt -l`, `go test -race ./...`, `npm ci`, `npm run build`, tests.

@@ -316,10 +316,12 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     const btnSize = large ? 'w-12 h-12' : '';
     return (
       <>
-        <button className="media-btn" onClick={() => triggerCommand('previous', playerId)} disabled={isOffline || isIdle}>
+        <button className="media-btn" onClick={() => triggerCommand('previous', playerId)}
+          disabled={isOffline || isIdle} aria-label="Previous track">
           <SkipBack size={s} />
         </button>
-        <button className="media-btn" onClick={() => triggerCommand('seekBack10', playerId)} disabled={isOffline || isIdle}>
+        <button className="media-btn" onClick={() => triggerCommand('seekBack10', playerId)}
+          disabled={isOffline || isIdle} aria-label="Rewind 10 seconds">
           <Rewind size={Math.round(s * 0.9)} />
         </button>
         <button
@@ -331,10 +333,12 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         >
           {status === 'Playing' ? <Pause size={large ? 26 : 20} /> : <Play size={large ? 26 : 20} />}
         </button>
-        <button className="media-btn" onClick={() => triggerCommand('seekFwd10', playerId)} disabled={isOffline || isIdle}>
+        <button className="media-btn" onClick={() => triggerCommand('seekFwd10', playerId)}
+          disabled={isOffline || isIdle} aria-label="Forward 10 seconds">
           <FastForward size={Math.round(s * 0.9)} />
         </button>
-        <button className="media-btn" onClick={() => triggerCommand('next', playerId)} disabled={isOffline || isIdle}>
+        <button className="media-btn" onClick={() => triggerCommand('next', playerId)}
+          disabled={isOffline || isIdle} aria-label="Next track">
           <SkipForward size={s} />
         </button>
       </>
@@ -480,6 +484,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             <button
               className={`media-btn relative ${opening ? 'animate-pulse text-deck-accent' : ''}`}
               onClick={handleOpenInBrowser}
+              aria-label="Open this track in the browser"
               title="Open in browser (same position)"
             >
               <ExternalLink size={16} />
@@ -490,6 +495,9 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             <button
               className={`media-btn relative ${handingOff ? 'animate-pulse text-deck-accent' : ''} ${showHandoffMenu ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
               onClick={toggleHandoffMenu}
+              aria-expanded={showHandoffMenu}
+              aria-haspopup="menu"
+              aria-label="Send this track to a phone"
               title="Send to phone (same position)"
             >
               <Smartphone size={16} />

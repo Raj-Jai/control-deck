@@ -123,6 +123,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
               muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : 'text-deck-text'
             }`}
             onClick={() => triggerCommand('mute')}
+            aria-label={muted ? 'Unmute' : 'Mute'}
           >
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>

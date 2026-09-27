@@ -332,3 +332,52 @@
     min-height: 44px;
   }
 }
+
+/* A visible focus ring on everything focusable.
+   Without this, the only focus indicator on most controls was the browser's
+   default outline, which several of the utility classes here suppress - so a
+   keyboard user had no way to tell where they were (A11Y-13). */
+:focus-visible {
+  outline: 2px solid var(--deck-accent, #06b6d4) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The slider rules below set `outline: none` in @layer base, which is what the
+   browser would otherwise draw. Restated here so a keyboard user can see where
+   they are on the seek bar and the volume sliders. */
+input[type='range']:focus-visible {
+  outline: 2px solid var(--deck-accent, #06b6d4);
+  outline-offset: 4px;
+}
+
+/* Honour the OS "reduce motion" setting.
+   The deck pulses the playing indicator, animates the toggle ripple and
+   animates the broadcast dot continuously; for someone with a vestibular
+   disorder that is a real problem, and it is one media query (A11Y-12).
+   Nothing is hidden - transitions become instant rather than absent. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The two continuous animations are decorative; stop them outright rather
+     than running them at a thousandth of a second forever. */
+  .status-dot.playing,
+  .animate-pulse,
+  .animate-spin,
+  .animate-bounce,
+  .animate-ping {
+    animation: none !important;
+  }
+
+  /* Keep a static, visible signal where the animation was the only cue. */
+  .status-dot.playing {
+    background: var(--art-accent, #06b6d4) !important;
+  }
+}

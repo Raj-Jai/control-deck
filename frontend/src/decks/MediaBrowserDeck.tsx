@@ -43,6 +43,8 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
         <div className="deck-card p-3 flex items-center gap-3">
           <button
             onClick={() => triggerCommand('mute')}
+            aria-label={muted ? 'Unmute' : 'Mute'}
+            title={muted ? 'Unmute' : 'Mute'}
             className={`icon-btn w-8 h-8 flex items-center justify-center flex-shrink-0 ${
               muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : 'text-deck-dim'
             }`}
