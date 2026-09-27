@@ -86,8 +86,9 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 2. Backend reliability
 
-- [ ] **BUG-001** (Critical) `close(done)` from two goroutines in `terminal.go`, no `sync.Once`
-      → `panic: close of closed channel` kills the entire dashboard.
+- [x] **BUG-001** (Critical) `close(done)` from two goroutines in `terminal.go`, no `sync.Once`
+      → `panic: close of closed channel` kills the entire dashboard. *(done: the channel is
+      closed through a `sync.Once`, with a test that closes from two goroutines)*
 - [x] **BUG-043** `/api/service-stats` slept 200 ms per tracked service inside every handler
       invocation. CPU% is now derived from a background sampler publishing every 2 s, and the
       handler is a pure read of the last snapshot.
@@ -396,10 +397,12 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **§8.8** the clipboard card had a placeholder but no label, a toast with no live region,
       and no size cap. All three fixed, with a character count and a note that Push writes to
       the host clipboard.
-- [ ] **§8.10** the geo canvas has no `devicePixelRatio` scaling; no recording cap or auto-save;
-      delete fires on `pointerDown` with no confirm.
-- [ ] **§8.11** the BLE meter shows 62% green before any scan; unmounting stops advertising
-      for every other client.
+- [x] **§8.10** the geo canvas has no `devicePixelRatio` scaling; no recording cap or auto-save;
+      delete fires on `pointerDown` with no confirm. *(all three done in the performance
+      commit: DPR-aware backing store, a 5,000-point cap with the dropped count shown, and a
+      confirm before a session is deleted)*
+- [x] **§8.11** the BLE meter shows 62% green before any scan; unmounting stops advertising
+      for every other client. *(done in the BLE commit)*
 - [x] **§8.15** the Media Streamer page uses `location.reload()`; 28 px exit button.
       Exiting is a state change in `App` now, so the device id, the capability cache and the
       scroll position survive and nothing behind the lock screen is re-fetched. Verified on a
@@ -475,4 +478,7 @@ Complete visual redesign: new design tokens, theme, and layout across every comp
       - **Contract:** the feature-key test, since a flag the backend advertises and the
         frontend does not know silently disables a deck.
       Every step was run locally before being committed.
-- [ ] Ship `tab-dashboard.service` in-repo and correct the README.
+- [x] Ship `tab-dashboard.service` in-repo and correct the README. *(done: the unit and
+      `avahi-service.conf` are in the repo with the real paths and the README documents the
+      install; note the deployed copy under `~/.config/systemd/user` is separate and still
+      needs the final deploy)*
