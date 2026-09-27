@@ -21,8 +21,8 @@ export default function MediaStreamerPage({ deviceId, onExit }: Props) {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-[#0b0d12]">
       {/* Header */}
-      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 h-12 bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06]">
-        <Music size={16} className="text-amber-400" />
+      <div className="sticky top-0 z-50 flex items-center gap-3 px-4 h-12 bg-deck-bg/80 backdrop-blur-md border-b border-deck-hairline/10">
+        <Music size={16} className="text-deck-warning" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim">
           Media Streamer
         </span>
@@ -34,7 +34,7 @@ export default function MediaStreamerPage({ deviceId, onExit }: Props) {
         <button
           type="button"
           onClick={() => { clearAuth(); onExit(); }}
-          className="icon-btn min-h-[44px] min-w-[44px] text-deck-dim hover:text-red-400"
+          className="icon-btn min-h-[44px] min-w-[44px] text-deck-dim hover:text-deck-danger"
           title="Lock & exit"
           aria-label="Lock and exit the media streamer"
         >
@@ -47,7 +47,7 @@ export default function MediaStreamerPage({ deviceId, onExit }: Props) {
         <div className="text-center text-deck-dim text-sm py-8">Connecting…</div>
       )}
       {error && (
-        <div className="text-center text-red-400 text-sm py-2 px-4">{error}</div>
+        <div className="text-center text-deck-danger text-sm py-2 px-4">{error}</div>
       )}
 
       <div className="flex-1 w-full max-w-3xl mx-auto px-3 sm:px-4 py-4 flex flex-col gap-4">
@@ -59,7 +59,7 @@ export default function MediaStreamerPage({ deviceId, onExit }: Props) {
               <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
                 Now Playing
               </span>
-              <div className="flex-1 h-px bg-white/[0.06]" />
+              <div className="flex-1 h-px bg-deck-surface-2" />
             </div>
             <PlayerCarousel players={state?.players ?? []} state={state} />
           </div>
@@ -70,10 +70,10 @@ export default function MediaStreamerPage({ deviceId, onExit }: Props) {
           <div className="deck-card">
             <div className="flex items-center gap-2.5 mb-2">
               <Music size={14} className="text-deck-accent" />
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-muted/50">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-dim">
                 App Audio
               </span>
-              <div className="flex-1 h-px bg-white/[0.06]" />
+              <div className="flex-1 h-px bg-deck-surface-2" />
             </div>
             <AppStreamsList streams={state.app_streams} />
           </div>

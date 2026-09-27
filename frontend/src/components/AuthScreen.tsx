@@ -118,7 +118,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               <button
                 onClick={() => { setMode('dashboard'); setStep('pin'); }}
                 className="flex items-center gap-3 h-14 px-4 rounded-xl text-sm font-semibold text-deck-text
-                  bg-deck-surface2 border border-white/5
+                  bg-deck-surface2 border border-deck-hairline/15
                   hover:bg-deck-accent/10 hover:border-deck-accent/20
                   active:bg-deck-accent/15 active:border-deck-accent/30
                   transition-all duration-75 select-none"
@@ -129,12 +129,12 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               <button
                 onClick={() => { setMode('media'); setStep('pin'); }}
                 className="flex items-center gap-3 h-14 px-4 rounded-xl text-sm font-semibold text-deck-text
-                  bg-deck-surface2 border border-white/5
-                  hover:bg-amber-500/10 hover:border-amber-500/20
+                  bg-deck-surface2 border border-deck-hairline/15
+                  hover:bg-deck-warning/10 hover:border-amber-500/20
                   active:bg-amber-500/15 active:border-amber-500/30
                   transition-all duration-75 select-none"
               >
-                <Music size={18} className="text-amber-400" />
+                <Music size={18} className="text-deck-warning" />
                 Media Streamer
               </button>
             </div>
@@ -145,7 +145,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               onClick={() => { setStep('pick'); setPin([]); setError(null); }}
               aria-label="Back to mode selection"
               className="self-start -mt-2 -ml-2 w-8 h-8 flex items-center justify-center rounded-lg
-                text-deck-dim hover:text-deck-text hover:bg-white/5 transition-colors"
+                text-deck-dim hover:text-deck-text hover:bg-deck-surface-2 transition-colors"
             >
               <ArrowLeft size={18} />
             </button>
@@ -155,7 +155,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 {mode === 'media' ? 'Media Streamer' : 'Dashboard'}
               </div>
               <div className="text-[11px] text-deck-dim mt-1">Enter PIN to unlock</div>
-              <p className="text-[10px] text-deck-muted/50 mt-2 max-w-[240px] text-center leading-snug">
+              <p className="text-[10px] text-deck-dim mt-2 max-w-[240px] text-center leading-snug">
                 This locks the screen on this device only. It does not protect the host.
               </p>
             </div>
@@ -170,17 +170,17 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               ))}
             </div>
             {error === 'wrong' && (
-              <div className="text-xs text-red-400 -mt-3" role="alert">Wrong PIN</div>
+              <div className="text-xs text-deck-danger -mt-3" role="alert">Wrong PIN</div>
             )}
             {error === 'offline' && (
               <div className="flex flex-col items-center gap-2 -mt-3" role="alert">
-                <p className="text-xs text-amber-300 text-center">
+                <p className="text-xs text-deck-warning text-center">
                   Can&apos;t reach the deck — is it still running?
                 </p>
                 <button
                   onClick={() => { setPin([]); setError(null); }}
-                  className="min-h-[44px] px-4 rounded-lg border border-white/10
-                    text-[12px] text-deck-dim hover:bg-white/5"
+                  className="min-h-[44px] px-4 rounded-lg border border-deck-hairline/15
+                    text-[12px] text-deck-dim hover:bg-deck-surface-2"
                 >
                   Retry
                 </button>
@@ -190,20 +190,20 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
             <div className="grid grid-cols-3 gap-3 w-full max-w-[220px]">
               {['1','2','3','4','5','6','7','8','9'].map(n => (
                 <button key={n} onClick={() => press(n)} aria-label={`Digit ${n}`}
-                  className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                  className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                   {n}
                 </button>
               ))}
               <button onClick={() => setPin([])} aria-label="Clear PIN"
-                className="h-14 rounded-xl text-xs font-semibold text-deck-dim bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                className="h-14 rounded-xl text-xs font-semibold text-deck-dim bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 Clear
               </button>
               <button onClick={() => press('0')} aria-label="Digit 0"
-                className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 0
               </button>
               <button onClick={backspace} aria-label="Delete last digit"
-                className="h-14 rounded-xl flex items-center justify-center text-deck-dim bg-deck-surface2 border border-white/5 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                className="h-14 rounded-xl flex items-center justify-center text-deck-dim bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 <ArrowLeft size={20} />
               </button>
             </div>

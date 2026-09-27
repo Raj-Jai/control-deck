@@ -20,7 +20,7 @@ export default function CommandLogCard({ log }: Props) {
         </span>
       </div>
       {empty ? (
-        <p className="text-[11px] text-deck-muted/50 py-1">No commands yet</p>
+        <p className="text-[11px] text-deck-dim py-1">No commands yet</p>
       ) : (
         <div className="max-h-[200px] min-h-[72px] overflow-y-auto space-y-0.5 font-mono text-[12px] leading-relaxed">
           {[...log].reverse().map((e) => (

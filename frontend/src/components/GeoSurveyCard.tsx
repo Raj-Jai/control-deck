@@ -379,12 +379,12 @@ export default function GeoSurveyCard() {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim">
           Geo Survey
         </span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
         <button
           aria-label={gpsEnabled ? 'Turn GPS off' : 'Turn GPS on'}
           aria-pressed={gpsEnabled}
           onPointerDown={toggleGps}
-          className={`icon-btn w-7 h-7 ${gpsEnabled ? 'text-green-400 bg-green-500/15 border-green-500/20' : ''}`}
+          className={`icon-btn w-7 h-7 ${gpsEnabled ? 'text-deck-success bg-deck-success/15 border-deck-success/30' : ''}`}
           title={gpsEnabled ? 'GPS on' : 'GPS off'}
         >
           <Navigation size={12} />
@@ -393,7 +393,7 @@ export default function GeoSurveyCard() {
           aria-label={recording ? 'Stop recording' : 'Start recording'}
           aria-pressed={recording}
           onPointerDown={toggleRecording}
-          className={`icon-btn w-7 h-7 ${recording ? 'text-red-400 bg-red-500/15 border-red-500/20' : ''}`}
+          className={`icon-btn w-7 h-7 ${recording ? 'text-deck-danger bg-deck-danger/15 border-deck-danger/30' : ''}`}
           title={recording ? 'Stop recording' : 'Start recording'}
         >
           {recording ? <Square size={12} /> : <Play size={12} />}
@@ -404,7 +404,7 @@ export default function GeoSurveyCard() {
         ref={canvasRef}
         width={canvasSize.w}
         height={canvasSize.h}
-        className="w-full h-auto rounded-lg bg-black/20 border border-white/[0.04]"
+        className="w-full h-auto rounded-lg bg-deck-sunken border border-deck-hairline/10"
         style={{ aspectRatio: '3/2' }}
       />
 
@@ -427,16 +427,16 @@ export default function GeoSurveyCard() {
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> &gt;50ms
         </span>
-        {recording && <span className="text-red-400 ml-auto animate-pulse">REC</span>}
+        {recording && <span className="text-deck-danger ml-auto animate-pulse">REC</span>}
       </div>
 
       <div className="text-[10px] text-deck-dim">
         Points: {points.length}{trimmed > 0 && ` (oldest ${trimmed} dropped at the 5,000-point cap)`}
         {currPing !== null && <> · Ping: {currPing}ms</>}
         {currPos && <> · Dist: {haversine(currPos.lat, currPos.lng, roomCenter.lat, roomCenter.lng).toFixed(0)}m</>}
-        {gpsEnabled && gpsAcc > 0 && <span className="text-deck-muted/40"> ±{gpsAcc.toFixed(0)}m</span>}
+        {gpsEnabled && gpsAcc > 0 && <span className="text-deck-dim"> ±{gpsAcc.toFixed(0)}m</span>}
         {loadedSession && <> · Loaded: {loadedSession.name} ({loadedSession.points.length}pts)</>}
-        {!roomCenter || (roomCenter.lat === DEFAULT_LAT && roomCenter.lng === DEFAULT_LNG) && <span className="text-amber-400"> ⚠ default</span>}
+        {!roomCenter || (roomCenter.lat === DEFAULT_LAT && roomCenter.lng === DEFAULT_LNG) && <span className="text-deck-warning"> ⚠ default</span>}
       </div>
 
       {/* Calibrate button & progress */}
@@ -452,7 +452,7 @@ export default function GeoSurveyCard() {
         </button>
         {calibrating && (
           <div className="flex items-center gap-2 flex-1">
-            <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+            <div className="flex-1 h-1.5 rounded-full bg-deck-surface-2 overflow-hidden">
               <div
                 className="h-full rounded-full bg-deck-accent transition-all duration-200"
                 style={{ width: `${Math.min(100, (calibProgress / CALIB_DURATION) * 100)}%` }}
@@ -489,7 +489,7 @@ export default function GeoSurveyCard() {
           value={sessionName}
           onChange={e => setSessionName(e.target.value)}
           placeholder="Session name (optional)"
-          className="flex-1 bg-white/[0.04] border border-white/[0.06] rounded px-2 py-1 text-[11px] text-deck-text
+          className="flex-1 bg-deck-surface-2 border border-deck-hairline/10 rounded px-2 py-1 text-[11px] text-deck-text
             placeholder:text-deck-muted/30 outline-none focus:border-deck-accent/30"
         />
         <button
@@ -510,10 +510,10 @@ export default function GeoSurveyCard() {
           {sessionList.map(name => (
             <div key={name}
               className={`flex items-center gap-2 px-2 py-1 rounded text-[10px] cursor-pointer
-                ${loadedSession?.name === name ? 'bg-deck-accent/10 border border-deck-accent/20' : 'bg-white/[0.03] hover:bg-white/[0.06]'}`}
+                ${loadedSession?.name === name ? 'bg-deck-accent/10 border border-deck-accent/20' : 'bg-deck-surface-2 hover:bg-deck-surface-2'}`}
               onPointerDown={() => loadSession(name)}
             >
-              <FolderOpen size={10} className="text-deck-muted/40 flex-shrink-0" />
+              <FolderOpen size={10} className="text-deck-dim flex-shrink-0" />
               <span className="flex-1 truncate text-deck-text">{name.replace('.json','')}</span>
               <button
                 onClick={(e) => {
@@ -524,7 +524,7 @@ export default function GeoSurveyCard() {
                   }
                 }}
                 aria-label={`Delete session ${name}`}
-                className="icon-btn w-5 h-5 text-deck-dim hover:text-red-400 flex-shrink-0"
+                className="icon-btn w-5 h-5 text-deck-dim hover:text-deck-danger flex-shrink-0"
                 title="Delete"
               >
                 <Trash2 size={10} />

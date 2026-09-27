@@ -65,7 +65,7 @@ function Card({ title, actions, cols, onRun, busy }: {
       <div className="flex items-center gap-2.5 mb-3">
         <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">{title}</span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
       </div>
       <div className={`grid ${cols} gap-2`}>
         {actions.map(b => (
@@ -78,8 +78,8 @@ function Card({ title, actions, cols, onRun, busy }: {
             className={`min-h-[44px] px-2 py-2 text-[11px] rounded-md border text-center leading-tight
               active:scale-90 disabled:opacity-50 ${
                 b.confirm
-                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-200 hover:bg-amber-500/20'
-                  : 'bg-white/5 border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'
+                  ? 'bg-deck-warning/10 border-deck-warning/30 text-deck-warning hover:bg-deck-warning/20'
+                  : 'bg-deck-surface-2 border-deck-hairline/15 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'
               }`}
           >
             {b.label}
@@ -121,21 +121,21 @@ export default function IdeDeck({ caps }: Props) {
 
       {armed && (
         <div role="alertdialog" aria-label={`Confirm ${armed.label}`}
-          className="deck-card border-amber-500/40 flex flex-col gap-2.5">
-          <p className="text-[12px] text-amber-200">
+          className="deck-card border-deck-warning/50 flex flex-col gap-2.5">
+          <p className="text-[12px] text-deck-warning">
             <span className="font-semibold">{armed.label}:</span> {armed.confirm}
           </p>
           <div className="flex gap-2">
             <button
               onClick={() => run(armed)}
-              className="min-h-[44px] px-4 rounded-lg bg-amber-500/20 border border-amber-500/40
-                text-amber-100 text-[12px] font-semibold"
+              className="min-h-[44px] px-4 rounded-lg bg-deck-warning/20 border border-deck-warning/50
+                text-deck-warning text-[12px] font-semibold"
             >
               Run it
             </button>
             <button
               onClick={() => setArmed(null)}
-              className="min-h-[44px] px-4 rounded-lg bg-white/5 border border-white/10
+              className="min-h-[44px] px-4 rounded-lg bg-deck-surface-2 border border-deck-hairline/15
                 text-deck-dim text-[12px]"
             >
               Cancel
@@ -149,21 +149,21 @@ export default function IdeDeck({ caps }: Props) {
           <div className="flex items-center gap-2">
             <span
               role="status"
-              className={`text-[11px] font-semibold ${last.result.ok ? 'text-green-400' : 'text-red-400'}`}
+              className={`text-[11px] font-semibold ${last.result.ok ? 'text-deck-success' : 'text-deck-danger'}`}
             >
               {last.result.ok ? 'Succeeded' : 'Failed'}
             </span>
-            <code className="text-[11px] text-deck-muted/70">{last.cmd}</code>
-            <div className="flex-1 h-px bg-white/[0.04]" />
-            <span className="text-[10px] text-deck-muted/40">
+            <code className="text-[11px] text-deck-dim">{last.cmd}</code>
+            <div className="flex-1 h-px bg-deck-surface-2" />
+            <span className="text-[10px] text-deck-dim">
               {new Date(last.at).toLocaleTimeString()}
             </span>
           </div>
           {last.result.output && (
             <pre
               className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg
-                bg-black/30 p-2.5 text-[11px] leading-relaxed font-mono
-                text-deck-dim border border-white/[0.05]"
+                bg-deck-sunken p-2.5 text-[11px] leading-relaxed font-mono
+                text-deck-dim border border-deck-hairline/10"
             >
               {last.result.output}
             </pre>

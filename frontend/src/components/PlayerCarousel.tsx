@@ -84,7 +84,7 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
               viewport edge on a 360px phone. */}
           <button
             className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center
-              justify-center rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
+              justify-center rounded-full bg-deck-sunken text-deck-text hover:bg-deck-sunken hover:text-white"
             onClick={() => go(clampedIdx - 1)}
             aria-label="Previous player"
           >
@@ -92,7 +92,7 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
           </button>
           <button
             className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center
-              justify-center rounded-full bg-black/40 text-white/80 hover:bg-black/60 hover:text-white"
+              justify-center rounded-full bg-deck-sunken text-deck-text hover:bg-deck-sunken hover:text-white"
             onClick={() => go(clampedIdx + 1)}
             aria-label="Next player"
           >

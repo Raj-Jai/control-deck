@@ -41,7 +41,7 @@ export default function TmuxRadial({ sendToTerminal }: TmuxRadialProps) {
       {/* Radial menu */}
       {open && (
         <div className="absolute bottom-full right-0 mb-2 z-50">
-          <div className="grid grid-cols-3 gap-1.5 p-2 bg-deck-bg/95 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-2xl min-w-[200px]">
+          <div className="grid grid-cols-3 gap-1.5 p-2 bg-deck-bg/95 backdrop-blur-xl border border-deck-hairline/10 rounded-xl shadow-2xl min-w-[200px]">
             {items.map(item => {
               const Icon = item.icon;
               return (
@@ -49,7 +49,7 @@ export default function TmuxRadial({ sendToTerminal }: TmuxRadialProps) {
                   key={item.label}
                   onClick={() => { sendToTerminal(item.cmd); setOpen(false); }}
                   className="flex flex-col items-center gap-0.5 px-2 py-2 rounded-lg text-[10px]
-                    text-deck-dim hover:text-deck-accent hover:bg-white/5 active:scale-90 transition-all"
+                    text-deck-dim hover:text-deck-accent hover:bg-deck-surface-2 active:scale-90 transition-all"
                 >
                   <Icon size={16} style={item.rot ? { transform: `rotate(${item.rot}deg)` } : undefined} />
                   <span className="font-medium">{item.label}</span>

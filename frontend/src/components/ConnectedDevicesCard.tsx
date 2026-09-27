@@ -158,7 +158,7 @@ export default function ConnectedDevicesCard() {
       <span className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim">
         Connected Devices
       </span>
-      <span className="text-[10px] text-deck-muted/40 font-medium">{data?.count ?? 0}</span>
+      <span className="text-[10px] text-deck-dim font-medium">{data?.count ?? 0}</span>
     </div>
   );
 
@@ -169,7 +169,7 @@ export default function ConnectedDevicesCard() {
     return (
       <div className="deck-card flex flex-col gap-2.5" role="status">
         {header}
-        <p className={`text-[11px] ${ctrlErr ? 'text-red-400' : 'text-deck-muted/60'}`}>
+        <p className={`text-[11px] ${ctrlErr ? 'text-deck-danger' : 'text-deck-muted/60'}`}>
           {ctrlErr || 'No other devices connected'}
         </p>
       </div>
@@ -183,7 +183,7 @@ export default function ConnectedDevicesCard() {
         <span className="text-[11px] font-semibold uppercase tracking-wider text-deck-dim">
           Connected Devices
         </span>
-        <span className="text-[10px] text-deck-muted/40 font-medium">{data.count}</span>
+        <span className="text-[10px] text-deck-dim font-medium">{data.count}</span>
         <button
           onClick={toggleBroadcast}
           aria-label={data.broadcasting ? 'Stop broadcast' : 'Broadcast to all devices'}
@@ -199,7 +199,7 @@ export default function ConnectedDevicesCard() {
             : <VolumeX size={12} />
           }
         </button>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
       </div>
       {needsTap && data.broadcasting && (
         <div className="px-2 py-1.5 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-[11px] text-yellow-300 flex items-center gap-1.5">
@@ -212,14 +212,14 @@ export default function ConnectedDevicesCard() {
           return (
             <div key={c.device_id || i}
               className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${
-                isThis ? 'bg-deck-accent/8 border border-deck-accent/15' : 'bg-white/[0.03]'
+                isThis ? 'bg-deck-accent/8 border border-deck-accent/15' : 'bg-deck-surface-2'
               }`}
             >
               <span className="text-base leading-none flex-shrink-0">{deviceIcon(c)}</span>
               <div className="min-w-0 flex-1">
                   <div className="font-medium text-deck-text truncate">
                     {deviceLabel(c)}
-                    {isThis && <span className="text-deck-muted/40 ml-1">(you)</span>}
+                    {isThis && <span className="text-deck-dim ml-1">(you)</span>}
                   </div>
                   {isThis && ping !== null && (
                     <div className="text-[10px] text-deck-dim mt-0.5 flex items-center gap-1">
@@ -248,7 +248,7 @@ export default function ConnectedDevicesCard() {
           );
         })}
       </div>
-      {ctrlErr && <p className="text-[10px] text-red-400 mt-1">{ctrlErr}</p>}
+      {ctrlErr && <p className="text-[10px] text-deck-danger mt-1">{ctrlErr}</p>}
     </div>
   );
 }

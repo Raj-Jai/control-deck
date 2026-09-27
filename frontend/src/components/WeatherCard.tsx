@@ -165,7 +165,7 @@ export default function WeatherCard() {
       <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
         Weather
       </span>
-      <div className="flex-1 h-px bg-white/[0.04]" />
+      <div className="flex-1 h-px bg-deck-surface-2" />
     </div>
   );
 
@@ -207,8 +207,8 @@ export default function WeatherCard() {
         <button
           type="button"
           onClick={useMyLocation}
-          className="mb-2 min-h-[44px] w-full px-3 rounded-lg border border-white/10
-            text-[12px] text-deck-dim hover:bg-white/5"
+          className="mb-2 min-h-[44px] w-full px-3 rounded-lg border border-deck-hairline/15
+            text-[12px] text-deck-dim hover:bg-deck-surface-2"
         >
           Showing {place} — use my location
         </button>
@@ -233,7 +233,7 @@ export default function WeatherCard() {
         </div>
       </div>
 
-      <div className="flex gap-2 mt-3 pt-2 border-t border-white/[0.06]">
+      <div className="flex gap-2 mt-3 pt-2 border-t border-deck-hairline/10">
         {daily.map((d) => (
           <div key={d.date} className="flex-1 text-center">
             <div className="text-[10px] text-deck-dim mb-1">{dayLabel(d.date)}</div>

@@ -53,7 +53,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
         <div className="flex items-center gap-2.5 mb-1">
           <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted">Volume</span>
-          <div className="flex-1 h-px bg-white/[0.04]" />
+          <div className="flex-1 h-px bg-deck-surface-2" />
         </div>
         <div className="deck-card p-3 flex items-center gap-3">
           <button
@@ -61,7 +61,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
             aria-label={muted ? 'Unmute' : 'Mute'}
             title={muted ? 'Unmute' : 'Mute'}
             className={`icon-btn w-8 h-8 flex items-center justify-center flex-shrink-0 ${
-              muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : 'text-deck-dim'
+              muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : 'text-deck-dim'
             }`}
           >
             {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
@@ -102,7 +102,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
           </span>
           <div className="flex-1" />
           {activePlayer?.title && (
-            <span className="text-[10px] text-deck-muted/50 truncate max-w-[40%]">
+            <span className="text-[10px] text-deck-dim truncate max-w-[40%]">
               now: {activePlayer.title}
             </span>
           )}
@@ -131,7 +131,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
                     className={`min-h-[44px] px-3 rounded-lg border text-[11px] text-left
                       ${on
                         ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
-                        : 'bg-white/5 border-white/5 text-deck-dim hover:border-deck-accent/30'}`}
+                        : 'bg-deck-surface-2 border-deck-hairline/15 text-deck-dim hover:border-deck-accent/30'}`}
                   >
                     <span className="block font-semibold">{pl.name}</span>
                     <span className="block text-[10px] opacity-70">{pl.status ?? 'unknown'}</span>
@@ -140,7 +140,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
               })}
             </div>
             {players.length > 1 && (
-              <p className="text-[10px] text-deck-muted/50">
+              <p className="text-[10px] text-deck-dim">
                 {players.length} players are running, so the keys go to the one selected here.
               </p>
             )}
@@ -155,7 +155,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
             <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted">Macro Deck</span>
           </div>
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 bg-red-500/15 text-red-400">
+          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide flex items-center gap-1 bg-deck-danger/15 text-deck-danger">
             <YouTubeIcon size={12} /> MEDIA
           </span>
         </div>
@@ -164,7 +164,7 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
         <div className="flex gap-2 mb-3">
           <button onClick={() => triggerCommand('speed_down', playerId)}
             className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 text-[11px] rounded-md
-              bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-95">
+              bg-deck-surface-2 border border-deck-hairline/15 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-95">
             <ChevronDown size={14} /> Slower
           </button>
           <button onClick={() => triggerCommand('speed_up', playerId)}
@@ -213,7 +213,7 @@ function MacroButton({ label, icon, sub, cmd, playerId, highlight, className }: 
         border text-[11px] font-semibold transition-all duration-100 active:scale-90 min-h-[52px]
         ${highlight
           ? 'bg-deck-accent/15 border-deck-accent/25 text-deck-accent'
-          : 'bg-white/5 border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'
+          : 'bg-deck-surface-2 border-deck-hairline/15 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'
         }`}>
       {icon && <span>{icon}</span>}
       <span>{label}</span>

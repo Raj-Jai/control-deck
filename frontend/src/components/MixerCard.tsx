@@ -62,7 +62,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
           Mixer
         </span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
       </div>
 
       <div className="flex flex-col gap-4">
@@ -71,18 +71,18 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
             way to tell (BUG-020). */}
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-muted/50">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-dim">
               Volume
             </span>
             {!hasAudio && (
-              <span className="text-[10px] text-amber-300/80">
+              <span className="text-[10px] text-deck-warning/80">
                 no audio output detected
               </span>
             )}
           </div>
           <div className="flex items-center gap-2.5">
             <button
-              className={`icon-btn w-9 h-9 flex-shrink-0 ${muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : ''}`}
+              className={`icon-btn w-9 h-9 flex-shrink-0 ${muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : ''}`}
               onClick={() => triggerCommand('mute')}
               disabled={!hasAudio}
               aria-label={muted ? 'Unmute' : 'Mute'}
@@ -124,7 +124,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
         {/* Brightness row */}
         {caps.brightness && (
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-deck-muted/50 mb-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-deck-dim mb-1.5">
               Brightness
             </div>
             <div className="flex items-center gap-2.5">
@@ -189,7 +189,7 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
     <div>
       <div className="flex items-center gap-2 mb-2">
         <Music size={14} className="text-deck-accent" />
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-muted/50">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-dim">
           App Audio
         </span>
       </div>
@@ -197,7 +197,7 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
         {streams.map((s) => {
           const vol = dragging.current[s.id] ? (localVol[s.id] ?? s.volume) : s.volume;
           return (
-            <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded-lg bg-white/[0.03]">
+            <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded-lg bg-deck-surface-2">
               <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-medium truncate">{s.app || 'Unknown'}</div>
                 <div className="text-[10px] text-deck-dim truncate">
@@ -205,7 +205,7 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
                 </div>
               </div>
               <button
-                className={`icon-btn w-8 h-8 flex-shrink-0 ${s.muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : ''}`}
+                className={`icon-btn w-8 h-8 flex-shrink-0 ${s.muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : ''}`}
                 onClick={() => setStream(s.id, { muted: !s.muted })}
                 aria-label={s.muted ? `Unmute ${s.media_name || `stream ${s.id}`}` : `Mute ${s.media_name || `stream ${s.id}`}`}
               >

@@ -376,7 +376,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                 ? 'bg-deck-surface2 text-deck-muted'
                 : status === 'Playing'
                 ? 'bg-deck-accent/15 text-deck-accent'
-                : 'bg-yellow-500/15 text-yellow-400'
+                : 'bg-deck-warning/15 text-deck-warning'
             }`}
           >
             <span
@@ -385,7 +385,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                   ? 'bg-deck-muted'
                   : status === 'Playing'
                   ? 'playing'
-                  : 'bg-yellow-400'
+                  : 'bg-deck-warning'
               }`}
             />
             {isOffline ? 'Offline' : isIdle ? 'Idle' : status}
@@ -506,19 +506,19 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             {showHandoffMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowHandoffMenu(false)} />
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 min-w-[180px] rounded-xl p-1.5 border border-white/[0.1] bg-[rgba(15,23,42,0.95)] shadow-2xl">
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-deck-muted/50 px-2 py-1">
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 min-w-[180px] rounded-xl p-1.5 border border-deck-hairline/20 bg-[rgba(15,23,42,0.95)] shadow-2xl">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-deck-dim px-2 py-1">
                     Send to
                   </div>
                   {handoffDevices.length === 0 ? (
-                    <div className="text-xs text-deck-muted/70 px-2 py-1.5">
+                    <div className="text-xs text-deck-dim px-2 py-1.5">
                       No phones reachable
                     </div>
                   ) : (
                     handoffDevices.map(d => (
                       <button
                         key={d.id}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-deck-text hover:bg-white/[0.06] transition-colors cursor-pointer text-left"
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-deck-text hover:bg-deck-surface-2 transition-colors cursor-pointer text-left"
                         onClick={() => handleHandoffToPhone(d.id)}
                         disabled={handingOff}
                       >
@@ -527,7 +527,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                       </button>
                     ))
                   )}
-                  <div className="text-[10px] text-deck-muted/50 px-2 py-1.5 border-t border-white/[0.06] mt-1">
+                  <div className="text-[10px] text-deck-dim px-2 py-1.5 border-t border-deck-hairline/10 mt-1">
                     Tip: keep the KDE Connect app open on the phone so the link auto-opens
                   </div>
                 </div>
@@ -568,13 +568,13 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           {/* Close button (top-right, always visible) */}
           <button
             onClick={() => setShowFullLyrics(false)}
-            className="fixed top-4 right-4 z-[60] w-10 h-10 flex items-center justify-center rounded-full bg-white/[0.08] border border-white/[0.12] text-deck-dim hover:text-white hover:bg-white/[0.14] transition-all duration-200 cursor-pointer"
+            className="fixed top-4 right-4 z-[60] w-10 h-10 flex items-center justify-center rounded-full bg-deck-surface-2 border border-deck-hairline/20 text-deck-dim hover:text-white hover:bg-deck-surface-3 transition-all duration-200 cursor-pointer"
           >
             <X size={20} />
           </button>
 
           {/* Left panel: art + controls (desktop) / top panel (mobile) */}
-          <div className="flex flex-col items-center justify-center gap-5 p-6 md:p-10 md:w-[360px] md:min-w-[360px] md:h-full md:border-r border-white/[0.06]">
+          <div className="flex flex-col items-center justify-center gap-5 p-6 md:p-10 md:w-[360px] md:min-w-[360px] md:h-full md:border-r border-deck-hairline/10">
             {/* Album art */}
             <div className="relative w-[180px] h-[180px] md:w-[240px] md:h-[240px] rounded-2xl overflow-hidden flex-shrink-0 shadow-2xl bg-deck-surface2">
               {artUrl && !artError ? (
@@ -627,7 +627,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           {/* Right panel: full scrollable lyrics */}
           <div className="flex-1 flex flex-col min-h-0 p-4 md:p-8 overflow-hidden">
             <div className="text-center mb-1">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-deck-muted/50">Lyrics</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-deck-dim">Lyrics</h3>
               {lyricsData?.track_id && (
                 <div className="text-[9px] text-deck-muted/20 tracking-wider mt-0.5 select-none">
                   {lyricsData.track_id}
@@ -649,7 +649,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
                         className={`px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide rounded-full border transition-all duration-150 cursor-pointer ${
                           isSel
                             ? 'bg-deck-accent/20 border-deck-accent/40 text-deck-accent'
-                            : 'bg-white/[0.04] border-white/[0.08] text-deck-dim hover:text-deck-text hover:border-white/20'
+                            : 'bg-deck-surface-2 border-deck-hairline/10 text-deck-dim hover:text-deck-text hover:border-deck-hairline/15'
                         }`}
                       >
                         {label}

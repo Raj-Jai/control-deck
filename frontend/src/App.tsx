@@ -13,6 +13,7 @@ import PlayerCarousel from './components/PlayerCarousel';
 import MiniPlayer from './components/MiniPlayer';
 import SystemStatsCard from './components/SystemStatsCard';
 import ServiceStatsBar from './components/ServiceStatsBar';
+import ThemeToggle from './components/ThemeToggle';
 import MixerCard from './components/MixerCard';
 import QuickSettings from './components/QuickSettings';
 import WeatherCard from './components/WeatherCard';
@@ -303,7 +304,7 @@ export default function App() {
         {/* Top strip. Owns the fullscreen control, so the two can never
             overlap: body already applies the top safe-area inset, so this must
             not add it again. */}
-        <div className="sticky top-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-white/[0.06]">
+        <div className="sticky top-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-deck-hairline/10">
           <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 flex items-center gap-2">
             {features.service_stats ? (
               <div className="min-w-0 flex-1 overflow-x-auto no-scrollbar">
@@ -312,11 +313,10 @@ export default function App() {
             ) : (
               <div className="flex-1" />
             )}
+            <ThemeToggle className="shrink-0 -my-0.5" />
             <button
               onClick={toggleFull}
-              className="shrink-0 w-11 h-11 -my-0.5 rounded-lg flex items-center justify-center
-                text-deck-dim hover:bg-deck-accent/20 hover:text-deck-accent
-                transition-all duration-100 active:scale-90"
+              className="icon-btn min-h-[44px] min-w-[44px] shrink-0 -my-0.5"
               title={full ? 'Exit fullscreen' : 'Fullscreen'}
               aria-label={full ? 'Exit fullscreen' : 'Enter fullscreen'}
             >
@@ -330,7 +330,7 @@ export default function App() {
             <div className="text-center text-deck-dim text-sm py-4">Connecting…</div>
           )}
           {error && (
-            <div className="text-center text-red-400 text-sm py-2 mb-2">{error} — retrying…</div>
+            <div className="text-center text-deck-danger text-sm py-2 mb-2">{error} — retrying…</div>
           )}
           {!capabilitiesReady && (
             <div className="text-center text-deck-dim text-xs py-2 mb-2" role="status">
@@ -343,8 +343,8 @@ export default function App() {
             <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-3 pb-2">
               <div className="flex items-center gap-2.5 mb-1">
                 <div className="w-0.5 h-3.5 rounded-full bg-deck-accent/30" />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">Now Playing</span>
-                <div className="flex-1 h-px bg-white/[0.06]" />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-dim">Now Playing</span>
+                <div className="flex-1 h-px bg-deck-surface-2" />
               </div>
               <PlayerCarousel players={state?.players ?? []} state={state} />
             </div>
@@ -396,8 +396,8 @@ export default function App() {
                 aria-expanded={showMore}
                 aria-controls="home-secondary"
                 className="mt-4 w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl
-                  border border-white/[0.08] bg-white/[0.03] text-[12px] font-medium text-deck-dim
-                  hover:bg-white/[0.06] hover:text-deck-text transition-colors"
+                  border border-deck-hairline/10 bg-deck-surface-2 text-[12px] font-medium text-deck-dim
+                  hover:bg-deck-surface-2 hover:text-deck-text transition-colors"
               >
                 {showMore ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                 {showMore ? 'Fewer' : 'More controls'}
@@ -475,7 +475,7 @@ export default function App() {
       {features.now_playing && showMini && state && caps.playerctl && <MiniPlayer state={state} />}
 
       {/* Bottom strip — fixed to bottom of screen */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-white/[0.04] pb-[env(safe-area-inset-bottom)]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-deck-hairline/10 pb-[env(safe-area-inset-bottom)]">
         <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2 relative">
           {/* Draggable page dots */}
           <div
@@ -499,17 +499,17 @@ export default function App() {
                 <span
                   className={`block rounded-full transition-all duration-200 ${
                     dragging
-                      ? 'bg-white/40 w-3 h-3'
+                      ? 'bg-deck-surface-2 w-3 h-3'
                       : i === page
                         ? 'bg-deck-accent w-6 h-2'
-                        : 'bg-white/20 w-2 h-2'
+                        : 'bg-deck-surface-2 w-2 h-2'
                   }`}
                 />
               </button>
             ))}
           </div>
           {clientCount > 0 && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-deck-muted/40 select-none pointer-events-none">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-deck-dim select-none pointer-events-none">
               <Monitor size={10} />
               {clientCount}
             </div>
@@ -521,7 +521,7 @@ export default function App() {
         <button
           onClick={retryCapabilities}
           className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 min-h-[44px] px-4
-            rounded-xl border border-white/10 bg-deck-bg/90 text-[12px] text-deck-dim
+            rounded-xl border border-deck-hairline/15 bg-deck-bg/90 text-[12px] text-deck-dim
             hover:text-deck-text"
         >
           Retry tool check

@@ -52,7 +52,7 @@ export default function ScenesCard() {
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
           Scenes
         </span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
       </div>
 
       {scenes.length === 0 ? (
@@ -73,7 +73,7 @@ export default function ScenesCard() {
                 transition-all duration-100 active:scale-95 disabled:opacity-60
                 ${active
                   ? 'bg-deck-accent/20 border-deck-accent/40 text-deck-accent'
-                  : 'bg-white/[0.04] border-white/[0.06] text-deck-text hover:border-deck-accent/30 hover:text-deck-accent'}`}
+                  : 'bg-deck-surface-2 border-deck-hairline/10 text-deck-text hover:border-deck-accent/30 hover:text-deck-accent'}`}
             >
               <Icon size={20} className={`flex-shrink-0 ${active ? 'animate-pulse' : 'text-deck-dim'}`} />
               <span className="min-w-0">

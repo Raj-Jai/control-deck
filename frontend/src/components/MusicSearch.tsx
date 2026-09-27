@@ -73,7 +73,7 @@ export default function MusicSearch({ available }: MusicSearchProps) {
 
   if (!available) {
     return (
-      <div className="text-xs text-deck-muted/70 text-center py-2 px-3">
+      <div className="text-xs text-deck-dim text-center py-2 px-3">
         Song search requires <span className="text-deck-accent">yt-dlp</span> and{' '}
         <span className="text-deck-accent">mpv</span> on the host.
       </div>
@@ -88,7 +88,7 @@ export default function MusicSearch({ available }: MusicSearchProps) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search songs on YouTube…"
-          className="w-full pl-9 pr-8 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-sm text-deck-text placeholder:text-deck-muted/60 focus:outline-none focus:border-deck-accent/40 transition-colors"
+          className="w-full pl-9 pr-8 py-2 rounded-xl bg-deck-surface-2 border border-deck-hairline/20 text-sm text-deck-text placeholder:text-deck-muted/60 focus:outline-none focus:border-deck-accent/40 transition-colors"
         />
         {loading && (
           <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-deck-muted animate-spin" />
@@ -103,7 +103,7 @@ export default function MusicSearch({ available }: MusicSearchProps) {
         )}
       </div>
 
-      {error && <div className="text-xs text-red-400 px-1">{error}</div>}
+      {error && <div className="text-xs text-deck-danger px-1">{error}</div>}
 
       {results.length > 0 && (
         <ul className="flex flex-col gap-1 max-h-[280px] overflow-y-auto pr-1">
@@ -111,7 +111,7 @@ export default function MusicSearch({ available }: MusicSearchProps) {
             <li key={r.id}>
               <button
                 onClick={() => handlePlay(r)}
-                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-transparent hover:border-white/[0.08] transition-all cursor-pointer text-left"
+                className="w-full flex items-center gap-3 px-2 py-2 rounded-lg bg-deck-surface-2 hover:bg-deck-surface-2 border border-transparent hover:border-deck-hairline/10 transition-all cursor-pointer text-left"
               >
                 <div className="w-11 h-11 flex-shrink-0 rounded-md overflow-hidden bg-deck-muted/10 flex items-center justify-center">
                   {r.thumbnail ? (

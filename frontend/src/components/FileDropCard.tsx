@@ -66,11 +66,11 @@ export default function FileDropCard() {
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
           File Drop
         </span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
         <button
           aria-label="Refresh file list"
           onClick={refresh}
-          className="w-7 h-7 flex items-center justify-center rounded-lg text-deck-dim hover:text-deck-accent hover:bg-white/5 transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-deck-dim hover:text-deck-accent hover:bg-deck-surface-2 transition-colors"
           title="Refresh list"
         >
           <RefreshCw size={13} />
@@ -88,7 +88,7 @@ export default function FileDropCard() {
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
         className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl border border-dashed
-          border-white/15 text-deck-dim hover:text-deck-accent hover:border-deck-accent/40
+          border-deck-hairline/15 text-deck-dim hover:text-deck-accent hover:border-deck-accent/40
           transition-all active:scale-[0.98] disabled:opacity-60 text-xs font-semibold"
       >
         {uploading ? <Upload size={16} className="animate-pulse" /> : <FileUp size={16} />}
@@ -105,7 +105,7 @@ export default function FileDropCard() {
               key={f.name}
               href={`/api/files/download?name=${encodeURIComponent(f.name)}`}
               download={f.name}
-              className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-white/[0.03]
+              className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-deck-surface-2
                 hover:bg-deck-accent/10 transition-colors group"
             >
               <Download size={13} className="text-deck-dim group-hover:text-deck-accent flex-shrink-0" />

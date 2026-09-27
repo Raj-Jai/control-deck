@@ -43,7 +43,7 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
           role="menu"
           aria-label="Deck navigation"
           className="absolute bottom-full right-0 mb-3 min-w-[180px] z-50
-            bg-deck-bg/95 backdrop-blur-xl border border-white/[0.08] rounded-xl p-2 shadow-2xl"
+            bg-deck-bg/95 backdrop-blur-xl border border-deck-hairline/10 rounded-xl p-2 shadow-2xl"
         >
           <div className="flex flex-col gap-0.5">
             {pages.map((p, i) => (
@@ -54,7 +54,7 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
                 className={`px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center text-left transition-all ${
                   i === currentPage
                     ? 'bg-deck-accent/20 text-deck-accent font-semibold'
-                    : 'text-deck-dim hover:text-deck-text hover:bg-white/5'
+                    : 'text-deck-dim hover:text-deck-text hover:bg-deck-surface-2'
                 }`}
               >
                 {p.label}
@@ -62,17 +62,17 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
             ))}
           </div>
 
-          <div className="h-px bg-white/[0.06] my-1.5" />
+          <div className="h-px bg-deck-surface-2 my-1.5" />
 
           <button
             role="menuitem"
             onClick={onToggleAutoFocus}
             className="w-full flex items-center justify-between px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center
-              text-deck-dim hover:text-deck-text hover:bg-white/5 transition-all"
+              text-deck-dim hover:text-deck-text hover:bg-deck-surface-2 transition-all"
           >
             <span>Auto-focus</span>
             <span className={`w-4 h-4 rounded flex items-center justify-center transition-colors ${
-              autoFocus ? 'bg-deck-accent' : 'border border-white/20'
+              autoFocus ? 'bg-deck-accent' : 'border border-deck-hairline/15'
             }`}>
               {autoFocus && <Check size={12} className="text-white" strokeWidth={3} />}
             </span>
@@ -89,7 +89,7 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
               setArmed(true);
             }}
             className="w-full flex items-center gap-2 px-3 py-2.5 min-h-[44px] text-[13px] rounded-lg flex items-center
-              text-deck-dim hover:text-deck-text hover:bg-white/5 transition-all"
+              text-deck-dim hover:text-deck-text hover:bg-deck-surface-2 transition-all"
           >
             <RefreshCw size={12} />
             <span className="text-left">

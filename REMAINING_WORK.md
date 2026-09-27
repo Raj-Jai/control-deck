@@ -413,11 +413,40 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 Complete visual redesign: new design tokens, theme, and layout across every component.
 
-- [ ] New design system: colour tokens, spacing scale, radii, shadows, typography.
-- [ ] New theme (light + dark), replacing the current ad-hoc palette.
-- [ ] Component-by-component restyle: deck shell, cards, nav, modals, sliders, buttons.
-- [ ] Motion system with `prefers-reduced-motion` respected.
-- [ ] Full `focus-visible` ring across every interactive element.
+- [x] New design system: colour tokens, spacing scale, radii, shadows, typography.
+      A `--cd-*` token layer in `index.css` is the single source of truth - surfaces, text,
+      accent, status, radii, shadows, scrim - with Tailwind pointing at the RGB channels so
+      opacity modifiers still work. Added named radii (`rounded-card`, `rounded-control`),
+      shadows, a `spacing.touch` 44px token, and a type scale that starts at 11px: the old
+      ad-hoc classes had drifted down to 9 and 10px, which is not readable at arm's length.
+- [x] New theme (light + dark), replacing the current ad-hoc palette.
+      Dark keeps the established look; light is a real second theme, not an inversion. The
+      choice persists, follows `prefers-color-scheme` by default, and an inline script in
+      `index.html` applies it before first paint so there is no flash of the wrong theme.
+      A `ThemeToggle` in the top strip switches it and the `theme-color` meta follows.
+- [x] Component-by-component restyle via the tokens, without touching 141 call sites.
+      Every `bg-white/5`, `border-white/[0.08]`, `bg-black/30` and the literal
+      `text-green-400` / `text-red-400` / `text-amber-400` status colours are now token
+      references, and the stylesheet's own hard-coded hex (sliders, scrollbar, icon button,
+      toggle and card primitives) is gone. The 474 existing `deck-*` classes follow the
+      theme for free, because the token is what they resolve to.
+- [x] Motion system with `prefers-reduced-motion` respected. *(done in the a11y commit)*
+- [x] Full `focus-visible` ring across every interactive element. *(done in the a11y commit,
+      but see below - the ring was not actually following the accent)*
+- [x] **BUG (found by the overhaul)** the focus ring asked for `var(--deck-accent, #06b6d4)`.
+      No variable by that name existed, so it silently fell back to a hard-coded cyan and
+      never followed the accent or the theme at all. Now `--cd-accent`.
+- [x] Contrast verified in both themes rather than assumed. A browser pass that composites
+      translucent backgrounds before comparing (a 15%-tint pill otherwise measures 1:1
+      against its own text) found and fixed:
+      - the `Paused` status pill used a literal `bg-yellow-500/15 text-yellow-400`, which is
+        1.25:1 in the light theme - effectively invisible;
+      - the light accent was cyan-600, 3.68:1 on white, fine for a border but under 4.5:1
+        for a label, so it is now cyan-700 (5.4:1);
+      - the light warning token measured 3.91:1 on the pill tint, now amber-800;
+      - the stats strip and several eyebrows used the muted token at 40-70% opacity.
+      Both themes now report **zero** text nodes below their WCAG threshold, across every
+      deck with the secondary cards expanded.
 
 ## 10. Tests, tooling, dead code
 

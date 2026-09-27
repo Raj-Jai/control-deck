@@ -2,6 +2,128 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   Design tokens
+
+   Every colour, radius, shadow and border in the app comes from here. The
+   palette used to be a handful of hex values repeated in three places - the
+   Tailwind config, these stylesheet rules, and the art-theming overrides -
+   and the deck had drifted to literal white/black opacities in 141 places, so a
+   second theme was not possible without editing every component.
+
+   Colours are space-separated RGB channels so Tailwind's opacity modifiers keep
+   working, and so a theme switch is a variable change rather than a rebuild of
+   the class names in every file.
+   ========================================================================== */
+
+@layer base {
+  /* --- Dark: the default, and the established look ------------------------ */
+  :root,
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --cd-bg: 10 15 26;              /* app background */
+    --cd-sunken: 6 10 18;           /* wells, code blocks, terminal */
+    --cd-surface: 20 29 45;        /* cards */
+    --cd-surface-2: 33 44 62;      /* controls, chips */
+    --cd-surface-3: 45 58 79;       /* hover on controls */
+
+    --cd-hairline: 255 255 255;     /* used with an opacity modifier */
+    --cd-hairline-strong: 255 255 255;
+
+    --cd-text: 238 244 252;
+    --cd-dim: 158 173 196;
+    --cd-muted: 122 137 160;
+
+    --cd-accent: 34 211 238;        /* cyan-400, brighter than before */
+    --cd-accent-dim: 14 148 168;
+    --cd-accent-contrast: 4 47 58;  /* text on an accent fill */
+
+    --cd-success: 74 222 128;
+    --cd-warning: 252 211 77;
+    --cd-danger: 248 113 113;
+
+    --cd-radius-card: 16px;
+    --cd-radius-control: 10px;
+
+    --cd-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --cd-shadow-raised: 0 8px 24px rgb(0 0 0 / 0.45);
+    --cd-shadow-focus: 0 0 0 3px rgb(var(--cd-accent) / 0.35);
+
+    --cd-scrim: 0 0 0;              /* used with an opacity modifier */
+  }
+
+  /* --- Light: a real second theme, tuned rather than inverted -------------- */
+  :root[data-theme='light'] {
+    color-scheme: light;
+
+    --cd-bg: 241 245 249;
+    --cd-sunken: 226 232 240;
+    --cd-surface: 255 255 255;
+    --cd-surface-2: 241 245 249;
+    --cd-surface-3: 226 232 240;
+
+    /* Hairlines are dark in a light theme. Every border is expressed as
+       hairline/N, so the same class means the right thing in both. */
+    --cd-hairline: 15 23 42;
+    --cd-hairline-strong: 51 65 85;
+
+    --cd-text: 15 23 42;
+    --cd-dim: 71 85 105;
+    --cd-muted: 100 116 139;
+
+    /* cyan-700 rather than cyan-600: 5.4:1 on white, so accent-coloured text
+       clears the 4.5:1 body-text threshold. cyan-600 was 3.68:1, which is a
+       fine border but not a fine label. */
+    --cd-accent: 14 116 144;
+    --cd-accent-dim: 8 145 178;
+    --cd-accent-contrast: 255 255 255;
+
+    /* Status colours have to be dark enough to read on a white surface, which
+       the dark theme's 400-weight equivalents are not. */
+    /* Dark enough to read on the 15% tint a status pill sits on: amber-700
+       measured 3.91:1 there, amber-800 clears 4.5:1. */
+    --cd-success: 21 128 61;
+    --cd-warning: 146 64 14;
+    --cd-danger: 190 24 93;
+
+    --cd-shadow-card: 0 1px 2px rgb(15 23 42 / 0.08);
+    --cd-shadow-raised: 0 8px 24px rgb(15 23 42 / 0.12);
+    --cd-shadow-focus: 0 0 0 3px rgb(var(--cd-accent) / 0.35);
+
+    --cd-scrim: 15 23 42;
+  }
+
+  /* Before the stored preference is read, follow the system so a first-time
+     visitor is not flashed the wrong theme. The inline script in index.html
+     sets data-theme before first paint; this is the fallback. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) {
+      color-scheme: light;
+      --cd-bg: 241 245 249;
+      --cd-sunken: 226 232 240;
+      --cd-surface: 255 255 255;
+      --cd-surface-2: 241 245 249;
+      --cd-surface-3: 226 232 240;
+      --cd-hairline: 15 23 42;
+      --cd-hairline-strong: 51 65 85;
+      --cd-text: 15 23 42;
+      --cd-dim: 71 85 105;
+      --cd-muted: 100 116 139;
+      --cd-accent: 14 116 144;
+      --cd-accent-dim: 8 145 178;
+      --cd-accent-contrast: 255 255 255;
+      --cd-success: 21 128 61;
+      --cd-warning: 146 64 14;
+      --cd-danger: 190 24 93;
+      --cd-shadow-card: 0 1px 2px rgb(15 23 42 / 0.08);
+      --cd-shadow-raised: 0 8px 24px rgb(15 23 42 / 0.12);
+      --cd-shadow-focus: 0 0 0 3px rgb(var(--cd-accent) / 0.35);
+      --cd-scrim: 15 23 42;
+    }
+  }
+}
+
 @layer base {
   *,
   *::before,
@@ -34,19 +156,19 @@
 
   input[type='range']::-webkit-slider-runnable-track {
     height: 10px;
-    background: #1e293b;
+    background: rgb(var(--cd-surface-2));
     border-radius: 999px;
   }
 
   input[type='range']::-moz-range-track {
     height: 10px;
-    background: #1e293b;
+    background: rgb(var(--cd-surface-2));
     border-radius: 999px;
   }
 
   input[type='range']::-moz-range-progress {
     height: 10px;
-    background: #1e293b;
+    background: rgb(var(--cd-surface-2));
     border-radius: 999px;
   }
 
@@ -54,14 +176,14 @@
     @apply appearance-none rounded-full cursor-pointer;
     width: 24px;
     height: 24px;
-    background: #06b6d4;
-    box-shadow: 0 0 12px rgba(6, 182, 212, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+    background: rgb(var(--cd-accent));
+    box-shadow: 0 0 12px rgb(var(--cd-accent) / 0.5), var(--cd-shadow-card);
     transition: transform 0.1s, box-shadow 0.1s;
   }
 
   input[type='range']::-webkit-slider-thumb:hover {
     transform: scale(1.15);
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.7), 0 1px 6px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 20px rgb(var(--cd-accent) / 0.7), var(--cd-shadow-card);
   }
 
   input[type='range']::-webkit-slider-thumb:active {
@@ -70,8 +192,8 @@
 
   input[type='range']::-moz-range-thumb {
     @apply w-6 h-6 rounded-full border-0 cursor-pointer;
-    background: #06b6d4;
-    box-shadow: 0 0 12px rgba(6, 182, 212, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+    background: rgb(var(--cd-accent));
+    box-shadow: 0 0 12px rgb(var(--cd-accent) / 0.5), var(--cd-shadow-card);
   }
 
   input[type='range']:disabled {
@@ -112,7 +234,7 @@
   }
   ::-webkit-scrollbar-thumb {
     @apply rounded-full;
-    background: #334155;
+    background: rgb(var(--cd-surface-2));
   }
 
   .no-scrollbar {
@@ -126,16 +248,17 @@
 
 @layer components {
   .deck-card {
-    @apply rounded-xl p-4 border w-full min-w-0 transition-all duration-200;
+    @apply rounded-card p-4 border w-full min-w-0 transition-all duration-200;
     overflow-wrap: break-word;
     word-break: break-word;
-    background: rgba(30, 41, 59, 0.6);
+    background: rgb(var(--cd-surface) / 0.6);
     backdrop-filter: blur(12px);
-    border-color: rgba(255, 255, 255, 0.04);
+    border-color: rgb(var(--cd-hairline) / 0.08);
+    box-shadow: var(--cd-shadow-card);
   }
 
   .deck-card:hover {
-    border-color: rgba(255, 255, 255, 0.07);
+    border-color: rgb(var(--cd-hairline) / 0.16);
   }
 
   .deck-card-interactive {
@@ -143,18 +266,18 @@
   }
 
   .deck-card-interactive:hover {
-    border-color: rgba(6, 182, 212, 0.15);
-    box-shadow: 0 0 24px rgba(6, 182, 212, 0.05);
+    border-color: rgb(var(--cd-accent) / 0.2);
+    box-shadow: 0 0 24px rgb(var(--cd-accent) / 0.05);
   }
 
   .toggle-card {
     @apply relative flex flex-col items-center justify-center gap-2.5
-      rounded-xl px-3 py-5 cursor-pointer select-none w-full min-w-0
+      rounded-card px-3 py-5 cursor-pointer select-none w-full min-w-0
       transition-all duration-150 overflow-hidden;
     overflow-wrap: break-word;
     word-break: break-word;
-    background: rgba(30, 41, 59, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgb(var(--cd-surface) / 0.6);
+    border: 1px solid rgb(var(--cd-hairline) / 0.08);
   }
 
   .toggle-card:active {
@@ -162,13 +285,13 @@
   }
 
   .toggle-card:hover {
-    border-color: rgba(255, 255, 255, 0.08);
+    border-color: rgb(var(--cd-hairline) / 0.16);
   }
 
   .toggle-card.active {
-    border-color: rgba(6, 182, 212, 0.3);
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.15),
-      inset 0 0 40px rgba(6, 182, 212, 0.05);
+    border-color: rgb(var(--cd-accent) / 0.4);
+    box-shadow: 0 0 20px rgb(var(--cd-accent) / 0.15),
+      inset 0 0 40px rgb(var(--cd-accent) / 0.05);
   }
 
   .toggle-card.active .toggle-label {
@@ -178,13 +301,13 @@
   .icon-btn {
     @apply flex items-center justify-center rounded-full
       transition-all duration-100 select-none;
-    background: #334155;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgb(var(--cd-surface-2));
+    border: 1px solid rgb(var(--cd-hairline) / 0.1);
   }
 
   .icon-btn:hover {
-    background: #475569;
-    border-color: rgba(255, 255, 255, 0.12);
+    background: rgb(var(--cd-surface-3));
+    border-color: rgb(var(--cd-hairline) / 0.18);
   }
 
   .icon-btn:active {
@@ -211,7 +334,7 @@
 
   .status-dot.playing {
     animation: pulseDot 1.5s ease-in-out infinite;
-    background: #06b6d4;
+    background: rgb(var(--cd-accent));
   }
 
   /* Same override set as the rest of the themed elements, so nothing inside a
@@ -226,10 +349,12 @@
   50% { opacity: 0.4; }
 }
 
-/* Art-themed overrides */
+/* Art theming defaults. useArtTheming rewrites these from the album art; the
+   values here are the token accent, so a page with no art still looks right in
+   whichever theme is active. */
 :root {
-  --art-primary: #06b6d4;
-  --art-accent: #06b6d4;
+  --art-primary: rgb(var(--cd-accent));
+  --art-accent: rgb(var(--cd-accent));
 }
 
 /* Ambient background gradient from album art */
@@ -320,7 +445,7 @@
    default outline, which several of the utility classes here suppress - so a
    keyboard user had no way to tell where they were (A11Y-13). */
 :focus-visible {
-  outline: 2px solid var(--deck-accent, #06b6d4) !important;
+  outline: 2px solid var(--cd-accent) !important;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -329,7 +454,7 @@
    browser would otherwise draw. Restated here so a keyboard user can see where
    they are on the seek bar and the volume sliders. */
 input[type='range']:focus-visible {
-  outline: 2px solid var(--deck-accent, #06b6d4);
+  outline: 2px solid var(--cd-accent);
   outline-offset: 4px;
 }
 
@@ -360,6 +485,6 @@ input[type='range']:focus-visible {
 
   /* Keep a static, visible signal where the animation was the only cue. */
   .status-dot.playing {
-    background: var(--art-accent, #06b6d4) !important;
+    background: var(--cd-accent) !important;
   }
 }

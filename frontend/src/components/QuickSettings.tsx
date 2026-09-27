@@ -69,7 +69,7 @@ export default function QuickSettings({ state }: QuickSettingsProps) {
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted/60">
           Quick Settings
         </span>
-        <div className="flex-1 h-px bg-white/[0.04]" />
+        <div className="flex-1 h-px bg-deck-surface-2" />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
@@ -108,7 +108,7 @@ export default function QuickSettings({ state }: QuickSettingsProps) {
               badge={cfg.id === 'bt' ? (
                 <button
                   className="absolute bottom-0.5 right-0.5 w-10 h-10 rounded-full flex items-center justify-center
-                    bg-deck-surface2 border border-white/10 text-deck-dim hover:bg-deck-accent hover:text-white
+                    bg-deck-surface2 border border-deck-hairline/15 text-deck-dim hover:bg-deck-accent hover:text-white
                     transition-all active:scale-85"
                   onClick={(e) => { e.stopPropagation(); triggerCommand('btConnect'); }}
                   title="Connect headphone"

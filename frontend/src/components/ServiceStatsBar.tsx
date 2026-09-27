@@ -57,27 +57,27 @@ export default function ServiceStatsBar() {
         const running = s.status === 'running';
         return (
           <span key={s.name}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/[0.04]
-              border border-white/[0.06] whitespace-nowrap shrink-0">
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-deck-surface-2
+              border border-deck-hairline/10 whitespace-nowrap shrink-0">
             <span className={`w-2 h-2 rounded-full ${running ? 'bg-green-400 shadow-sm shadow-green-400/40' : 'bg-red-400'}`} />
             <span className="font-bold text-deck-text truncate max-w-[9rem]" title={s.name}>{s.name}</span>
             {running ? (
               <>
-                <span className="text-deck-muted/70 flex items-center gap-0.5 whitespace-nowrap">
-                  <Activity size={11} className="text-cyan-400" />
+                <span className="text-deck-dim flex items-center gap-0.5 whitespace-nowrap">
+                  <Activity size={11} className="text-deck-accent" />
                   {s.cpu_percent.toFixed(1)}%
                 </span>
-                <span className="text-deck-muted/70 flex items-center gap-0.5 whitespace-nowrap">
+                <span className="text-deck-dim flex items-center gap-0.5 whitespace-nowrap">
                   <HardDrive size={11} className="text-purple-400" />
                   {fmtMem(s.mem_rss_kb)}
                 </span>
-                <span className="text-deck-muted/70 flex items-center gap-0.5 whitespace-nowrap">
-                  <Clock size={11} className="text-deck-muted/50" />
+                <span className="text-deck-dim flex items-center gap-0.5 whitespace-nowrap">
+                  <Clock size={11} className="text-deck-dim" />
                   {fmtUptime(s.uptime_secs)}
                 </span>
               </>
             ) : (
-              <span className="text-red-400/80 whitespace-nowrap">stopped</span>
+              <span className="text-deck-danger/80 whitespace-nowrap">stopped</span>
             )}
           </span>
         );

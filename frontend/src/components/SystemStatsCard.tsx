@@ -91,7 +91,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
   const pingIcon = sys.ping_ok ? (
     <Wifi size={14} className="text-deck-accent" />
   ) : (
-    <WifiOff size={14} className="text-red-400" />
+    <WifiOff size={14} className="text-deck-danger" />
   );
 
   const netParts: string[] = [];
@@ -129,7 +129,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
         />
         <StatBar
           label="TEMP"
-          icon={<Thermometer size={14} className="text-amber-400" />}
+          icon={<Thermometer size={14} className="text-deck-warning" />}
           value={sys.temp >= 0 ? Math.min(100, sys.temp) : -1}
           display={tempDisplay}
           color={tempColor}
@@ -146,7 +146,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
       </div>
 
       <div className="flex justify-center items-center gap-3 text-xs text-deck-dim mt-1 min-w-0
-        rounded-lg bg-white/[0.03] border border-white/[0.05] px-3 py-1.5">
+        rounded-lg bg-deck-surface-2 border border-deck-hairline/10 px-3 py-1.5">
         {netParts.map((part, i) => (
           <span key={i} className="flex items-center gap-1 truncate max-w-[180px]">
             {i === netParts.length - 1 && pingIcon}

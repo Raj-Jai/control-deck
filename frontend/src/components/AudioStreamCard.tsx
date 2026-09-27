@@ -73,9 +73,9 @@ export default function AudioStreamCard({ state, compact }: Props) {
 
   const tone =
     status === 'error'
-      ? 'bg-red-500/15 border-red-500/30 text-red-400'
+      ? 'bg-deck-danger/15 border-red-500/30 text-deck-danger'
       : status === 'gesture-needed'
-      ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+      ? 'bg-amber-500/15 border-amber-500/30 text-deck-warning'
       : isPlaying
       ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
       : isBusy
@@ -124,7 +124,7 @@ export default function AudioStreamCard({ state, compact }: Props) {
             latency {info.latencyMs}ms
             {info.outputLatencyMs > 5 ? ` · out ${info.outputLatencyMs}ms` : ''}
           </div>
-          <div className="text-deck-muted/50">
+          <div className="text-deck-dim">
             drift {info.driftMs >= 0 ? '+' : ''}
             {info.driftMs}ms
             {info.gaps > 0 ? ` · ${info.gaps} gap${info.gaps > 1 ? 's' : ''}` : ''}
@@ -134,13 +134,13 @@ export default function AudioStreamCard({ state, compact }: Props) {
       )}
 
       {status === 'gesture-needed' && (
-        <p className="text-[10px] text-amber-300/90 text-center leading-tight">
+        <p className="text-[10px] text-deck-warning/90 text-center leading-tight">
           Browser blocked autoplay — tap anywhere to enable audio.
         </p>
       )}
 
       {status === 'error' && info.error && (
-        <p className="text-[10px] text-red-400/90 text-center leading-tight break-words">
+        <p className="text-[10px] text-deck-danger/90 text-center leading-tight break-words">
           {info.error}
         </p>
       )}
