@@ -413,10 +413,13 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       `Math.round(scrollLeft / width)` flip the active page mid-animation and back, remounting
       the deck body each time - a terminal opened, closed and reopened within 200ms of being
       opened. The scroll handler now defers to the navigation target for 1.2s.
-- [ ] **PERF-04/16/17** the video deck's 1 Hz poll still runs whenever the Video deck is on
-      screen even if the user is looking at the browser tab behind it, and the bundle is still
-      one 656 kB chunk with `@xterm/xterm` imported statically.
-      *(xterm is now only fetched when the Terminal deck is first opened, via the lazy body)*
+- [x] **PERF-04/16/17** the video deck's 1 Hz poll ran whenever the Video deck was mounted,
+      including while the browser tab was in the background. Two changes close it: the deck
+      body is a lazy chunk mounted only while its page is on screen, and the poll stops
+      rescheduling itself while the tab is hidden, restarting on `visibilitychange`. The
+      in-flight request still completes, so the state is not torn down mid-read - measured
+      3 polls in 3s while visible, 1 (the pending one) then none over 4s hidden, and 3
+      again after returning.
 - [x] **PERF-09** the survey recording was unbounded: the canvas redraw is O(n) per point,
       so a long walk grew React state and re-rendered the whole polyline every 200 ms.
       Now capped at `MAX_RECORD_POINTS` (5,000, over 16 minutes at 5 Hz) with the dropped

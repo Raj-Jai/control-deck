@@ -50,10 +50,25 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
           audioRef.current = v.audio_delay;
         }
       } catch { /* ignore */ }
-      if (!dead) timer = setTimeout(poll, 1000);
+      if (dead) return;
+      // While hidden, stop scheduling; the visibilitychange listener restarts
+      // it. The in-flight request still finishes, so the state is not torn down.
+      if (document.visibilityState === 'visible') timer = setTimeout(poll, 1000);
     };
     poll();
-    return () => { dead = true; clearTimeout(timer); };
+    // The deck is only mounted while its page is on screen, so the poll is
+    // already bounded by whether the user is looking at it. A hidden tab is the
+    // other half: a backgrounded deck should not keep asking the player for
+    // its status once a second, and on a laptop that means waking the radio.
+    const onVisible = () => {
+      if (!dead && document.visibilityState === 'visible') void poll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      dead = true;
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   // Applies a delay change, and reports whether the host accepted it.
