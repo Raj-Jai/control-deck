@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Monitor, Radio, RadioTower, VolumeX } from 'lucide-react';
+import { getOrCreateDeviceId } from '../lib/deviceId';
 
 interface ClientInfo {
   ip: string;
@@ -55,8 +56,13 @@ export default function ConnectedDevicesCard({ readOnly = false }: { readOnly?: 
   useEffect(() => {
     const poll = async () => {
       try {
-        const id = sessionStorage.getItem('dash_device_id') || '';
-        const res = await fetch(`/api/clients?device_id=${encodeURIComponent(id)}`);
+        // getOrCreateDeviceId, not a raw sessionStorage read. This card read a
+        // key nothing ever wrote there - the id lives in localStorage - so it
+        // always sent an empty device_id, and the server answered "404 device
+        // not connected" for every per-device control the card offers. Over
+        // plain-HTTP LAN the same read also defeated the insecure-context
+        // fallback that keeps the id a usable UUID (SEC-015).
+        const res = await fetch(`/api/clients?device_id=${encodeURIComponent(getOrCreateDeviceId())}`);
         setData(await res.json());
       } catch {}
     };
@@ -84,7 +90,7 @@ export default function ConnectedDevicesCard({ readOnly = false }: { readOnly?: 
     });
   }, [data?.broadcasting]);
 
-  const thisDeviceId = sessionStorage.getItem('dash_device_id') || '';
+  const thisDeviceId = getOrCreateDeviceId();
 
   const [ping, setPing] = useState<number | null>(null);
 

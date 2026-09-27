@@ -88,7 +88,20 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **SEC-014** (Medium) unbounded, publicly served log containing window titles — the
       window watcher no longer logs once per second, only on change, and the log is no longer
       served at all.
-- [ ] **SEC-015** (High) `device_id` empty over plain-HTTP LAN → per-device controls dead.
+- [x] **SEC-015** (High) `device_id` empty over plain-HTTP LAN → per-device controls dead.
+      `crypto.randomUUID()` only exists in a secure context, and the README documents reaching
+      the dashboard from a phone over plain-HTTP LAN, so the id came out empty and every
+      per-device control, the audio WebSocket registration and the whole hotkey broadcast path
+      answered "404 device not connected". `lib/deviceId.ts` now builds a v4 UUID from
+      `crypto.getRandomValues`, which is available in every context. Verified against a real
+      LAN address over plain HTTP: `isSecureContext` false and `crypto.randomUUID` absent,
+      yet the id is a valid v4 UUID and reaches the server.
+      **A second path was still broken.** `ConnectedDevicesCard` read
+      `sessionStorage.getItem('dash_device_id')` directly - a key nothing ever writes there,
+      since the id lives in `localStorage` - so it sent `device_id=` empty regardless of
+      context, and that read also bypassed the fallback. It now uses `getOrCreateDeviceId()`.
+      Re-verified over the LAN address: zero requests with an empty id, where before there
+      were two per poll.
 - [x] **SEC-016** (Low) `geo_sessions` was created 0755 with 0644 files. Now 0700/0600.
 
 ## 2. Backend reliability
