@@ -127,7 +127,7 @@ export default function ClipboardCard() {
         placeholder="Type or paste text, then push to host…"
         rows={3}
         maxLength={100000}
-        className="w-full bg-deck-surface2/60 border border-deck-hairline/15 rounded-lg p-2.5
+        className="w-full bg-deck-surface-2/60 border border-deck-hairline/15 rounded-lg p-2.5
           text-sm text-deck-text placeholder-deck-muted resize-none
           focus:outline-none focus:border-deck-accent/40 focus:ring-1 focus:ring-deck-accent/20
           transition-colors duration-150"
@@ -144,7 +144,7 @@ export default function ClipboardCard() {
           disabled={loading !== 'idle'}
           className="flex items-center justify-center gap-1.5 py-2 rounded-lg
             text-xs font-semibold uppercase tracking-wider
-            bg-deck-surface2 border border-deck-hairline/15 text-deck-text
+            bg-deck-surface-2 border border-deck-hairline/15 text-deck-text
             hover:bg-deck-accent/15 hover:border-deck-accent/30 hover:text-deck-accent
             disabled:opacity-40 disabled:pointer-events-none
             transition-all duration-100 active:scale-95"
@@ -162,7 +162,7 @@ export default function ClipboardCard() {
           disabled={!text || loading !== 'idle'}
           className="flex items-center justify-center gap-1.5 py-2 rounded-lg
             text-xs font-semibold uppercase tracking-wider
-            bg-deck-surface2 border border-deck-hairline/15 text-deck-text
+            bg-deck-surface-2 border border-deck-hairline/15 text-deck-text
             hover:bg-deck-accent/15 hover:border-deck-accent/30 hover:text-deck-accent
             disabled:opacity-40 disabled:pointer-events-none
             transition-all duration-100 active:scale-95"
@@ -180,7 +180,7 @@ export default function ClipboardCard() {
           disabled={loading !== 'idle'}
           className="flex items-center justify-center gap-1.5 py-2 rounded-lg
             text-xs font-semibold uppercase tracking-wider
-            bg-deck-surface2 border border-deck-hairline/15 text-deck-text
+            bg-deck-surface-2 border border-deck-hairline/15 text-deck-text
             hover:bg-deck-accent/15 hover:border-deck-accent/30 hover:text-deck-accent
             disabled:opacity-40 disabled:pointer-events-none
             transition-all duration-100 active:scale-95"
@@ -198,7 +198,7 @@ export default function ClipboardCard() {
           disabled={!text}
           className="flex items-center justify-center gap-1.5 py-2 rounded-lg
             text-xs font-semibold uppercase tracking-wider
-            bg-deck-surface2 border border-deck-hairline/15 text-deck-text
+            bg-deck-surface-2 border border-deck-hairline/15 text-deck-text
             hover:bg-deck-accent/15 hover:border-deck-accent/30 hover:text-deck-accent
             disabled:opacity-40 disabled:pointer-events-none
             transition-all duration-100 active:scale-95"

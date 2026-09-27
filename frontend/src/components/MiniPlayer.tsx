@@ -21,7 +21,7 @@ export default function MiniPlayer({ state }: MiniPlayerProps) {
   return (
     <div className="fixed bottom-14 left-0 right-0 z-40 bg-deck-bg/80 backdrop-blur-md border-t border-deck-hairline/10 px-3 py-1.5">
       <div className="max-w-6xl mx-auto flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-deck-surface2 flex items-center justify-center">
+        <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-deck-surface-2 flex items-center justify-center">
           {artUrl && !artError ? (
             <img src={artUrl} alt="" className="w-full h-full object-cover"
               onError={() => setArtError(true)} />

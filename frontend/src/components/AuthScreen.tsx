@@ -118,7 +118,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               <button
                 onClick={() => { setMode('dashboard'); setStep('pin'); }}
                 className="flex items-center gap-3 h-14 px-4 rounded-xl text-sm font-semibold text-deck-text
-                  bg-deck-surface2 border border-deck-hairline/15
+                  bg-deck-surface-2 border border-deck-hairline/15
                   hover:bg-deck-accent/10 hover:border-deck-accent/20
                   active:bg-deck-accent/15 active:border-deck-accent/30
                   transition-all duration-75 select-none"
@@ -129,7 +129,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               <button
                 onClick={() => { setMode('media'); setStep('pin'); }}
                 className="flex items-center gap-3 h-14 px-4 rounded-xl text-sm font-semibold text-deck-text
-                  bg-deck-surface2 border border-deck-hairline/15
+                  bg-deck-surface-2 border border-deck-hairline/15
                   hover:bg-deck-warning/10 hover:border-amber-500/20
                   active:bg-amber-500/15 active:border-amber-500/30
                   transition-all duration-75 select-none"
@@ -190,20 +190,20 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
             <div className="grid grid-cols-3 gap-3 w-full max-w-[220px]">
               {['1','2','3','4','5','6','7','8','9'].map(n => (
                 <button key={n} onClick={() => press(n)} aria-label={`Digit ${n}`}
-                  className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                  className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface-2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                   {n}
                 </button>
               ))}
               <button onClick={() => setPin([])} aria-label="Clear PIN"
-                className="h-14 rounded-xl text-xs font-semibold text-deck-dim bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                className="h-14 rounded-xl text-xs font-semibold text-deck-dim bg-deck-surface-2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 Clear
               </button>
               <button onClick={() => press('0')} aria-label="Digit 0"
-                className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                className="h-14 rounded-xl text-lg font-semibold text-deck-text bg-deck-surface-2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 0
               </button>
               <button onClick={backspace} aria-label="Delete last digit"
-                className="h-14 rounded-xl flex items-center justify-center text-deck-dim bg-deck-surface2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
+                className="h-14 rounded-xl flex items-center justify-center text-deck-dim bg-deck-surface-2 border border-deck-hairline/15 active:bg-deck-accent/15 active:border-deck-accent/30 transition-all duration-75 select-none">
                 <ArrowLeft size={20} />
               </button>
             </div>

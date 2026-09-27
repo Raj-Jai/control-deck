@@ -305,7 +305,9 @@ export default function App() {
         {/* Top strip. Owns the fullscreen control, so the two can never
             overlap: body already applies the top safe-area inset, so this must
             not add it again. */}
-        <div className="sticky top-0 z-50 flex justify-center bg-deck-bg/80 backdrop-blur-md border-b border-deck-hairline/10">
+        {/* Opaque for the same reason as the bottom strip: at /80 the content
+            scrolling underneath was visible through it in the light theme. */}
+        <div className="sticky top-0 z-50 flex justify-center bg-deck-bg border-b border-deck-hairline/10">
           <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 flex items-center gap-2">
             {features.service_stats ? (
               <div className="min-w-0 flex-1 overflow-x-auto no-scrollbar">
@@ -478,13 +480,26 @@ export default function App() {
       {/* Mini player — docked above nav strip on Code/Terminal decks */}
       {features.now_playing && showMini && state && caps.playerctl && <MiniPlayer state={state} />}
 
-      {/* Bottom strip — fixed to bottom of screen */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg/70 backdrop-blur-md border-t border-deck-hairline/10 pb-[env(safe-area-inset-bottom)]">
-        <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6 py-2 relative">
+      {/* Bottom strip — fixed to the bottom of the screen.
+
+          It was bg-deck-bg/70 with a backdrop blur, which in the light theme
+          meant the page showed through it: card edges and tile borders were
+          visible behind the dots, and the strip read as a smudge rather than a
+          bar. Opaque, with a defined top edge, it reads as a surface. */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg border-t border-deck-hairline/10 shadow-[0_-1px_0_rgb(var(--cd-hairline)/0.04)] pb-[env(safe-area-inset-bottom)]">
+        <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-5 lg:px-6 py-1.5 relative flex items-center gap-1">
+          <FloatingNav
+            pages={pages}
+            currentPage={page}
+            scrollTo={scrollTo}
+            autoFocus={autoFocus}
+            onToggleAutoFocus={() => setAutoFocus(prev => !prev)}
+            broadcasting={broadcasting}
+          />
           {/* Draggable page dots */}
           <div
             ref={dragStripRef}
-            className="flex items-center justify-center gap-6 select-none touch-none py-1 w-full transition-transform duration-100"
+            className="flex-1 flex items-center justify-center gap-5 sm:gap-6 select-none touch-none transition-transform duration-100"
             data-dragging={dragging || undefined}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -513,8 +528,8 @@ export default function App() {
             ))}
           </div>
           {clientCount > 0 && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-deck-dim select-none pointer-events-none">
-              <Monitor size={10} />
+            <div className="shrink-0 flex items-center gap-1 text-[10px] text-deck-dim select-none pointer-events-none pl-1">
+              <Monitor size={11} />
               {clientCount}
             </div>
           )}
@@ -532,15 +547,6 @@ export default function App() {
         </button>
       )}
 
-      <FloatingNav
-        raised={showMini}
-        broadcasting={broadcasting}
-        pages={pages}
-        currentPage={page}
-        scrollTo={scrollTo}
-        autoFocus={autoFocus}
-        onToggleAutoFocus={() => setAutoFocus(prev => !prev)}
-      />
     </>
   );
 }

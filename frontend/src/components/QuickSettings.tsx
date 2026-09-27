@@ -98,6 +98,42 @@ export default function QuickSettings({ state }: QuickSettingsProps) {
         {visibleToggles.filter(t => t.id !== 'audioStream').map(cfg => {
           const active = !cfg.cmd && isActive(cfg.id);
           const Icon = iconMap[cfg.icon] || null;
+
+          // Bluetooth carries a second action, "connect the headphones". It used
+          // to be a 44px badge floating in the tile's bottom-right corner, but a
+          // 44px target does not fit in the corner of a one-third-column tile
+          // without sitting on top of the label - and 44px is the floor for a
+          // touch target, so it could not just be made smaller. It gets two
+          // columns and sits beside the toggle instead, which is also easier to
+          // understand: two things, two buttons.
+          if (cfg.id === 'bt') {
+            return (
+              <div key={cfg.id} className="col-span-2 flex gap-2 min-w-0">
+                <QuickToggle
+                  icon={Icon}
+                  label={cfg.label}
+                  active={active}
+                  onClick={() => handleToggle(cfg)}
+                  customClass="flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => triggerCommand('btConnect')}
+                  title="Connect headphone"
+                  aria-label="Connect headphone"
+                  className="shrink-0 w-[46px] rounded-card flex flex-col items-center justify-center gap-1.5
+                    border border-deck-hairline/10 bg-deck-surface-2/60 text-deck-dim
+                    hover:border-deck-accent/30 hover:text-deck-accent
+                    transition-all duration-150 active:scale-95
+                    focus-visible:outline-2 focus-visible:outline-deck-accent"
+                >
+                  <Headphones size={18} />
+                  <span className="text-[9px] font-semibold leading-none">Pair</span>
+                </button>
+              </div>
+            );
+          }
+
           return (
             <QuickToggle
               key={cfg.id}
@@ -105,17 +141,6 @@ export default function QuickSettings({ state }: QuickSettingsProps) {
               label={cfg.label}
               active={active}
               onClick={() => handleToggle(cfg)}
-              badge={cfg.id === 'bt' ? (
-                <button
-                  className="absolute bottom-0.5 right-0.5 w-10 h-10 rounded-full flex items-center justify-center
-                    bg-deck-surface2 border border-deck-hairline/15 text-deck-dim hover:bg-deck-accent hover:text-white
-                    transition-all active:scale-85"
-                  onClick={(e) => { e.stopPropagation(); triggerCommand('btConnect'); }}
-                  title="Connect headphone"
-                >
-                  <Headphones size={11} />
-                </button>
-              ) : undefined}
             />
           );
         })}

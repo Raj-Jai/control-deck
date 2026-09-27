@@ -26,6 +26,10 @@ export default {
           surface: token('--cd-surface'),
           'surface-2': token('--cd-surface-2'),
           'surface-3': token('--cd-surface-3'),
+          // Slider and meter tracks, which must read against the card they
+          // sit on. Distinct from surface-2, which in the light theme is the
+          // same value as the page background.
+          track: token('--cd-track'),
           // Lines.
           hairline: token('--cd-hairline'),
           'hairline-strong': token('--cd-hairline-strong'),

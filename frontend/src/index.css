@@ -43,6 +43,20 @@
     --cd-warning: 252 211 77;
     --cd-danger: 248 113 113;
 
+    /* A slider or meter track. It needs to read against the card it sits on,
+       and surface-2 did not: in the light theme that is the same value as the
+       page background, so a track on a white card measured 1.02:1 and simply
+       was not there. */
+    --cd-track: 52 66 88;
+
+    /* How solid a card is, and how strongly it is outlined. The dark theme
+       wants glass - translucent fill, a faint edge, a backdrop blur. The light
+       theme cannot: white at 60% over near-white is white at 60%, so the cards
+       had no edge and no body, and the whole page read as a wash. */
+    --cd-card-alpha: 0.6;
+    --cd-card-border: 0.08;
+    --cd-card-border-hover: 0.16;
+
     --cd-radius-card: 16px;
     --cd-radius-control: 10px;
 
@@ -79,6 +93,16 @@
     --cd-accent-dim: 8 145 178;
     --cd-accent-contrast: 255 255 255;
 
+    /* Opaque cards with a real edge. Translucency is a dark-theme device: it
+       works because the fill is lighter than the page behind it. Inverted, it
+       cancels out and the card disappears. */
+    --cd-surface-2: 233 240 248;
+    --cd-surface-3: 214 225 238;
+    --cd-track: 191 205 224;
+    --cd-card-alpha: 1;
+    --cd-card-border: 0.14;
+    --cd-card-border-hover: 0.24;
+
     /* Status colours have to be dark enough to read on a white surface, which
        the dark theme's 400-weight equivalents are not. */
     /* Dark enough to read on the 15% tint a status pill sits on: amber-700
@@ -113,6 +137,12 @@
       --cd-accent: 14 116 144;
       --cd-accent-dim: 8 145 178;
       --cd-accent-contrast: 255 255 255;
+      --cd-surface-2: 233 240 248;
+      --cd-surface-3: 214 225 238;
+      --cd-track: 191 205 224;
+      --cd-card-alpha: 1;
+      --cd-card-border: 0.14;
+      --cd-card-border-hover: 0.24;
       --cd-success: 21 128 61;
       --cd-warning: 146 64 14;
       --cd-danger: 190 24 93;
@@ -156,13 +186,13 @@
 
   input[type='range']::-webkit-slider-runnable-track {
     height: 10px;
-    background: rgb(var(--cd-surface-2));
+    background: rgb(var(--cd-track));
     border-radius: 999px;
   }
 
   input[type='range']::-moz-range-track {
     height: 10px;
-    background: rgb(var(--cd-surface-2));
+    background: rgb(var(--cd-track));
     border-radius: 999px;
   }
 
@@ -251,14 +281,14 @@
     @apply rounded-card p-4 border w-full min-w-0 transition-all duration-200;
     overflow-wrap: break-word;
     word-break: break-word;
-    background: rgb(var(--cd-surface) / 0.6);
+    background: rgb(var(--cd-surface) / var(--cd-card-alpha));
     backdrop-filter: blur(12px);
-    border-color: rgb(var(--cd-hairline) / 0.08);
+    border-color: rgb(var(--cd-hairline) / var(--cd-card-border));
     box-shadow: var(--cd-shadow-card);
   }
 
   .deck-card:hover {
-    border-color: rgb(var(--cd-hairline) / 0.16);
+    border-color: rgb(var(--cd-hairline) / var(--cd-card-border-hover));
   }
 
   .deck-card-interactive {
@@ -276,8 +306,8 @@
       transition-all duration-150 overflow-hidden;
     overflow-wrap: break-word;
     word-break: break-word;
-    background: rgb(var(--cd-surface) / 0.6);
-    border: 1px solid rgb(var(--cd-hairline) / 0.08);
+    background: rgb(var(--cd-surface) / var(--cd-card-alpha));
+    border: 1px solid rgb(var(--cd-hairline) / var(--cd-card-border));
   }
 
   .toggle-card:active {
@@ -285,7 +315,7 @@
   }
 
   .toggle-card:hover {
-    border-color: rgb(var(--cd-hairline) / 0.16);
+    border-color: rgb(var(--cd-hairline) / var(--cd-card-border-hover));
   }
 
   .toggle-card.active {

@@ -42,7 +42,7 @@ function StatBar({ label, icon, value, display, color }: StatBarProps) {
         {icon}
         {label}
       </div>
-      <div className="h-1 rounded-full overflow-hidden bg-deck-surface2">
+      <div className="h-1.5 rounded-full overflow-hidden bg-deck-track">
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{ width: `${pct}%`, background: color }}
@@ -101,7 +101,11 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
 
   return (
     <div className="deck-card flex flex-col gap-2.5">
-      <div className={`grid grid-cols-3 sm:grid-cols-4 ${hasGPU ? 'lg:grid-cols-5' : ''} gap-2`}>
+      {/* Two up on a phone, not three. At three, the fourth metric wrapped onto
+          a row of its own with empty space beside it, which read as a layout
+          mistake rather than a fourth reading. Four metrics want 2x2 or 4x1;
+          three columns can only ever orphan one. */}
+      <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-4 ${hasGPU ? 'lg:grid-cols-5' : ''}`}>
         <StatBar
           label="CPU"
           icon={<Cpu size={14} className="text-deck-accent" />}

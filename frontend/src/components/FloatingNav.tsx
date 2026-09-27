@@ -7,8 +7,8 @@ interface FloatingNavProps {
   scrollTo: (index: number) => void;
   autoFocus: boolean;
   onToggleAutoFocus: () => void;
-  /** True when the MiniPlayer is docked at the bottom, so the FAB can sit
-   *  clear of it instead of covering the next-track button. */
+  /** Retained for callers that still pass it; the button is docked in the
+   *  bottom strip now, so it no longer floats over the page. */
   raised?: boolean;
   /** True when a broadcast is live, so Refresh can say so before it ends one. */
   broadcasting?: boolean;
@@ -27,7 +27,12 @@ export default function FloatingNav({ pages, currentPage, scrollTo, autoFocus, o
   }, [scrollTo]);
 
   return (
-    <div className={`fixed right-3 z-50 transition-[bottom] duration-200 ${raised ? 'bottom-[7.5rem]' : 'bottom-[4.75rem]'}`}>
+    // Docked in the bottom strip rather than floating over the page. It used to
+    // be a fixed FAB at right-3, which meant it sat on top of whatever card
+    // happened to be scrolled underneath it - on the Home deck it landed across
+    // the mixer and the "More controls" button, which read as a rendering fault
+    // rather than a deliberate control.
+    <div className="relative shrink-0">
       {/* Backdrop overlay */}
       {open && (
         <div

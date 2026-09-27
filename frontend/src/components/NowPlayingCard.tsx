@@ -368,7 +368,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       {/* Header: art + metadata */}
       <div className="flex items-center gap-3">
         <div className="relative w-[72px] h-[72px] rounded-xl overflow-hidden flex-shrink-0
-          bg-deck-surface2 [@media(max-height:720px)]:w-12 [@media(max-height:720px)]:h-12">
+          bg-deck-surface-2 [@media(max-height:720px)]:w-12 [@media(max-height:720px)]:h-12">
           {artUrl && !artError ? (
             <img
               src={artUrl}
@@ -390,7 +390,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             className={`inline-flex items-center gap-1 text-[11px] font-medium mt-1.5 px-2 py-0.5 rounded-full
               [@media(max-height:720px)]:hidden ${
               isOffline || isIdle
-                ? 'bg-deck-surface2 text-deck-muted'
+                ? 'bg-deck-surface-2 text-deck-muted'
                 : status === 'Playing'
                 ? 'bg-deck-accent/15 text-deck-accent'
                 : 'bg-deck-warning/15 text-deck-warning'
@@ -597,7 +597,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           {/* Left panel: art + controls (desktop) / top panel (mobile) */}
           <div className="flex flex-col items-center justify-center gap-5 p-6 md:p-10 md:w-[360px] md:min-w-[360px] md:h-full md:border-r border-deck-hairline/10">
             {/* Album art */}
-            <div className="relative w-[180px] h-[180px] md:w-[240px] md:h-[240px] rounded-2xl overflow-hidden flex-shrink-0 shadow-2xl bg-deck-surface2">
+            <div className="relative w-[180px] h-[180px] md:w-[240px] md:h-[240px] rounded-2xl overflow-hidden flex-shrink-0 shadow-2xl bg-deck-surface-2">
               {artUrl && !artError ? (
                 <img
                   src={artUrl}
