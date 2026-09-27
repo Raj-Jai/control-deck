@@ -33,7 +33,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 14b | BUG-031/033 video track cycling + honest failures | [x] | (this commit) |
 | 14c | BUG-035/036/039/040/024/008/019 terminal, refresh, auto-focus, capabilities, clipboard | [x] | (this commit) |
 | 14d | BUG-004/005/007 + A11Y-02/03/05 seek + lyrics modal | [x] | (this commit) |
-| 14e | BUG-006/009/018/030/037/044/054/055 remaining | [ ] | |
+| 14e | BUG-037 LRC parser + first frontend test runner | [x] | (this commit) |
+| 14f | BUG-006/009/018/030/044/054/055 remaining | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -187,7 +188,11 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **BUG-036** "Refresh" was `location.reload()` with no confirmation, which drops the
       client's socket and ends the broadcast for *every* device. It now always takes two taps
       and names the consequence when a broadcast is live.
-- [ ] **BUG-037** the LRC parser rejects single-digit minutes, mis-parses multi-timestamp lines.
+- [x] **BUG-037** the LRC pattern demanded exactly two minute digits and a mandatory fraction,
+      so any file using `[1:23.45]` lost every line, and it read only the first tag on a line,
+      so a repeated chorus lost every repeat. Both fixed, with `.5` now correctly 500ms.
+      This is the first frontend test in the project: `npm test` runs Node's built-in runner
+      against the pure functions, with no new dependency.
 - [ ] **BUG-038** `triggerCommand`/`seekTo`/`setVolume`/`setBrightness` never check the response.
       *(partially done: `triggerCommand` only)*
 - [x] **BUG-039** auto-focus snapped the deck to Home for any window we do not map — a file
@@ -273,7 +278,9 @@ Complete visual redesign: new design tokens, theme, and layout across every comp
 
 ## 10. Tests, tooling, dead code
 
-- [ ] **TEST-01..24** the audit's specified test cases; no CI, no frontend test runner.
+- [~] **TEST-01..24** the audit's specified test cases. There is now a frontend test runner
+      (`npm test`, Node's built-in runner, no new dependency) and Go tests for the areas fixed
+      so far. No CI yet, and most of TEST-01..24 remain.
 - [ ] Delete the 892 lines of dead frontend code (12.5%), including two divergent lock
       screens, a second BLE implementation, and `SysStatsBar.tsx`.
 - [ ] Extract shared `<VolumeSlider>` / `<BrightnessSlider>`.
