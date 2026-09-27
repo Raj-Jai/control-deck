@@ -104,14 +104,17 @@ func buildProfileCommandMap() {
 
 	profileCmds := map[string][]string{
 		// IDE: Debugger keys (F5, F10, F11, Shift+F5)
+		// VS Code's default debug bindings. Step Out, Stop and Restart were all
+		// "F5", i.e. Continue, and Toggle Breakpoint paused the user's music
+		// (BUG-034). The comments claimed a key the code never sent.
 		"dbg_continue":     {sk, "F5"},
 		"dbg_step_over":    {sk, "F10"},
 		"dbg_step_into":    {sk, "F11"},
-		"dbg_step_out":     {"sh", "-c", sk + " F5"}, // Shift+F5 — handled below
-		"dbg_stop":         {"sh", "-c", sk + " F5"}, // Shift+F5
-		"dbg_restart":      {"sh", "-c", sk + " F5"}, // Ctrl+Shift+F5 via loop
-		"dbg_toggle_break": {"sh", "-c", "playerctl --player $PLAYER play-pause 2>/dev/null || true"},
-		"dbg_clear_all":    {"sh", "-c", sk + " F9"},
+		"dbg_step_out":     {sk, "shift+F11"},
+		"dbg_stop":         {sk, "shift+F5"},
+		"dbg_restart":      {sk, "ctrl+shift+F5"},
+		"dbg_toggle_break": {sk, "F9"},
+		"dbg_clear_all":    {sk, "ctrl+shift+F9"},
 
 		// IDE: Git aliases
 		"git_stage":  {"bash", "-c", "git add -A && git status -s"},

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -30,13 +31,13 @@ type inputEvent struct {
 }
 
 type uinputUserDev struct {
-	Name        [80]byte
-	ID          struct{ Bus, Vendor, Product, Version uint16 }
+	Name         [80]byte
+	ID           struct{ Bus, Vendor, Product, Version uint16 }
 	FFEffectsMax uint32
-	AbsMax      [64]int32
-	AbsMin      [64]int32
-	AbsFuzz     [64]int32
-	AbsFlat     [64]int32
+	AbsMax       [64]int32
+	AbsMin       [64]int32
+	AbsFuzz      [64]int32
+	AbsFlat      [64]int32
 }
 
 var keyMap = map[string]uint16{
@@ -103,16 +104,57 @@ func main() {
 		fmt.Fprintln(os.Stderr, "keys: f, c, b, e, g, h, j, k, l, m, t, v, z, x, space, F11, F5, F9, F10, tab, esc, enter, up, down, left, right")
 		fmt.Fprintln(os.Stderr, "ctrl combos: ctrl_c, ctrl_d, ctrl_z, ctrl_l, ctrl_a, ctrl_e, ctrl_w, ctrl_u")
 		fmt.Fprintln(os.Stderr, "shift combos: shift_., shift_,")
+		fmt.Fprintln(os.Stderr, "modifiers: any key may be prefixed with ctrl+ and/or shift+, e.g. shift+F5, ctrl+shift+F5")
 		os.Exit(1)
 	}
 
 	keyName := os.Args[1]
-	keyCode, ok := keyMap[keyName]
-	ctrlCode, isCtrl := ctrlKeys[keyName]
-	shiftCode, isShift := shiftKeys[keyName]
+
+	// Modifier combos: "shift+F5", "ctrl+shift+F5". The debugger deck needs
+	// Shift+F5 (stop), Shift+F11 (step out) and Ctrl+Shift+F5 (restart), and
+	// there was no way to express any of them, so three different buttons all
+	// sent a bare F5.
+	wantCtrl, wantShift := false, false
+	base := keyName
+	for {
+		switch {
+		case strings.HasPrefix(base, "ctrl+"):
+			wantCtrl, base = true, base[len("ctrl+"):]
+		case strings.HasPrefix(base, "shift+"):
+			wantShift, base = true, base[len("shift+"):]
+		default:
+			goto parsed
+		}
+	}
+parsed:
+	// Candidate spellings, in order: the stripped base, the original name, and
+	// the original with "+" written as "_" so that "shift+." finds the named
+	// combo "shift_." that predates the modifier prefix.
+	keyCode, ok := keyMap[base]
+	ctrlCode, isCtrl := ctrlKeys[base]
+	shiftCode, isShift := shiftKeys[base]
 	if !ok && !isCtrl && !isShift {
-		fmt.Fprintf(os.Stderr, "unknown key: %s\n", keyName)
+		for _, alt := range []string{keyName, strings.ReplaceAll(keyName, "+", "_")} {
+			keyCode, ok = keyMap[alt]
+			ctrlCode, isCtrl = ctrlKeys[alt]
+			shiftCode, isShift = shiftKeys[alt]
+			if ok || isCtrl || isShift {
+				break
+			}
+		}
+	}
+	if !ok && !isCtrl && !isShift {
+		fmt.Fprintf(os.Stderr, "unknown key: %s\n", base)
 		os.Exit(1)
+	}
+	// A bare "shift+x" or "ctrl+x" keeps its existing meaning.
+	if isCtrl && !wantCtrl && !wantShift {
+		wantCtrl, ctrlCode = true, ctrlCode
+		isCtrl = false
+	}
+	if isShift && !wantShift && !wantCtrl {
+		wantShift, shiftCode = true, shiftCode
+		isShift = false
 	}
 
 	player := ""
@@ -173,29 +215,35 @@ func main() {
 
 	time.Sleep(100 * time.Millisecond)
 
-	if isCtrl {
-		writeEvent(uintptr(fd), evKey, 29, 1) // KEY_LEFTCTRL down
-		writeEvent(uintptr(fd), evKey, ctrlCode, 1)
-		writeEvent(uintptr(fd), evSyn, synReport, 0)
-		time.Sleep(50 * time.Millisecond)
-		writeEvent(uintptr(fd), evKey, ctrlCode, 0)
-		writeEvent(uintptr(fd), evKey, 29, 0) // KEY_LEFTCTRL up
-		writeEvent(uintptr(fd), evSyn, synReport, 0)
-	} else if isShift {
-		writeEvent(uintptr(fd), evKey, 42, 1) // KEY_LEFTSHIFT down
-		writeEvent(uintptr(fd), evKey, shiftCode, 1)
-		writeEvent(uintptr(fd), evSyn, synReport, 0)
-		time.Sleep(50 * time.Millisecond)
-		writeEvent(uintptr(fd), evKey, shiftCode, 0)
-		writeEvent(uintptr(fd), evKey, 42, 0) // KEY_LEFTSHIFT up
-		writeEvent(uintptr(fd), evSyn, synReport, 0)
-	} else {
-		writeEvent(uintptr(fd), evKey, keyCode, 1)
-		writeEvent(uintptr(fd), evSyn, synReport, 0)
-		time.Sleep(50 * time.Millisecond)
-		writeEvent(uintptr(fd), evKey, keyCode, 0)
-		writeEvent(uintptr(fd), evSyn, synReport, 0)
+	// Press the modifiers, the key, then release in reverse.
+	const keyLeftCtrl = 29
+	const keyLeftShift = 42
+
+	var modsDown []uint16
+	if wantCtrl {
+		modsDown = append(modsDown, keyLeftCtrl)
 	}
+	if wantShift {
+		modsDown = append(modsDown, keyLeftShift)
+	}
+	target := keyCode
+	if isCtrl {
+		target = ctrlCode
+	} else if isShift {
+		target = shiftCode
+	}
+
+	for _, m := range modsDown {
+		writeEvent(uintptr(fd), evKey, m, 1)
+	}
+	writeEvent(uintptr(fd), evKey, target, 1)
+	writeEvent(uintptr(fd), evSyn, synReport, 0)
+	time.Sleep(50 * time.Millisecond)
+	writeEvent(uintptr(fd), evKey, target, 0)
+	for i := len(modsDown) - 1; i >= 0; i-- {
+		writeEvent(uintptr(fd), evKey, modsDown[i], 0)
+	}
+	writeEvent(uintptr(fd), evSyn, synReport, 0)
 
 	fmt.Fprintf(os.Stderr, "sent key %s\n", keyName)
 }

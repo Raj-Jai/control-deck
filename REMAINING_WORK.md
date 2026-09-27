@@ -29,7 +29,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
 | 12a | BUG-025/021/027 GPU label, volume curve, weather day labels | [x] | (this commit) |
 | 13 | BUG-041/022/SUS-001 feature-flag contract + command registration | [x] | (this commit) |
-| 14 | BUG-034/035/036/037/039/040/044/045/050/054/055 functional | [ ] | |
+| 14a | BUG-034 IDE debugger keys | [x] | (this commit) |
+| 14b | BUG-035/036/037/039/040/044/054/055 remaining functional | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -163,7 +164,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-030** music-search responses can arrive out of order and overwrite newer results.
 - [ ] **BUG-031** "Toggle subtitles" disables them; "Cycle audio" selects track 1.
 - [ ] **BUG-033** `handleVideoCommand` returns HTTP 200 "ok" even when the command failed.
-- [ ] **BUG-034** IDE "Step Out", "Stop" and "Restart" all send F5.
+- [x] **BUG-034** IDE "Step Out", "Stop" and "Restart" all sent a bare F5 - i.e. Continue -
+      and "Toggle Breakpoint" shelled out to `playerctl play-pause` and paused the user's
+      music. The comments claimed keys the code never sent. The bindings are now VS Code's
+      real ones, and `sendkey` learned `ctrl+` / `shift+` prefixes so they can be expressed.
 - [ ] **BUG-035** the terminal reconnects forever every 2 s and floods `[disconnected]`.
 - [ ] **BUG-036** "Refresh" in the nav menu silently kills an active audio broadcast.
 - [ ] **BUG-037** the LRC parser rejects single-digit minutes, mis-parses multi-timestamp lines.
