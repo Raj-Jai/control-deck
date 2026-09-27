@@ -101,19 +101,14 @@ export default function AudioStreamCard({ state, compact }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div
-        className={`toggle-card ${tone} ${isPlaying ? 'active' : ''}`}
+      // Native button rather than a div with role="button": keyboard
+      // activation, focus ring and pressed state come from the platform.
+      <button
+        type="button"
+        className={`toggle-card w-full ${tone} ${isPlaying ? 'active' : ''}`}
         onClick={handleToggle}
-        role="button"
-        tabIndex={0}
         aria-pressed={isPlaying}
         aria-label={label}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleToggle();
-          }
-        }}
       >
         <span className={`text-[28px] leading-none ${isBusy ? 'animate-spin' : isPlaying ? 'animate-pulse' : ''}`}>
           <Icon size={28} />
@@ -121,7 +116,7 @@ export default function AudioStreamCard({ state, compact }: Props) {
         <span className="toggle-label text-xs font-semibold text-center leading-tight">
           {label}
         </span>
-      </div>
+      </button>
 
       {isPlaying && (
         <div className="text-[10px] text-deck-dim text-center leading-tight" role="status">

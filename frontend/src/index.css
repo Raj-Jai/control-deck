@@ -187,10 +187,10 @@
     border-color: rgba(255, 255, 255, 0.12);
   }
 
-
   .icon-btn:active {
     transform: scale(0.85);
   }
+
 
   .media-btn {
     @apply icon-btn w-10 h-10 text-deck-text;
@@ -202,13 +202,6 @@
 
   .media-btn:active {
     @apply bg-deck-accent text-white;
-  }
-
-  /* Toggle ripple */
-  .toggle-ripple {
-    @apply absolute rounded-full pointer-events-none;
-    background: rgba(6, 182, 212, 0.25);
-    animation: rippleAnim 0.5s ease-out forwards;
   }
 
   /* Pulse dot for playing status */
@@ -225,13 +218,6 @@
      card keeps the unthemed brand colour. */
   .art-themed .status-dot.playing {
     background: var(--art-accent) !important;
-  }
-}
-
-@keyframes rippleAnim {
-  to {
-    transform: scale(4);
-    opacity: 0;
   }
 }
 
@@ -311,10 +297,6 @@
 
 .art-themed .toggle-card.active .toggle-label {
   color: var(--art-accent) !important;
-}
-
-.art-themed .toggle-ripple {
-  background: color-mix(in srgb, var(--art-accent) 25%, transparent) !important;
 }
 
 .art-themed .media-btn:active {

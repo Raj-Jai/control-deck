@@ -235,7 +235,12 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       user previously had no way to tell where they were. Verified across 14 real Tab stops.
 - [x] **A11Y-02/03** the seek slider has an `aria-label` and a spoken `aria-valuetext`
       ("0:30 of 5:00") now.
-- [ ] **A11Y-04** the carousel arrows have no accessible name.
+- [x] **A11Y-04** the carousel arrows have no accessible name. *(done in the label sweep below)*
+- [x] **A11Y-22** the last three hand-rolled `div role="button"` toggles are now real
+      `<button>` elements: `QuickSettings`' quick toggles and `AudioStreamCard`'s transport
+      tile. Each was re-implementing what the browser already provides - `tabIndex`, an Enter
+      and Space handler, and a focus ring - and the hand-rolled versions could drift. The
+      `aria-pressed` state is unchanged, so the toggle semantics the tests assert are intact.
 - [x] **A11Y-05** the lyrics modal has a focus trap, Escape, and focus restore.
 - [x] **A11Y-06..21** `prefers-reduced-motion` is honoured: continuous animations stop and the
       pulsing status dot stays visibly lit rather than disappearing with its animation. Every
@@ -303,6 +308,12 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       video frame-step, track, aspect and speed controls. All are now at least 44x44, and the
       full 59-check responsive suite is clean.
 - [ ] Single 656 kB bundle, no code splitting. *(gzip is done; the split is not)*
+- [x] **MAINT-01** `ToggleGrid.tsx` (139 lines) was dead - nothing imported it - and it was the
+      only remaining reason `.toggle-ripple`, `@keyframes rippleAnim` and their art-themed
+      override existed. Deleted the component and all three CSS rules. This also retires
+      **PERF-21**: its ripple appended a span outside React and removed it on `animationend`
+      only, so under `prefers-reduced-motion` the node was never removed and one leaked per
+      tap, and `onMouseDown` plus `onTouchStart` drew two ripples per tap on a touchscreen.
 
 ### Session model (added with unit 3)
 

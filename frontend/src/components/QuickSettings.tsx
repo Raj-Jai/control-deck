@@ -136,19 +136,14 @@ interface QuickToggleProps {
 
 function QuickToggle({ icon: Icon, label, active, pulse, onClick, badge, customClass }: QuickToggleProps) {
   return (
-    <div
+    // A native button: the browser already does what the role/tabIndex/onKeyDown
+    // trio was doing by hand, and the hand-rolled version drifted.
+    <button
+      type="button"
       className={`toggle-card relative focus-visible:outline-2 focus-visible:outline-deck-accent ${active ? 'active' : ''} ${customClass || ''}`}
       onClick={onClick}
-      role="button"
-      tabIndex={0}
       aria-pressed={active ?? false}
       aria-label={label}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
     >
       <span className={`text-[22px] leading-none ${pulse ? 'animate-pulse' : ''}`}>
         {Icon ? <Icon size={22} /> : null}
@@ -157,6 +152,6 @@ function QuickToggle({ icon: Icon, label, active, pulse, onClick, badge, customC
         {label}
       </span>
       {badge}
-    </div>
+    </button>
   );
 }
