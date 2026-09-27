@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -126,7 +127,7 @@ func TestAuthMiddlewareLeavesPublicPathsOpen(t *testing.T) {
 	h := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	for _, p := range []string{"/api/auth", "/api/auth-media", "/api/capabilities", "/api/features", "/api/ping"} {
+	for _, p := range []string{"/api/auth", "/api/auth-media"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		if rec.Code != http.StatusOK {
@@ -138,6 +139,83 @@ func TestAuthMiddlewareLeavesPublicPathsOpen(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/index.html", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("static asset = %d, want 200", rec.Code)
+	}
+}
+
+// The LAN could enumerate the host's toolchain - ffmpeg, VLC, mpv, playerctl,
+// KDE Connect, the GPU - and which decks exist, without ever unlocking. These
+// three were on the public list and matched a matching entry on the client, so
+// neither side thought to question it.
+func TestHostDetailsAreNotReachableWhileLocked(t *testing.T) {
+	resetAuthState()
+	reached := map[string]bool{}
+	h := authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached[r.URL.Path] = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, p := range []string{"/api/capabilities", "/api/features", "/api/ping"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("locked %s = %d, want 401", p, rec.Code)
+		}
+		if reached[p] {
+			t.Errorf("locked %s reached the handler", p)
+		}
+	}
+
+	// And they must still work once unlocked, or the fix would just be breakage.
+	tok := newSessionToken("dashboard")
+	for _, p := range []string{"/api/capabilities", "/api/features", "/api/ping"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, p, nil)
+		req.Header.Set(sessionHeader, tok)
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("unlocked %s = %d, want 200", p, rec.Code)
+		}
+	}
+}
+
+// The client decides whether to attach a token by checking its own list, and
+// the server decides whether to demand one by checking publicPaths. When those
+// two lists are written down separately they drift, and a path that is public on
+// one side and guarded on the other fails in the least obvious way: locked, for
+// the client. This reads the client's source and compares.
+func TestClientAndServerPublicPathsAgree(t *testing.T) {
+	const src = "frontend/src/lib/session.ts"
+	body, err := os.ReadFile(src)
+	if err != nil {
+		t.Skipf("frontend sources not present next to the server: %v", err)
+	}
+	loc := strings.Index(string(body), "const PUBLIC_PATHS")
+	if loc < 0 {
+		t.Fatalf("%s no longer has a PUBLIC_PATHS list; the client gate needs rechecking", src)
+	}
+	block := string(body)[loc:]
+	end := strings.Index(block, "];")
+	if end < 0 {
+		t.Fatalf("could not find the end of PUBLIC_PATHS in %s", src)
+	}
+	client := map[string]bool{}
+	for _, m := range regexp.MustCompile(`'([^']+)'`).FindAllStringSubmatch(block[:end], -1) {
+		client[m[1]] = true
+	}
+	if len(client) == 0 {
+		t.Fatalf("no paths parsed out of PUBLIC_PATHS in %s", src)
+	}
+	for p := range client {
+		if !publicPaths[p] {
+			t.Errorf("client treats %s as public but the server requires a session; "+
+				"it will 401 the moment the page unlocks", p)
+		}
+	}
+	for p := range publicPaths {
+		if !client[p] {
+			t.Errorf("server treats %s as public but the client sends no token, "+
+				"so a locked request is indistinguishable from a valid one", p)
+		}
 	}
 }
 

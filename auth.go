@@ -190,14 +190,21 @@ func authRecordSuccess(ip string) {
 	authMu.Unlock()
 }
 
-// publicPaths never require a session: they are either needed before unlock or
-// carry nothing sensitive.
+// publicPaths never require a session, and it is the whole list: the two PIN
+// endpoints are the only things a locked client legitimately needs.
+//
+// capabilities, features and ping used to be here as well. That made them
+// reachable by any client on the LAN without unlocking anything, and
+// /api/capabilities in particular answers with the host's toolchain - ffmpeg,
+// VLC, mpv, playerctl, KDE Connect, the GPU, which schema directories exist.
+// Nothing needs them before unlock: the capability and feature hooks stand down
+// until unlocked, and the latency probes live in cards that only render then.
+// The client's own allow-list in frontend/src/lib/session.ts listed the same
+// three, so the two agreed with each other and disagreed with the intent -
+// which is how it survived the session work. A test now keeps the two in step.
 var publicPaths = map[string]bool{
-	"/api/auth":         true,
-	"/api/auth-media":   true,
-	"/api/capabilities": true,
-	"/api/features":     true,
-	"/api/ping":         true,
+	"/api/auth":       true,
+	"/api/auth-media": true,
 }
 
 // requireSession wraps a handler so it only runs for an unlocked client.

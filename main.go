@@ -563,9 +563,16 @@ func main() {
 
 	// API Routes
 	// Public: needed before unlock, or carries nothing sensitive.
-	http.HandleFunc("/api/capabilities", handleCapabilities)
-	http.HandleFunc("/api/features", handleFeatures)
-	http.HandleFunc("/api/ping", handlePing)
+	// These three were reachable without a session, so any client on the LAN
+	// could enumerate the host's toolchain - ffmpeg, VLC, mpv, playerctl,
+	// KDE Connect, a GPU, the schema directories - and which decks exist.
+	// Nothing needs them before unlock: the capabilities and features hooks
+	// both stand down until the page is unlocked, and the latency probes live
+	// in cards that only render once it is. The client-side allow-list said the
+	// same, which is why the omission survived the session work (SEC-009).
+	http.HandleFunc("/api/capabilities", requireSession(handleCapabilities))
+	http.HandleFunc("/api/features", requireSession(handleFeatures))
+	http.HandleFunc("/api/ping", requireSession(handlePing))
 	http.HandleFunc("/api/auth", handleAuthUnlock("dashboard"))
 	http.HandleFunc("/api/auth-media", handleAuthUnlock("media"))
 	http.HandleFunc("/api/logout", requireSession(handleAuthLogout))
@@ -1885,6 +1892,15 @@ var (
 	playerListMu    sync.Mutex
 	playerListCache []string
 	playerListAt    time.Time
+	// playerListCached is what "we have an answer" means. It used to be
+	// inferred from playerListCache being non-nil, but nil is also the honest
+	// answer when nothing is playing - playerctl writes "No players found" to
+	// stderr and exits 0, so stdout is empty and the parsed list is nil. On
+	// this host that made the cache a permanent no-op: every call re-spawned
+	// playerctl and moved the timestamp, so the card re-queried D-Bus on every
+	// single poll, which is the opposite of what the TTL is for. The flag
+	// separates "not looked yet" from "looked, and there are none".
+	playerListCached bool
 )
 
 const playerListTTL = 1500 * time.Millisecond
@@ -1892,7 +1908,7 @@ const playerListTTL = 1500 * time.Millisecond
 func listPlayers() []string {
 	playerListMu.Lock()
 	defer playerListMu.Unlock()
-	if time.Since(playerListAt) < playerListTTL && playerListCache != nil {
+	if playerListCached && time.Since(playerListAt) < playerListTTL {
 		return playerListCache
 	}
 	out, err := runCmd("playerctl", "-l")
@@ -1902,6 +1918,7 @@ func listPlayers() []string {
 	}
 	playerListCache = players
 	playerListAt = time.Now()
+	playerListCached = true
 	return players
 }
 

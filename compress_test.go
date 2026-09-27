@@ -106,6 +106,7 @@ func TestPlayerListIsCached(t *testing.T) {
 	playerListMu.Lock()
 	playerListCache = nil
 	playerListAt = time.Time{}
+	playerListCached = false
 	playerListMu.Unlock()
 
 	first := listPlayers()
@@ -124,6 +125,32 @@ func TestPlayerListIsCached(t *testing.T) {
 	}
 	if first == nil {
 		t.Log("no playerctl on this host; the cache mechanics are what is under test")
+	}
+}
+
+// The empty result is the common one: playerctl reports "No players found" on
+// stderr and exits 0, so an honest empty list is nil - the same value that used
+// to mean "nothing cached". With nil doubling as both, the cache never engaged
+// and every poll spawned playerctl.
+func TestEmptyPlayerListIsStillCached(t *testing.T) {
+	playerListMu.Lock()
+	playerListCache = nil
+	playerListAt = time.Time{}
+	playerListCached = false
+	playerListMu.Unlock()
+
+	if got := listPlayers(); got != nil {
+		t.Skipf("this host has players (%v); nothing to prove about the empty case", got)
+	}
+	playerListMu.Lock()
+	at := playerListAt
+	playerListMu.Unlock()
+	_ = listPlayers()
+	playerListMu.Lock()
+	after := playerListAt
+	playerListMu.Unlock()
+	if !after.Equal(at) {
+		t.Errorf("an empty result was re-queried inside the %s TTL", playerListTTL)
 	}
 }
 

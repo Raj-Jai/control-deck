@@ -14,13 +14,16 @@
 
 const TOKEN_KEY = 'dash_session_token';
 
-// Endpoints that are reachable before unlock.
+// Endpoints that are reachable before unlock, and so get no token attached.
+// Only the two PIN endpoints belong here. capabilities, features and ping were
+// listed too, which matched a server-side omission: any client on the LAN
+// could enumerate the host's toolchain without unlocking anything. Nothing
+// needs them before unlock - the capability and feature hooks stand down, and
+// the latency probes live in cards that only render once unlocked - so they are
+// session-gated on both sides now.
 const PUBLIC_PATHS = [
   '/api/auth',
   '/api/auth-media',
-  '/api/capabilities',
-  '/api/features',
-  '/api/ping',
 ];
 
 const GUARDED_PREFIXES = ['/api/', '/media-stream', '/seek', '/ws/'];
