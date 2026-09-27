@@ -18,9 +18,20 @@ function fmt(v: number): string {
 export default function VideoPlayerDeck({ state, caps }: Props) {
   const [vs, setVS] = useState<Awaited<ReturnType<typeof fetchVideoStatus>> | null>(null);
   const [subDelay, setSubDelay] = useState(0);
+  const [videoError, setVideoError] = useState('');
   const [audioDelay, setAudioDelay] = useState(0);
   const subRef = useRef(0);
   const audioRef = useRef(0);
+
+  // A delay nudge is applied optimistically, but the 1 Hz poll will still be
+  // carrying the player's *old* value for a round trip, and writing that back
+  // made the displayed delay snap back and reset the ref the next nudge
+  // computes from - so a second tap landed on the wrong value (SUS-012).
+  //
+  // While a nudge is in flight the poll's delay values are ignored. Once it
+  // settles, the poll is authoritative again - and if the command failed the
+  // real value takes over immediately, which is the honest outcome.
+  const pendingDelay = useRef<'sub' | 'audio' | null>(null);
 
   useEffect(() => {
     let dead = false;
@@ -30,10 +41,14 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
         const v = await fetchVideoStatus();
         if (dead) return;
         setVS(v);
-        setSubDelay(v.sub_delay);
-        setAudioDelay(v.audio_delay);
-        subRef.current = v.sub_delay;
-        audioRef.current = v.audio_delay;
+        if (pendingDelay.current !== 'sub') {
+          setSubDelay(v.sub_delay);
+          subRef.current = v.sub_delay;
+        }
+        if (pendingDelay.current !== 'audio') {
+          setAudioDelay(v.audio_delay);
+          audioRef.current = v.audio_delay;
+        }
       } catch { /* ignore */ }
       if (!dead) timer = setTimeout(poll, 1000);
     };
@@ -41,23 +56,39 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
     return () => { dead = true; clearTimeout(timer); };
   }, []);
 
-  const nudge = (kind: 'sub' | 'audio', delta: number) => {
+  // Applies a delay change, and reports whether the host accepted it.
+  const applyDelay = async (kind: 'sub' | 'audio', value: number) => {
     const action = kind === 'sub' ? 'set_sub_delay' : 'set_audio_delay';
     const ref = kind === 'sub' ? subRef : audioRef;
-    const next = Math.round((ref.current + delta) * 10) / 10;
+    const next = Math.round(value * 10) / 10;
+
+    // Optimistic, so the button feels immediate.
     ref.current = next;
     if (kind === 'sub') setSubDelay(next);
     else setAudioDelay(next);
-    sendVideoCommand(action, { value: next });
+    pendingDelay.current = kind;
+
+    const ok = await sendVideoCommand(action, { value: next });
+    if (pendingDelay.current === kind) pendingDelay.current = null;
+    if (!ok) {
+      // The host refused it, so the optimistic value is a lie. Drop back to
+      // whatever the next poll reports rather than leaving it on screen.
+      if (kind === 'sub') { setSubDelay(0); subRef.current = 0; }
+      else { setAudioDelay(0); audioRef.current = 0; }
+      setVideoError(`The player rejected that ${kind === 'sub' ? 'subtitle' : 'audio'} delay change.`);
+    } else {
+      setVideoError('');
+    }
+    return ok;
+  };
+
+  const nudge = (kind: 'sub' | 'audio', delta: number) => {
+    const ref = kind === 'sub' ? subRef : audioRef;
+    void applyDelay(kind, ref.current + delta);
   };
 
   const resetDelay = (kind: 'sub' | 'audio') => {
-    const action = kind === 'sub' ? 'set_sub_delay' : 'set_audio_delay';
-    const ref = kind === 'sub' ? subRef : audioRef;
-    ref.current = 0;
-    if (kind === 'sub') setSubDelay(0);
-    else setAudioDelay(0);
-    sendVideoCommand(action, { value: 0 });
+    void applyDelay(kind, 0);
   };
 
   const player = vs?.active_player ?? 'unknown';
@@ -157,6 +188,11 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
             </div>
           ) : (
             <p className="text-[11px] text-deck-dim">No subtitle tracks reported by the player</p>
+          )}
+          {videoError && (
+            <span role="alert" className="text-[10px] text-deck-danger mr-1 max-w-[45%]">
+              {videoError}
+            </span>
           )}
           <div className="flex-1" />
           <button onClick={() => nudge('sub', -0.1)}

@@ -331,7 +331,43 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       `files.go` / `scenes.go` and the components in untracked `FileDropCard.tsx` /
       `ScenesCard.tsx`, but nothing imported or routed them. Both are now wired, behind their
       own feature flags and the session, and committed.
-- [ ] **SUS-006..020** remaining suspected-bug items in §6.
+- [x] **SUS-006..017** the report's suspected-bug section ends at SUS-017, not SUS-020, so
+      the range is twelve items rather than fifteen. All twelve are now closed:
+  - **SUS-006** the media-open path handed a server URL to `window.open`; the scheme is now
+        checked (see the SUS-005 entry).
+  - **SUS-007** `handleClients` mutated shared structs under a read lock. The lock is now a
+        full write and the snapshot is copied before encoding, so a concurrent track cannot
+        be read mid-mutation.
+  - **SUS-008** `readLoop` read fields the lock-guarded stop path writes. The reader and the
+        stop channel are passed in as parameters, so the mutable fields are gone.
+  - **SUS-009** a reconnecting device's previous socket was overwritten without being closed.
+        The old connection is closed before the map entry is replaced.
+  - **SUS-010** a music pipeline that finished on its own became a zombie until the next
+        play request. It is now reaped.
+  - **SUS-011** geo-save wrote outside the directory. The write goes through the same
+        validated path as the read and delete, so it is contained.
+  - **SUS-012** the 1 Hz poll overwrote the optimistic delay a nudge had just set, and reset
+        the ref the next nudge computed from, so a second tap landed on the wrong value -
+        and the command's response was discarded so nothing was ever reported. The poll
+        now stands down while a nudge is in flight, and a refused nudge drops the
+        optimistic value and says so.
+  - **SUS-013** `handleMusicPlay` waited six seconds for mpv, ignored the result and
+        reported success, so a failed launch was silence plus a "playing" message - after
+        the previous track had already been killed. It now stops the pipeline and returns
+        503.
+  - **SUS-014** `dbg_toggle_break` was `playerctl play-pause`, so toggling a breakpoint
+        paused the user's music. The IDE commands now send real debugger keys.
+  - **SUS-015** the top safe-area inset was applied twice. The strip documents that the body
+        owns it and does not add it again.
+  - **SUS-016** `prefers-reduced-motion` was honoured nowhere. There is a global block, and
+        the status dot stays visibly lit rather than disappearing with its animation.
+  - **SUS-017** `bleStartAdvertising` ran three blocking `bluetoothctl` calls while holding
+        the mutex, so a wedged one blocked every concurrent request for ten seconds while
+        the UI said "Advertising" - and it checked none of the results. The state is now
+        reserved under the lock and the work happens outside it, every command is bounded
+        and its result checked, and a failure rolls the state back. Three tests, and on
+        this host (where bluetoothctl genuinely hangs) they now report
+        `signal: killed` and roll back, which the old code would have swallowed.
 
 ## 6. Accessibility (21 findings)
 

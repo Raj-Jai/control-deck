@@ -271,12 +271,32 @@ func handleMusicPlay(w http.ResponseWriter, r *http.Request) {
 	log.Printf("music: started yt-dlp|mpv pipeline (pid %d) for %s", cmd.Process.Pid, u)
 
 	// Wait for the IPC socket to appear (mpv binds it shortly after startup).
+	//
+	// The result used to be ignored and success was reported unconditionally, so
+	// a launch that never came up produced silence plus a "playing" message -
+	// and by this point the previous track had already been torn down
+	// (SUS-013). If mpv does not answer, the pipeline is stopped and the caller
+	// is told, rather than being left with a silent success.
 	deadline := time.Now().Add(6 * time.Second)
+	alive := false
 	for time.Now().Before(deadline) {
 		if mpvAlive() {
+			alive = true
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
+	}
+	if !alive {
+		log.Printf("music: mpv did not come up within 6s for %s; stopping the pipeline", u)
+		killMusicPipeline()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"playing": false,
+			"error":   "the player did not start; the track could not be played",
+			"url":     u,
+		})
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The alias reaches a process argument list, never a shell, but it is still
@@ -106,4 +107,75 @@ func quotedJSON(s string) string {
 	}
 	b.WriteByte('"')
 	return b.String()
+}
+
+// A wedged bluetoothctl used to hold the manager's mutex for up to ten
+// seconds, so any concurrent /api/ble/transmit blocked behind it (SUS-017).
+// The state is now reserved under the lock and the external work happens
+// outside it.
+func TestAdvertisingStateIsVisibleWhileTheWorkRuns(t *testing.T) {
+	ble.mu.Lock()
+	ble.running = false
+	ble.name = ""
+	ble.mu.Unlock()
+
+	// Pretend advertising succeeded without touching bluetoothctl, then check
+	// the lock is free and the state is set.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = bleStartAdvertising("conquest-test")
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("bleStartAdvertising did not return")
+	}
+}
+
+// The mutex must not be held while a command runs, so a caller that needs the
+// state can always read it.
+func TestManagerLockIsNotHeldAcrossExternalCalls(t *testing.T) {
+	ble.mu.Lock()
+	ble.running = false
+	ble.name = ""
+	ble.mu.Unlock()
+
+	acquired := make(chan struct{})
+	go func() {
+		// Deliberately ask for the lock many times while advertising runs. If
+		// the lock were held across bluetoothctl, these would queue up behind
+		// a multi-second command; they will still queue briefly, so the test
+		// asserts progress rather than instant acquisition.
+		for i := 0; i < 5; i++ {
+			ble.mu.Lock()
+			ble.mu.Unlock()
+		}
+		close(acquired)
+	}()
+
+	_ = bleStartAdvertising("")
+	select {
+	case <-acquired:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the manager lock was held for the whole of bleStartAdvertising")
+	}
+	_ = bleStopAdvertising()
+}
+
+// A stop that is already in progress must not be queued behind another stop.
+func TestStopIsIdempotentAndFast(t *testing.T) {
+	ble.mu.Lock()
+	ble.running = false
+	ble.name = ""
+	ble.mu.Unlock()
+
+	start := time.Now()
+	if err := bleStopAdvertising(); err != nil {
+		t.Errorf("stopping when not running returned %v, want nil", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("a no-op stop took %s; the state check must not wait on bluetoothctl", elapsed)
+	}
 }

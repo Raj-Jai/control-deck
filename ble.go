@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -61,14 +62,57 @@ func validateBleName(raw string) (string, error) {
 }
 
 func bleStartAdvertising(name string) error {
+	// Reserve first, work outside the lock.
 	ble.mu.Lock()
-	defer ble.mu.Unlock()
-
 	if ble.running && (name == "" || name == ble.name) {
+		ble.mu.Unlock()
+		return nil
+	}
+	if ble.running {
+		// A different name: stop the old advertisement first, also outside.
+		ble.mu.Unlock()
+		bleStopAdvertising()
+		ble.mu.Lock()
+	}
+	if ble.running {
+		// Another request won the race while we were stopping.
+		ble.mu.Unlock()
+		return nil
+	}
+	ble.running = true
+	ble.name = name
+	ble.mu.Unlock()
+
+	rollback := func() {
+		ble.mu.Lock()
+		ble.running = false
+		ble.name = ""
+		ble.mu.Unlock()
+	}
+
+	runBounded := func(timeout time.Duration, name string, args ...string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if out, err := exec.CommandContext(ctx, name, args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err,
+				strings.TrimSpace(string(out)))
+		}
 		return nil
 	}
 
-	exec.Command("bluetoothctl", "--timeout", "5", "power", "on").Run()
+	// Every external command is bounded, so a wedged bluetoothctl cannot hold
+	// anything up for longer than this.
+	if err := runBounded(5*time.Second, "bluetoothctl", "--timeout", "5", "power", "on"); err != nil {
+		log.Printf("BLE: power on: %v", err)
+		rollback()
+		return err
+	}
+	time.Sleep(200 * time.Millisecond)
+	if err := runBounded(5*time.Second, "bluetoothctl", "--timeout", "5", "discoverable", "on"); err != nil {
+		log.Printf("BLE: discoverable on: %v", err)
+		rollback()
+		return err
+	}
 	time.Sleep(200 * time.Millisecond)
 	exec.Command("bluetoothctl", "--timeout", "5", "discoverable", "on").Run()
 
@@ -81,38 +125,49 @@ func bleStartAdvertising(name string) error {
 		}
 	}
 
-	cmd := exec.Command("bash", "-c", `bluetoothctl <<'BLEEOF'
-advertise on
-BLEEOF
-`)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.Run()
+	if err := runBounded(6*time.Second, "bluetoothctl", "advertise", "on"); err != nil {
+		log.Printf("BLE: advertise on: %v", err)
+		rollback()
+		return err
+	}
 
-	ble.running = true
-	ble.name = name
 	log.Printf("BLE: advertising started (name %q)", name)
 	return nil
 }
 
 func bleStopAdvertising() error {
+	// Clear the state first, under the lock, then do the work outside it: a
+	// stop request should be visible as "not advertising" immediately, not
+	// after bluetoothctl has finished.
 	ble.mu.Lock()
-	defer ble.mu.Unlock()
-
 	if !ble.running {
+		ble.mu.Unlock()
+		return nil
+	}
+	ble.running = false
+	ble.name = ""
+	ble.mu.Unlock()
+
+	runBounded := func(timeout time.Duration, args ...string) error {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if out, err := exec.CommandContext(ctx, "bluetoothctl", args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("bluetoothctl %s: %w: %s", strings.Join(args, " "), err,
+				strings.TrimSpace(string(out)))
+		}
 		return nil
 	}
 
-	exec.Command("bash", "-c", `bluetoothctl <<'BLEEOF'
-advertise off
-BLEEOF
-`).Run()
-	exec.Command("bluetoothctl", "--timeout", "3", "discoverable", "off").Run()
+	var firstErr error
+	if err := runBounded(6*time.Second, "advertise", "off"); err != nil {
+		firstErr = err
+	}
+	if err := runBounded(4*time.Second, "--timeout", "3", "discoverable", "off"); err != nil && firstErr == nil {
+		firstErr = err
+	}
 
-	ble.running = false
-	ble.name = ""
 	log.Printf("BLE: advertising stopped")
-	return nil
+	return firstErr
 }
 
 func handleBleTransmit(w http.ResponseWriter, r *http.Request) {
