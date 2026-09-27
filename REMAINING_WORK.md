@@ -28,7 +28,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 10 | BUG-049/006/010 lyrics stall, unbounded cache | [x] | (this commit) |
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
 | 12a | BUG-025/021/027 GPU label, volume curve, weather day labels | [x] | (this commit) |
-| 13 | BUG-041/022 feature-flag + command registration | [ ] | |
+| 13 | BUG-041/022/SUS-001 feature-flag contract + command registration | [x] | (this commit) |
 | 14 | BUG-034/035/036/037/039/040/044/045/050/054/055 functional | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
@@ -138,8 +138,14 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 4. Feature flags
 
-- [ ] **BUG-022** WARP/ERP toggles gate on the binary existing, not on command registration.
-- [ ] **BUG-041** `power`, `scenes`, `filedrop` accepted by the backend, ignored by the frontend.
+- [x] **BUG-022** WARP/ERP toggles gated on the binary existing rather than on the command being
+      registered - `warpOn`, `warpOff` and `erpLogin` were in no command map at all, so the
+      button rendered and the server answered "Unknown command". All three are registered now,
+      and the capability check requires registration as well as the binary.
+- [x] **BUG-041** `power`, `scenes` and `filedrop` were in the backend's KnownFeatures and in
+      config.example.json but had no frontend key, so setting them to false did nothing. The
+      keys exist now, the handlers are routed, and the cards render. `TestFeatureKeysMatchTheFrontend`
+      fails the build if either side drifts again.
 
 ## 5. Remaining functional bugs
 
@@ -168,7 +174,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-042** art theming silently fails for any art host without CORS, and sticks.
       *(partially done: accent contrast clamp only)*
 - [ ] **BUG-044** `speed_*` commands ignore the player and always type into the focused window.
-- [ ] **SUS-001** file-drop and Scenes features are entirely unwired (uncommitted WIP).
+- [x] **SUS-001** file-drop and Scenes were entirely unwired. The handlers existed in untracked
+      `files.go` / `scenes.go` and the components in untracked `FileDropCard.tsx` /
+      `ScenesCard.tsx`, but nothing imported or routed them. Both are now wired, behind their
+      own feature flags and the session, and committed.
 - [ ] **SUS-006..020** remaining suspected-bug items in §6.
 
 ## 6. Accessibility (21 findings)

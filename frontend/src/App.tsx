@@ -27,6 +27,8 @@ import TerminalDeck from './decks/TerminalDeck';
 import MediaStreamerPage from './components/MediaStreamerPage';
 import GeoSurveyCard from './components/GeoSurveyCard';
 import BleProximityCard from './components/BleProximityCard';
+import FileDropCard from './components/FileDropCard';
+import ScenesCard from './components/ScenesCard';
 
 type PageId = 'home' | 'media' | 'video' | 'ide' | 'terminal';
 interface DeckPage { id: PageId; label: string; flag: FeatureKey | null }
@@ -361,11 +363,13 @@ export default function App() {
               <div id="home-secondary"
                 className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 <div className="flex flex-col gap-4 min-w-0">
+                  {features.power && <ScenesCard />}
                   {features.geo_survey && <GeoSurveyCard />}
                   {features.ble_proximity && <BleProximityCard />}
                 </div>
                 <div className="flex flex-col gap-4 min-w-0">
                   {features.weather && <WeatherCard />}
+                  {features.filedrop && <FileDropCard />}
                   {features.clipboard && <ClipboardCard />}
                   {features.command_log && <CommandLogCard log={state?.cmd_log ?? []} />}
                 </div>

@@ -27,6 +27,11 @@ export const FEATURE_DEFAULTS = {
   video_player: true,
   ide: true,
   terminal: true,
+  // These three were advertised by the backend and config.example.json but had
+  // no frontend key, so setting them to false did nothing at all (BUG-041).
+  power: true,
+  scenes: true,
+  filedrop: true,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURE_DEFAULTS;

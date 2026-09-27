@@ -79,12 +79,19 @@ func buildCommandMap() {
 		"btSinkOn":       {"sh", "-c", "bluetoothctl discoverable on && bluetoothctl pairable on"},
 		"btSinkOff":      {"bluetoothctl", "discoverable", "off"},
 		"btConnect":      {"bluetoothctl", "connect", getConfig().BTMAC},
-		"nightOn":        {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
-		"nightOff":       {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
-		"caffeineOff":    {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
-		"caffeineOn":     {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
-		"caffeine30":     {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
-		"caffeine60":     {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		// WARP and the ERP client. The deck advertised both toggles behind a
+		// capability check on the binary, but neither command was ever in the
+		// map, so tapping the button sent a name the server rejected with a 400
+		// (BUG-022). The capability check now reflects registration too.
+		"warpOn":      {"warp-cli", "connect"},
+		"warpOff":     {"warp-cli", "disconnect"},
+		"erpLogin":    {"sh", "-c", "erp login 2>&1 | tail -1"},
+		"nightOn":     {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"},
+		"nightOff":    {"gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"},
+		"caffeineOff": {"gsettings", "--schemadir", caffeineSD, "set", "org.gnome.shell.extensions.caffeine", "cli-toggle", "false"},
+		"caffeineOn":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 0 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"caffeine30":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 1800 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
+		"caffeine60":  {"bash", "-c", "gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle false && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine use-custom-duration true && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine duration-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine countdown-timer 3600 && gsettings --schemadir " + caffeineSD + " set org.gnome.shell.extensions.caffeine cli-toggle true"},
 	}
 	for k, v := range getConfig().CustomCommands {
 		commandMap[k] = v
@@ -594,6 +601,15 @@ func main() {
 	http.HandleFunc("/api/music/handoff", requireSession(handleHandoffToPhone))
 	http.HandleFunc("/api/music/handoff-devices", requireSession(handleHandoffDevices))
 
+	// File drop and scenes. The handlers existed but were never routed, and the
+	// feature flags were advertised by the backend and ignored by the frontend,
+	// so the whole feature was invisible in both directions (BUG-041, SUS-001).
+	http.HandleFunc("/api/files/upload", requireSession(handleFileUpload))
+	http.HandleFunc("/api/files/list", requireSession(handleFileList))
+	http.HandleFunc("/api/files/download", requireSession(handleFileDownload))
+	http.HandleFunc("/api/scenes", requireSession(handleSceneList))
+	http.HandleFunc("/api/scenes/run", requireSession(handleSceneRun))
+
 	// Background tickers
 	go startServiceStatsSampler()
 	go startMediaBroadcaster()
@@ -639,8 +655,8 @@ func handleCapabilities(w http.ResponseWriter, r *http.Request) {
 	caps := map[string]bool{
 		"caffeine":    checkCaffeine(),
 		"bluetooth":   checkBluetooth(),
-		"warp":        checkBinary("warp-cli"),
-		"erp":         checkBinary("erp"),
+		"warp":        checkBinary("warp-cli") && commandRegistered("warpOn"),
+		"erp":         checkBinary("erp") && commandRegistered("erpLogin"),
 		"night_light": checkNightLight(),
 		"brightness":  checkBinary("brightnessctl"),
 		"clipboard":   checkBinary("wl-copy") || checkBinary("xclip"),
@@ -889,6 +905,16 @@ func runDeckCommand(cmdName, player string) (int, any) {
 
 // isIdeCommand reports whether a /api/command name belongs to the IDE deck
 // (debugger, git, task runners).
+// commandRegistered reports whether a name is dispatchable. A toggle must never
+// be advertised on the strength of a binary alone: the button would render and
+// then fail.
+func commandRegistered(name string) bool {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	_, ok := commandMap[name]
+	return ok
+}
+
 func isIdeCommand(cmd string) bool {
 	return strings.HasPrefix(cmd, "dbg_") ||
 		strings.HasPrefix(cmd, "git_") ||
