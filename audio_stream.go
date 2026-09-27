@@ -396,11 +396,8 @@ func sendErrorNotice(w *connWriter, reason, msg string) {
 }
 
 func handleStreamWS(w http.ResponseWriter, r *http.Request) {
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
+	conn, err := acceptWebSocket(w, r, "audio-stream")
 	if err != nil {
-		log.Printf("audio-stream: websocket accept: %v", err)
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")

@@ -15,8 +15,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 1 | SEC-007 root file server → allow-list | [x] | (this commit) |
 | 2 | SEC-001/002/003 geo path traversal | [x] | (this commit) |
 | 3 | SEC-004/006/008/009 session tokens + CSRF guard + rate limit | [x] | (this commit) |
-| 4 | SEC-005/SEC-011 WebSocket origin verification | [ ] | |
-| 5 | SEC-006/008/009/010 clipboard + PIN brute force + gate | [ ] | |
+| 4 | SEC-005/SEC-011 WebSocket origin verification | [x] | (this commit) |
+| 5 | SEC-006/008/009 clipboard + PIN brute force + gate | [x] | unit 3 |
 | 6 | SEC-012/014/016 proxy header, log growth, file modes | [ ] | |
 | 7 | BUG-001 terminal panic kills the server | [ ] | |
 | 8 | BUG-048 pkill -9 mpv/yt-dlp | [ ] | |
@@ -53,7 +53,6 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       web page the user visited. Now: every guarded route requires a session token, mutating
       requests must carry `X-Control-Deck-CSRF: 1` (a custom header, so cross-origin needs a
       preflight, and no `Access-Control-*` header is ever returned), and bodies must be JSON.
-- [ ] **SEC-005** (Critical) `/ws/terminal` accepts any Origin → unauthenticated `$SHELL`.
 - [x] **SEC-006** (High) clipboard read/write unauthenticated — now behind the session.
 - [ ] **SEC-007a** (Critical) rotate `server.key`, `pin`, `media_pin` — readable on the LAN.
 - [x] **SEC-008** (High) no brute-force protection on the PIN endpoints — now 5 attempts then
@@ -62,7 +61,8 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       endpoint now requires a server-minted token, the remembered mode is only honoured while a
       live token exists, and the four data hooks do not connect while locked.
 - [ ] **SEC-010** (Medium) "Media Streamer" mode is not actually restricted.
-- [ ] **SEC-011** (Medium) audio WebSocket has no Origin check.
+- [x] **SEC-011** (Medium) audio WebSocket had no Origin check — same helper, and the
+      `InsecureSkipVerify: true` option that disabled the library's own check is gone.
 - [ ] **SEC-012** (Medium) `X-Forwarded-For` trusted unconditionally.
 - [ ] **SEC-013** (Info) command-injection review — **no exploitable shell injection found**.
 - [ ] **SEC-014** (Medium) unbounded, publicly served log containing window titles.

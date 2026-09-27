@@ -6,16 +6,17 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
-	"github.com/creack/pty"
 	"github.com/coder/websocket"
+	"github.com/creack/pty"
 )
 
 type resizeMsg struct {
-	Type  string `json:"type"`
-	Rows  uint16 `json:"rows"`
-	Cols  uint16 `json:"cols"`
+	Type string `json:"type"`
+	Rows uint16 `json:"rows"`
+	Cols uint16 `json:"cols"`
 }
 
 func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
@@ -23,11 +24,8 @@ func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	if !requireFeature(w, FeatureTerminal) {
 		return
 	}
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
+	conn, err := acceptWebSocket(w, r, "terminal")
 	if err != nil {
-		log.Printf("terminal: websocket accept: %v", err)
 		return
 	}
 
@@ -49,17 +47,28 @@ func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	done := make(chan struct{})
 
+	// Both goroutines below signal on the same channel, and either can reach
+	// its close first: a tab close makes conn.Read fail, while a shell exiting
+	// makes ptmx.Read fail. The second close was
+	//   panic: close of closed channel
+	// which killed the whole dashboard - SSE, the audio WebSocket, the hotkey
+	// endpoint, every connected client. Closing a PTY is enough to trigger it:
+	// the reader sees EIO and closes done at almost the same moment the
+	// WebSocket reader sees the close frame.
+	var doneOnce sync.Once
+	finish := func() { doneOnce.Do(func() { close(done) }) }
+
 	// PTY stdout → WebSocket
 	go func() {
 		buf := make([]byte, 4096)
 		for {
 			n, err := ptmx.Read(buf)
 			if err != nil {
-				close(done)
+				finish()
 				return
 			}
 			if err := conn.Write(ctx, websocket.MessageBinary, buf[:n]); err != nil {
-				close(done)
+				finish()
 				return
 			}
 		}
@@ -70,7 +79,7 @@ func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 		for {
 			typ, msg, err := conn.Read(ctx)
 			if err != nil {
-				close(done)
+				finish()
 				return
 			}
 			if typ == websocket.MessageText {
@@ -88,7 +97,13 @@ func handleTerminalWS(w http.ResponseWriter, r *http.Request) {
 
 	<-done
 	ptmx.Close()
-	cmd.Wait()
+	// cmd.Wait can block on a shell that ignores the hangup, and a dashboard
+	// must not be held open by one, so the reap is bounded.
+	reaped := make(chan struct{})
+	go func() { cmd.Wait(); close(reaped) }()
+	select {
+	case <-reaped:
+	case <-time.After(2 * time.Second):
+	}
 	conn.Close(websocket.StatusNormalClosure, "")
-	time.Sleep(100 * time.Millisecond)
 }
