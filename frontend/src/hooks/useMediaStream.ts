@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { applyFrame, emptyAccumulator, isDeltaMessage } from '../lib/sseDelta';
 import { DECK_CONFIG } from '../config/deckConfig';
 
 export interface SystemStats {
@@ -132,6 +133,11 @@ export function useMediaStream(deviceId?: string, enabled = true): UseMediaStrea
       return capped + Math.random() * 500;
     };
 
+    // Unchanged parts of the state now arrive as deltas, so the client
+    // reassembles them onto the previous frame. A delta that does not line up
+    // is dropped and the next full frame rebuilds the base.
+    const acc = emptyAccumulator();
+
     const handleMessage = (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
@@ -145,8 +151,24 @@ export function useMediaStream(deviceId?: string, enabled = true): UseMediaStrea
           }
           return;
         }
+
+        const next = applyFrame(acc, data);
+        if (next === null) {
+          // Either a malformed message or a delta we could not line up. Nothing
+          // is applied, and the next full frame will set us right.
+          if (isDeltaMessage(data)) { acc.state = null; acc.baseIsFullFrame = true; }
+          return;
+        }
+        acc.state = next;
+        if (isDeltaMessage(data)) {
+          acc.ordinal = data.o;
+          acc.baseIsFullFrame = false;
+        } else {
+          acc.baseIsFullFrame = true;
+        }
+
         failures = 0;
-        setState(data as MediaState);
+        setState(next as unknown as MediaState);
         setLastUpdateAt(Date.now());
         setLoading(false);
         setError(null);
@@ -160,6 +182,9 @@ export function useMediaStream(deviceId?: string, enabled = true): UseMediaStrea
       es?.close();
       es = new EventSource(streamUrl);
       es.onmessage = handleMessage;
+      // Deltas arrive under their own event name so a client that does not
+      // know about them simply never sees them.
+      es.addEventListener('delta', handleMessage as EventListener);
       es.onerror = () => {
         if (cancelled) return;
         failures += 1;

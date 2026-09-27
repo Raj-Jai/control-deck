@@ -1189,13 +1189,44 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 		close(messageChan)
 	}()
 
+	// Each client tracks the last frame it was sent, so the next one can go out
+	// as a delta. This has to be per client: two clients that joined at
+	// different times have different bases.
+	var (
+		prevFields map[string]json.RawMessage
+		ordinal    int
+	)
+
 	notify := r.Context().Done()
 	for {
 		select {
 		case <-notify:
 			return
 		case msg := <-messageChan:
-			fmt.Fprintf(w, "data: %s\n\n", msg)
+			ordinal++
+
+			event, payload := sseFullFrameEvent, msg
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(msg), &fields); err == nil {
+				event, payload = marshalDelta(ordinal, prevFields, json.RawMessage(msg))
+			}
+			if payload == "" {
+				// Nothing moved since this client's last frame.
+				continue
+			}
+			// The base only advances on a full frame or a sent delta.
+			if event == sseFullFrameEvent || event == "delta" {
+				if event == sseFullFrameEvent {
+					_ = json.Unmarshal([]byte(payload), &fields)
+				}
+				prevFields = fields
+			}
+
+			if event == "delta" {
+				fmt.Fprintf(w, "event: delta\ndata: %s\n\n", payload)
+			} else {
+				fmt.Fprintf(w, "data: %s\n\n", payload)
+			}
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
 			}
@@ -2310,4 +2341,104 @@ func fetchMPRISState() MediaState {
 		Sys:               fetchSystemStats(),
 		CmdLog:            logCopy,
 	}
+}
+
+// ─── SSE delta encoding ──────────────────────────────────────────
+
+// The state frame is sent whole, twice a second, to every client, and almost
+// all of it is identical between two consecutive frames: the track, the artwork,
+// the devices, the volumes, the command log. Only the playback position, the
+// elapsed time, the load figures and the clock really move. Sending a few
+// kilobytes of unchanged JSON twice a second to every client is the single
+// largest avoidable cost in the stream (PERF-26).
+//
+// gzip already went in with the listeners, which helps a lot but still spends
+// the CPU re-encoding the same bytes. A delta keeps the repeated part out of
+// the message entirely.
+//
+// The wire format is a superset of the old one, so a client that does not
+// understand it keeps working: an `event: delta` message carrying
+// {"o":<ordinal>,"p":{...changed fields...}} applies the changes onto the
+// previous frame. Anything else is a full frame and is applied as-is. A gap
+// sends a full frame instead, so a client that misses a delta self-heals on the
+// next update rather than drifting.
+
+const sseFullFrameEvent = "state"
+
+// sseDelta applies a patch onto a previous frame.
+//
+// A patch is a shallow merge by JSON pointer-free top-level key, with an
+// explicit null meaning "set this to null" - which JSON cannot express by
+// omission, and which matters here because a field going away (a track ended,
+// a device disconnected) has to be visible to the client.
+func sseDelta(prev, patch map[string]json.RawMessage) map[string]json.RawMessage {
+	out := make(map[string]json.RawMessage, len(prev)+len(patch))
+	for k, v := range prev {
+		out[k] = v
+	}
+	for k, v := range patch {
+		if string(v) == "null" {
+			// A null clears the key: the client must see it disappear, and
+			// omitting the key would be indistinguishable from "unchanged".
+			delete(out, k)
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// marshalDelta builds the next message for a client, returning a full frame
+// when a delta would not be worth it.
+//
+// The threshold is not a guess about the network: below it, the bookkeeping of
+// describing what changed costs about as much as sending the frame.
+func marshalDelta(ordinal int, prev map[string]json.RawMessage, state any) (event, payload string) {
+	full, err := json.Marshal(state)
+	if err != nil {
+		return sseFullFrameEvent, ""
+	}
+	if prev == nil || ordinal <= 1 {
+		return sseFullFrameEvent, string(full)
+	}
+
+	fields := map[string]json.RawMessage{}
+	if err := json.Unmarshal(full, &fields); err != nil {
+		return sseFullFrameEvent, string(full)
+	}
+
+	patch := map[string]json.RawMessage{}
+	removed := false
+	for k, v := range fields {
+		old, had := prev[k]
+		if !had {
+			patch[k] = v
+			continue
+		}
+		if string(old) != string(v) {
+			patch[k] = v
+		}
+	}
+	for k := range prev {
+		if _, still := fields[k]; !still {
+			patch[k] = json.RawMessage("null")
+			removed = true
+		}
+	}
+
+	// Nothing moved. A frame that repeats itself is pure waste, and the
+	// client keeps its own view.
+	if len(patch) == 0 {
+		return "", ""
+	}
+
+	// Not worth describing the change rather than sending it.
+	encoded, err := json.Marshal(map[string]any{"o": ordinal, "p": patch})
+	if err != nil {
+		return sseFullFrameEvent, string(full)
+	}
+	if removed || len(encoded) >= len(full) {
+		return sseFullFrameEvent, string(full)
+	}
+	return "delta", string(encoded)
 }

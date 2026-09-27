@@ -381,7 +381,27 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       `sync.Pool` of writers. Event streams and WebSocket upgrades pass through untouched -
       wrapping the writer removed `http.Hijacker` and broke every terminal handshake with
       501, which `TestCompressHandlerPassesThroughWebSocketUpgrade` now guards.
-- [ ] **PERF-26** the SSE payload is not delta-encoded.
+- [x] **PERF-26** the SSE payload is not delta-encoded.
+      The state went out whole, twice a second, to every client, and almost all of it is
+      identical between two consecutive frames. Unchanged top-level keys now go out as
+      `event: delta` messages carrying only what moved, tracked per client because two
+      clients that joined at different times have different bases. Measured over 8 s against
+      the live host: 1 full frame (1,800 B) plus 15 deltas (2,958 B) = 4,758 B, against about
+      28,800 B for the same run without them - **83% less on the wire**.
+      Three properties make this safe rather than clever:
+      - the format is a **superset** of the old one, so a client that does not know about
+        deltas simply never sees them and keeps working on the full frames;
+      - a **gap discards the accumulated base** and waits for the next full frame, so a
+        client that misses a delta heals instead of drifting;
+      - a key that **disappears** is sent as an explicit null and forces a whole frame,
+        because JSON cannot express "unset" by omission and omission means "unchanged" here.
+      A frame that repeats itself sends nothing at all. Describing a change is not free
+      either, so a delta larger than the frame falls back to the frame.
+      Known limit: the merge is one level deep, so a nested object that changes every
+      tick - the `sys` block of CPU, RAM and disk figures - is resent in full. Going
+      deeper was not worth the complexity against gzip, which already handles the
+      repetition inside it. Nine Go tests and ten client tests, including a run that
+      reconstructs the same state a whole frame each time would have produced.
 - [x] **PERF-30/31** audio accumulator unbounded while suspended; 512-frame queue.
       *(done in the audio commit: the suspended-tab buffer is bounded and the queue is
       512 frames)*
