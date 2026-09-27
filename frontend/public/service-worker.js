@@ -2,7 +2,7 @@
 // old entries. A fixed name meant cache-first HTML kept serving the previous
 // build to an already-installed PWA, which is how a deployed change silently
 // did not appear (BUG-019).
-const CACHE = 'control-deck-v' + __BUILD__;
+const CACHE = 'control-deck-v__BUILD__';
 const PRECACHE = [
   '/static/',
   '/static/manifest.json',
@@ -11,11 +11,7 @@ const PRECACHE = [
   '/static/icon-512.png',
 ];
 
-// Registration is at /static/service-worker.js, so the default scope is
-// /static/ - and the fetch handler below tests /api/ and /ws/ paths that can
-// never reach it, making those branches dead (BUG-018). Scope is widened
-// explicitly so the worker actually governs the whole origin.
-const SCOPE = '/';
+
 
 self.addEventListener('install', (e) => {
   e.waitUntil(

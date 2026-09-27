@@ -806,7 +806,7 @@
 
   if ('serviceWorker' in navigator) {
     try {
-      var swp = navigator.serviceWorker.register('/static/service-worker.js');
+      var swp = navigator.serviceWorker.register('/static/service-worker.js', { scope: '/' });
       if (swp && swp.then) {
         swp.then(function () {
           console.log('bg SW registered');
