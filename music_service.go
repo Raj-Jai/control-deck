@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -356,23 +357,37 @@ func handleOpenInBrowser(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&req)
 	}
 
+	if !playerNameIsSane(strings.TrimSpace(req.Player)) && strings.TrimSpace(req.Player) != "" {
+		http.Error(w, "Unusable player name", http.StatusBadRequest)
+		return
+	}
+
 	p, openURL, pos, err := resolvePlayerMedia(req.Player)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
+	// This URL is handed to window.open on the client, so it gets the same
+	// scheme check as the handoff path: a `javascript:` value arriving via MPRIS
+	// metadata would otherwise be executed by the browser (SUS-006).
+	shareURL, err := handoffShareableURL(openURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// Pause the laptop player first.
 	runCmd("playerctl", "--player", p, "pause")
 
-	addLog("↗ open in browser: " + openURL)
-	log.Printf("open-in-browser: player=%s pos=%.0f → %s", p, pos, openURL)
+	addLog("↗ open in browser: " + shareURL)
+	log.Printf("open-in-browser: player=%s pos=%.0f → %s", p, pos, shareURL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"opened":  true,
 		"paused":  true,
-		"url":     openURL,
+		"url":     shareURL,
 		"player":  p,
 		"seconds": pos,
 	})
@@ -612,9 +627,20 @@ func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&req)
 	}
 
+	if !playerNameIsSane(strings.TrimSpace(req.Player)) && strings.TrimSpace(req.Player) != "" {
+		http.Error(w, "Unusable player name", http.StatusBadRequest)
+		return
+	}
+
 	p, openURL, pos, err := resolvePlayerMedia(req.Player)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	shareURL, err := handoffShareableURL(openURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -642,11 +668,13 @@ func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
 	// browser) at the embedded timestamp.
 	var out []byte
 	var errShare error
+	// `--` before the value: the URL is data, and without the separator a value
+	// beginning with `--` would be read as an option by the tool.
 	if gsconnectAvailable() {
 		daemon := gsconnectDaemon()
-		out, errShare = exec.Command("gjs", "-m", daemon, "--share-link", openURL, "--device", dev).CombinedOutput()
+		out, errShare = exec.Command("gjs", "-m", daemon, "--share-link", "--", shareURL, "--device", dev).CombinedOutput()
 	} else {
-		out, errShare = exec.Command("kdeconnect-cli", "--share", openURL, "--device", dev).CombinedOutput()
+		out, errShare = exec.Command("kdeconnect-cli", "--share", "--", shareURL, "--device", dev).CombinedOutput()
 	}
 	if errShare != nil {
 		log.Printf("handoff: share failed: %v | %s", errShare, string(out))
@@ -654,8 +682,8 @@ func handleHandoffToPhone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addLog("📲 handoff to phone: " + openURL)
-	log.Printf("handoff: player=%s dev=%s pos=%.0f → %s", p, dev, pos, openURL)
+	addLog("📲 handoff to phone: " + shareURL)
+	log.Printf("handoff: player=%s dev=%s pos=%.0f → %s", p, dev, pos, shareURL)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -775,4 +803,62 @@ func fileExists(p string) bool {
 // shellQuote wraps s in single quotes for safe use in a sh -c command string.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// handoffShareableURL restricts what may be handed to a phone and, just as
+// importantly, refuses anything that could be read as a flag.
+//
+// The URL comes from MPRIS metadata (xesam:url), which any media file on the
+// machine can set, and it was passed as a bare argument with no `--`
+// separator, so a value beginning with `--` became an option to gjs or
+// kdeconnect-cli (SUS-005). Only http and https are shareable; a
+// `javascript:` URL arriving this way would otherwise be handed straight to the
+// phone's handler.
+func handoffShareableURL(raw string) (string, error) {
+	u := strings.TrimSpace(raw)
+	if u == "" {
+		return "", fmt.Errorf("the player reported no URL to share")
+	}
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return "", fmt.Errorf("the player reported a URL that could not be parsed")
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return "", fmt.Errorf("refusing to share a %s: only http and https links are shareable",
+			parsed.Scheme)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("the player reported a URL with no host")
+	}
+	return u, nil
+}
+
+// playerNameIsSane rejects a player name that could be an option rather than a
+// player. `req.Player` reaches the host from POST /api/command, so it is
+// client-supplied, and it was interpolated into a gdbus --dest value.
+func playerNameIsSane(name string) bool {
+	if name == "" || len(name) > 128 {
+		return false
+	}
+	// A leading dash would be read as an option.
+	if strings.HasPrefix(name, "-") {
+		return false
+	}
+	// No separators, no path traversal: an MPRIS bus name is
+	// org.mpris.MediaPlayer2.<instance>, and a '/' or '..' in here would let a
+	// caller address a different object path on the bus.
+	if strings.Contains(name, "/") || strings.Contains(name, "..") {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.', r == '_', r == '-', r == '@':
+		default:
+			return false
+		}
+	}
+	return true
 }

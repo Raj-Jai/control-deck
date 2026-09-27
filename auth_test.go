@@ -2,9 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -216,5 +220,120 @@ func TestClientIPIgnoresForwardedHeader(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "1.2.3.4")
 	if got := clientIP(req); got != "10.0.0.9" {
 		t.Errorf("clientIP = %q, want 10.0.0.9", got)
+	}
+}
+
+// SUS-002 claimed buildCommandMap ran outside configMu, which would make the
+// derived globals (commandMap, dashPIN, caffeineSD) racy against a concurrent
+// config reload. A reload and a login are now run against each other under
+// -race: if any of those globals is read without the lock, this fails.
+func TestConfigReloadRacesWithAuthentication(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+
+	prev := getConfig()
+	t.Cleanup(func() {
+		appCfg.Store(prev)
+		configMu.Lock()
+		buildCommandMap()
+		configMu.Unlock()
+	})
+
+	write := func(pin string) {
+		body := `{"pin":"` + pin + `","http_port":18099,"features":{}}`
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	// The writer: a reload every few iterations, exactly as SIGHUP does.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			t.Setenv("CONFIG_PATH", path)
+			write(fmt.Sprintf("%04d", i))
+			if err := reloadConfig(); err != nil {
+				return
+			}
+		}
+	}()
+
+	// The readers: the handlers that consume those globals.
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 40; j++ {
+				func() {
+					configMu.RLock()
+					_ = dashPIN
+					_ = dashMediaPIN
+					_ = caffeineSD
+					_ = commandMap["mute"]
+					configMu.RUnlock()
+				}()
+				func() { _, _ = lookupCommand("mute") }()
+				func() { _ = commandKnown("git_commit") }()
+				func() { _ = checkCaffeine() }()
+				func() { _ = isIdeCommand("git_commit") }()
+			}
+		}()
+	}
+
+	// Let the readers finish, then stop the writer.
+	time.Sleep(150 * time.Millisecond)
+	close(stop)
+	wg.Wait()
+}
+
+// A reload that changes the PIN must take effect for the next login, and one
+// that removes it must fall back rather than keeping a stale value.
+func TestReloadChangesTheEffectivePIN(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	prev := getConfig()
+	t.Cleanup(func() {
+		t.Setenv("CONFIG_PATH", "")
+		appCfg.Store(prev)
+		configMu.Lock()
+		buildCommandMap()
+		configMu.Unlock()
+	})
+	t.Setenv("CONFIG_PATH", path)
+
+	if err := os.WriteFile(path, []byte(`{"pin":"1111"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := reloadConfig(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	configMu.RLock()
+	got := dashPIN
+	configMu.RUnlock()
+	if got != "1111" {
+		t.Errorf("PIN after reload = %q, want %q", got, "1111")
+	}
+
+	// Removing the PIN must not leave the previous one in force.
+	if err := os.WriteFile(path, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := reloadConfig(); err != nil {
+		t.Fatalf("second reload: %v", err)
+	}
+	configMu.RLock()
+	got = dashPIN
+	configMu.RUnlock()
+	if got != "3456" {
+		t.Errorf("PIN after removing it = %q, want the %q default", got, "3456")
 	}
 }

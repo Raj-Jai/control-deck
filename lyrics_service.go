@@ -351,15 +351,22 @@ func buildVersions(results []lrclibResult, artist, title string, duration float6
 		}
 	}
 
-	// Sort versions: labelled languages first, then the unlabelled one last.
+	// Sort versions: labelled languages first, then the unlabelled one last,
+	// and otherwise leave the score order alone.
+	//
+	// This used to `return true` when both were labelled, which claims i < j
+	// and j < i at the same time. That is not a strict weak ordering, so the
+	// result of the sort was unspecified - and for a larger list it is the
+	// shape that sends the sort quadratic. Stability already preserves the
+	// order of equivalent elements, so the honest answer for two labelled
+	// languages is "not less than".
 	sort.SliceStable(versions, func(i, j int) bool {
-		if versions[i].Lang == "" && versions[j].Lang != "" {
+		iUnlabelled := versions[i].Lang == ""
+		jUnlabelled := versions[j].Lang == ""
+		if iUnlabelled == jUnlabelled {
 			return false
 		}
-		if versions[i].Lang != "" && versions[j].Lang == "" {
-			return true
-		}
-		return true // keep stable order otherwise
+		return !iUnlabelled
 	})
 
 	return &LyricData{

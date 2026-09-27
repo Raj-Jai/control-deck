@@ -293,13 +293,25 @@ func sendMPVCommand(cmd VideoCommand) error {
 	case "set_audio_delay":
 		return mpvSetProperty("audio-delay", cmd.Value)
 	case "set_aspect":
-		ratio, _ := cmd.Value.(string)
+		ratio, err := stringValue(cmd.Value)
+		if err != nil {
+			return fmt.Errorf("set_aspect: %w", err)
+		}
 		if ratio == "" || strings.EqualFold(ratio, "default") {
 			return mpvSetProperty("video-aspect-override", "-1")
 		}
 		return mpvSetProperty("video-aspect-override", ratio)
 	case "set_speed":
-		speed, _ := cmd.Value.(float64)
+		speed, err := numericValue(cmd.Value)
+		if err != nil {
+			return fmt.Errorf("set_speed: %w", err)
+		}
+		// A speed of 0 is not a speed: mpv reads it as "pause", so a request
+		// that arrived as the wrong type used to stop the video instead of
+		// failing. Clamp to a plausible range and say so if it is outside.
+		if speed <= 0 {
+			return fmt.Errorf("set_speed: %v is not a playable speed", speed)
+		}
 		return mpvSetProperty("speed", speed)
 	case "frame_step":
 		if cmd.Direction == "prev" {
@@ -438,19 +450,34 @@ func sendVLCCommand(cmd VideoCommand) error {
 		}
 		params = fmt.Sprintf("command=audio_track&val=%d", cmd.TrackID)
 	case "set_sub_delay":
-		val, _ := cmd.Value.(float64)
+		val, verr := numericValue(cmd.Value)
+		if verr != nil {
+			return fmt.Errorf("video command: %w", verr)
+		}
 		params = fmt.Sprintf("command=subdelay&val=%.3f", val)
 	case "set_audio_delay":
-		val, _ := cmd.Value.(float64)
+		val, verr := numericValue(cmd.Value)
+		if verr != nil {
+			return fmt.Errorf("video command: %w", verr)
+		}
 		params = fmt.Sprintf("command=audiodelay&val=%.3f", val)
 	case "set_aspect":
-		ratio, _ := cmd.Value.(string)
+		ratio, verr := stringValue(cmd.Value)
+		if verr != nil {
+			return fmt.Errorf("set_aspect: %w", verr)
+		}
 		if ratio == "" || strings.EqualFold(ratio, "default") {
 			ratio = "default"
 		}
 		params = "command=aspectratio&val=" + url.QueryEscape(ratio)
 	case "set_speed":
-		speed, _ := cmd.Value.(float64)
+		speed, verr := numericValue(cmd.Value)
+		if verr != nil {
+			return fmt.Errorf("set_speed: %w", verr)
+		}
+		if speed <= 0 {
+			return fmt.Errorf("set_speed: %v is not a playable speed", speed)
+		}
 		params = fmt.Sprintf("command=rate&val=%.2f", speed)
 	case "frame_step":
 		if cmd.Direction == "prev" {
@@ -481,7 +508,13 @@ func sendXdotoolCommand(cmd VideoCommand, mprisPlayer string) {
 	case "set_audio":
 		key = "b" // cycle audio track
 	case "set_sub_delay":
-		val, _ := cmd.Value.(float64)
+		val, verr := numericValue(cmd.Value)
+		if verr != nil {
+			// This path has no error return - it only synthesises a key to
+			// xdotool. Refusing loudly beats pressing the wrong key.
+			log.Printf("xdotool path: set_sub_delay: %v", verr)
+			return
+		}
 		if val > 0 {
 			key = "g" // sub delay +50ms
 		} else {
@@ -495,7 +528,11 @@ func sendXdotoolCommand(cmd VideoCommand, mprisPlayer string) {
 			repeat = 100
 		}
 	case "set_audio_delay":
-		val, _ := cmd.Value.(float64)
+		val, verr := numericValue(cmd.Value)
+		if verr != nil {
+			log.Printf("xdotool path: set_audio_delay: %v", verr)
+			return
+		}
 		if val > 0 {
 			key = "k" // audio delay +50ms
 		} else {
@@ -741,4 +778,42 @@ func handleVideoCommand(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// The command payloads arrive as json.RawMessage-free interface{} values, and
+// every use of them was a bare `v, _ := x.(float64)`. A wrong JSON type
+// therefore became the zero value with no error: `{"value":"1.5"}` set speed
+// to 0, which mpv treats as paused, so a malformed request silently stopped the
+// video (SUS-004). These helpers refuse instead.
+
+func numericValue(v any) (float64, error) {
+	switch n := v.(type) {
+	case float64:
+		return n, nil
+	case int:
+		return float64(n), nil
+	case int64:
+		return float64(n), nil
+	case json.Number:
+		f, err := n.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("value %q is not a number", n.String())
+		}
+		return f, nil
+	case nil:
+		return 0, fmt.Errorf("value is missing")
+	default:
+		return 0, fmt.Errorf("value must be a number, got %T", v)
+	}
+}
+
+func stringValue(v any) (string, error) {
+	switch s := v.(type) {
+	case string:
+		return s, nil
+	case nil:
+		return "", fmt.Errorf("value is missing")
+	default:
+		return "", fmt.Errorf("value must be a string, got %T", v)
+	}
 }

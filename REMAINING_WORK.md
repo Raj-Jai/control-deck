@@ -122,10 +122,37 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       WorkingDirectory), and uses `Restart=always` plus `KillMode=control-group`. The README
       also said `enable --now tab-dashboard` when the unit is `tab-dashboard.service`, and
       said nothing about rebuilding before restarting.
-- [ ] **SUS-002** `buildCommandMap` runs outside `configMu` at startup.
-- [ ] **SUS-003** `sort.SliceStable` comparator in `buildVersions` is not a strict weak ordering.
-- [ ] **SUS-004** `set_speed` accepts the wrong JSON type and silently pauses playback.
-- [ ] **SUS-005** argument injection via `xesam:url` and `req.Player`.
+- [x] **SUS-002** `buildCommandMap` runs outside `configMu` at startup. **Not a defect.**
+      Every derived global (`commandMap`, `dashPIN`, `dashMediaPIN`, `caffeineSD`) is
+      written under `configMu.Lock()` in the reload path and read under `RLock()`, including
+      in `auth.go` and `checkCaffeine`. Rather than assert that, `TestConfigReloadRacesWithAuthentication`
+      now hammers a config reload against four concurrent readers under `-race`; it passes.
+      `TestReloadChangesTheEffectivePIN` pins that a reload really does take effect and that
+      removing the PIN falls back instead of keeping a stale one.
+- [x] **SUS-003** `sort.SliceStable` comparator in `buildVersions` is not a strict weak ordering.
+      It returned `true` for any pair of two labelled languages, claiming i<j and j<i at once,
+      so the result was unspecified and a larger list would sort quadratically. The honest
+      answer for two equivalent elements is "not less than", which is what stability already
+      uses. Three tests: every triple checked for transitivity, plus irreflexivity and
+      asymmetry; the intent (labelled first, unlabelled last, score order otherwise) pinned;
+      and 2,000 versions sorting in well under a second.
+- [x] **SUS-004** `set_speed` accepts the wrong JSON type and silently pauses playback.
+      `speed, _ := cmd.Value.(float64)` turned `{"value":"1.5"}` into 0, and mpv reads speed 0
+      as pause - so a malformed request stopped the video. Every command payload now goes
+      through `numericValue`/`stringValue`, which refuse the wrong type with a message, and
+      speed additionally rejects anything <= 0 as not playable. The same unchecked assertions
+      existed for aspect, subtitle delay, audio delay and brightness; all are fixed.
+- [x] **SUS-005** argument injection via `xesam:url` and `req.Player`.
+      The share URL came from MPRIS metadata and was passed as a bare argument, so a value
+      beginning with `--` became an option to gjs or kdeconnect-cli; there is now a `--`
+      separator *and* the value must be http or https with a host. `req.Player` is
+      client-supplied and was interpolated into a gdbus `--dest`; it is now restricted to
+      letters, digits, `.`, `_`, `-` and `@`, with no leading dash, no `/` and no `..` so it
+      cannot address a different object path on the bus. Sixteen tests cover the accept and
+      reject lists, including `javascript:`, `data:` and `--help`.
+- [x] **SUS-006** the same URL is handed to `window.open` on the client, so a `javascript:`
+      value arriving via MPRIS metadata would have been executed by the browser. The
+      open-in-browser path now applies the same scheme check.
 
 ## 3. Fabricated or incorrect values
 
