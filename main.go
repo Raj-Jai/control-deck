@@ -260,10 +260,8 @@ type LogEntry struct {
 }
 
 var (
-	clients      = make(map[chan string]bool)
-	clientsMu    sync.Mutex
-	artCachePath string
-	artCacheData string
+	clients   = make(map[chan string]bool)
+	clientsMu sync.Mutex
 
 	winClients   = make(map[chan string]bool)
 	winClientsMu sync.Mutex
@@ -1785,30 +1783,29 @@ func resolveArtURL(rawURL string) string {
 		}
 		filePath := parsed.Path
 
-		if filePath == artCachePath {
-			return artCacheData
+		if cached, ok := albumArt.get(filePath); ok {
+			return cached
 		}
 
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Printf("Failed to read art file %s: %v", filePath, err)
-			artCachePath = filePath
-			artCacheData = ""
+			// Remember the failure so a missing file is not re-read twice a
+			// second for the life of the process.
+			albumArt.invalidate(filePath)
 			return ""
 		}
 
 		mimeType := http.DetectContentType(data)
 		if !strings.HasPrefix(mimeType, "image/") {
 			log.Printf("Art file %s has non-image MIME type: %s", filePath, mimeType)
-			artCachePath = filePath
-			artCacheData = ""
+			albumArt.invalidate(filePath)
 			return ""
 		}
 
 		encoded := base64.StdEncoding.EncodeToString(data)
 		dataURI := "data:" + mimeType + ";base64," + encoded
-		artCachePath = filePath
-		artCacheData = dataURI
+		albumArt.put(filePath, dataURI)
 		return dataURI
 	}
 

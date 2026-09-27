@@ -292,7 +292,15 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **PERF-26** the SSE payload is not delta-encoded.
 - [ ] **PERF-30/31** audio accumulator unbounded while suspended; 512-frame queue.
       *(done in the audio commit)*
-- [ ] **PERF-37** `resolveArtURL`'s single-entry cache re-base64s a file every 500 ms.
+- [x] **PERF-37** `resolveArtURL`'s single-entry cache re-base64s a file every 500 ms.
+      Replaced with a bounded LRU in `artcache.go`: 4 MiB per entry, 16 MiB total, so
+      alternating tracks both stay cached and one huge cover cannot be held for the life of
+      the process. Seven tests cover the hit, the alternating case, LRU eviction, the
+      oversized refusal, replace-without-double-counting, invalidation, and concurrent access.
+- [x] **BUG (found by the above)** `artCachePath`/`artCacheData` were plain globals with no
+      mutex, but the state payload is built once per client, so two clients meant two
+      goroutines reading and writing the same pair. The LRU is now guarded, and
+      `TestArtCacheConcurrentAccess` runs it under `-race`.
 
 ## 6b. Fixes from the latest verification pass
 
