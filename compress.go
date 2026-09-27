@@ -15,12 +15,7 @@ import (
 // only to text-ish types: re-encoding an already-compressed image or a
 // self-signed certificate wastes CPU for nothing.
 func compressHandler(next http.Handler) http.Handler {
-	var (
-		once sync.Once
-		pool *sync.Pool
-	)
-	pool = &sync.Pool{New: func() any { return gzip.NewWriter(nil) }}
-	_ = once
+	pool := &sync.Pool{New: func() any { return gzip.NewWriter(nil) }}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// A WebSocket upgrade needs to hijack the connection, which the

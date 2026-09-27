@@ -1,0 +1,105 @@
+# The project had no CI at all: nothing ran go vet, gofmt, the Go tests or the
+# frontend build except whoever happened to be editing. The audit's tooling row
+# asked for exactly this.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        # A gofmt difference is a build failure, not a suggestion.
+        run: |
+          unformatted="$(gofmt -l . | grep -v '^frontend/' || true)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"
+            echo "$unformatted"
+            echo
+            gofmt -d $unformatted | head -100
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: build
+        run: go build ./...
+
+      - name: test
+        run: go test -race -count=1 ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: typecheck
+        run: npx tsc --noEmit
+
+      - name: test
+        run: npm test
+
+      - name: build
+        # The build writes to ../static, which is committed. Building here also
+        # proves the service-worker stamp plugin still finds the entry chunk.
+        run: npm run build
+
+      - name: the build output must be committed
+        # static/ is tracked, so a build that changes it means the deployable
+        # assets and the source have drifted apart.
+        run: |
+          if ! git diff --quiet -- ../static; then
+            echo "static/ is out of date with the source. Run 'npm run build' in"
+            echo "frontend/ and commit the result."
+            git --no-pager diff --stat -- ../static
+            exit 1
+          fi
+
+  contract:
+    name: Feature contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: frontend feature keys must match the backend's
+        # A flag the backend advertises and the frontend does not know silently
+        # disables a deck, and one the frontend invents is ignored - the pair
+        # drifted before and a test now pins them together.
+        run: go test -count=1 -run 'FeatureKeysMatchTheFrontend|ExampleConfigMatchesKnownFeatures' .

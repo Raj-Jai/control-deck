@@ -429,6 +429,21 @@ Complete visual redesign: new design tokens, theme, and layout across every comp
       `authStore`, `BleRssiMonitor`. `AppMixerCard`/`CaffeineCard`/`StepperControls` only
       referenced each other, and `DefaultDeck` was the only thing importing them.
 - [ ] Extract shared `<VolumeSlider>` / `<BrightnessSlider>`.
-- [ ] `gofmt -l` clean (8 files), `go vet` clean (3 `unsafe.Pointer` warnings).
-- [ ] Add CI: `go vet`, `gofmt -l`, `go test -race ./...`, `npm ci`, `npm run build`, tests.
+- [x] `gofmt -l` clean, `go vet` clean. `gofmt` flagged `audio.go`; `go vet` flagged a dead
+      `sync.Once` in the new gzip handler and, in `cmd/sendkey`, three "possible misuse of
+      unsafe.Pointer" plus two self-assignments. The ioctls there all take an *integer* value
+      - an event code, a request number, a key counter - so they now pass it as `uintptr`
+      instead of an `unsafe.Pointer` round trip that meant nothing. The self-assignments
+      (`wantCtrl, ctrlCode = true, ctrlCode`) were no-ops and are now just the flag change
+      they always meant to be.
+- [x] Add CI: `.github/workflows/ci.yml` with three jobs.
+      - **Go:** gofmt as a hard failure with the diff printed, `go vet ./...`,
+        `go build ./...`, `go test -race -count=1 ./...`.
+      - **Frontend:** `npm ci`, `tsc --noEmit`, `npm test`, `npm run build`, then a check
+        that `static/` is committed and matches the source - `static/` is tracked, so a
+        build that changes it means the deployable assets and the source have drifted. That
+        check immediately caught a commit of mine that had shipped source without its build.
+      - **Contract:** the feature-key test, since a flag the backend advertises and the
+        frontend does not know silently disables a deck.
+      Every step was run locally before being committed.
 - [ ] Ship `tab-dashboard.service` in-repo and correct the README.

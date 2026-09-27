@@ -23,7 +23,7 @@ type AppStream struct {
 	ID        int    `json:"id"`
 	App       string `json:"app"`
 	MediaName string `json:"media_name"`
-	Volume    int    `json:"volume"`  // 0-100
+	Volume    int    `json:"volume"` // 0-100
 	Muted     bool   `json:"muted"`
 }
 
@@ -123,8 +123,8 @@ func handleSetAppStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		ID     int  `json:"id"`
-		Volume *int `json:"volume,omitempty"`
+		ID     int   `json:"id"`
+		Volume *int  `json:"volume,omitempty"`
 		Muted  *bool `json:"muted,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

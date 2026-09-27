@@ -85,6 +85,21 @@ var shiftKeys = map[string]uint16{
 	"shift_,": 51,
 }
 
+// ioctlUint issues an ioctl whose argument is an integer value - an event code,
+// a request number, a key index - rather than a pointer to memory.
+//
+// Every ioctl in this file is of that shape. They went through an
+// unsafe.Pointer round trip, which is both pointless and flagged by go vet as a
+// possible misuse: converting a uintptr to unsafe.Pointer is only unsafe when
+// the uintptr could be hiding a Go pointer, which an integer constant or a loop
+// counter never does.
+func ioctlUint(fd, op, arg uintptr) error {
+	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd, op, arg); err != 0 {
+		return err
+	}
+	return nil
+}
+
 func ioctl(fd, op uintptr, data unsafe.Pointer) error {
 	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd, op, uintptr(data)); err != 0 {
 		return err
@@ -147,13 +162,16 @@ parsed:
 		fmt.Fprintf(os.Stderr, "unknown key: %s\n", base)
 		os.Exit(1)
 	}
-	// A bare "shift+x" or "ctrl+x" keeps its existing meaning.
+	// A bare "shift+x" or "ctrl+x" keeps its existing meaning, so only the
+	// flags move. (These two statements used to assign ctrlCode and shiftCode
+	// to themselves, which go vet flagged as self-assignment and which did
+	// nothing at all.)
 	if isCtrl && !wantCtrl && !wantShift {
-		wantCtrl, ctrlCode = true, ctrlCode
+		wantCtrl = true
 		isCtrl = false
 	}
 	if isShift && !wantShift && !wantCtrl {
-		wantShift, shiftCode = true, shiftCode
+		wantShift = true
 		isShift = false
 	}
 
@@ -178,18 +196,18 @@ parsed:
 	}
 	defer syscall.Close(fd)
 
-	if err := ioctl(uintptr(fd), uiSetEvBit, unsafe.Pointer(uintptr(evKey))); err != nil {
+	if err := ioctlUint(uintptr(fd), uiSetEvBit, uintptr(evKey)); err != nil {
 		fmt.Fprintf(os.Stderr, "UI_SET_EVBIT KEY: %v\n", err)
 		os.Exit(1)
 	}
 
-	if err := ioctl(uintptr(fd), uiSetEvBit, unsafe.Pointer(uintptr(evSyn))); err != nil {
+	if err := ioctlUint(uintptr(fd), uiSetEvBit, uintptr(evSyn)); err != nil {
 		fmt.Fprintf(os.Stderr, "UI_SET_EVBIT SYN: %v\n", err)
 		os.Exit(1)
 	}
 
 	for k := uintptr(0); k <= maxKey; k++ {
-		if ioctl(uintptr(fd), uiSetKeyBit, unsafe.Pointer(k)) != nil {
+		if ioctlUint(uintptr(fd), uiSetKeyBit, k) != nil {
 			break
 		}
 	}
