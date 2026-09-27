@@ -532,7 +532,29 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       tags it was missing, without which iOS labels the icon "Web App". Verified in a
       browser: both manifests parse, every declared icon returns 200, and each manifest's
       icons are byte-distinct from the other's.
-- [ ] **§16** the 15 product/UX improvement proposals.
+- [x] **§16** the 15 product/UX improvement proposals, triaged rather than all built.
+      They are features, not fixes, so each is recorded with what this pass did about it:
+      - **IMP-01** connection indicator → **done** (the freshness pill; it replaced the
+        "Refresh" menu item, which is gone).
+      - **IMP-02** audio latency readout → **already present** in the transport tile
+        (latency, output latency, drift, gaps, drops).
+      - **IMP-03** make the Code deck work or remove it → **done** (option (a)): a result
+        surface, a real work directory, and confirmations on the destructive actions.
+      - **IMP-04** handoff device picker → **done** (re-fetched on every open, with the
+        state shown) and the media browser now names its keystroke target.
+      - **IMP-09** focus routing explains itself → **done** in the app-type work.
+      - **IMP-12** degrade Home by viewport → **done** (primary controls first, the rest
+        behind an explicit toggle).
+      - **IMP-13** the terminal as a power feature → **done** (lazily mounted, the PTY
+        closes when the deck is left, and `rebuild` now confirms).
+      - **IMP-15** "you are about to affect the real machine" → **done** in part: the
+        rebuild and the git actions confirm, and the media mode says it is read-only.
+      - **IMP-05, 06, 07, 08, 10, 11, 14** — not built. Each is a new feature surface
+        (a capability-explanation component, an in-app log panel, preference sync, a
+        global safe mode, surfacing currently-discarded computed data, a real audio
+        transport, a per-device profile). They are written up in the audit with their
+        tradeoffs, and none of them is a defect, so they are recorded as available work
+        rather than being built silently inside a fix pass.
 
 ## 9. UI overhaul
 

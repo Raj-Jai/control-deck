@@ -55,6 +55,10 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const [handingOff, setHandingOff] = useState(false);
   const [showHandoffMenu, setShowHandoffMenu] = useState(false);
   const [handoffDevices, setHandoffDevices] = useState<HandoffDevice[]>([]);
+  // Shown while the list is being re-read, and when it comes back empty or
+  // fails, so an empty list is never mistaken for "no phones exist".
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [handoffNote, setHandoffNote] = useState('');
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Reset art error when the artwork URL changes so new art can load
@@ -246,13 +250,26 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   };
 
   const toggleHandoffMenu = async () => {
-    setShowHandoffMenu(s => !s);
-    if (handoffDevices.length === 0) {
-      try {
-        setHandoffDevices(await listHandoffDevices());
-      } catch (e) {
-        console.error('Failed to list handoff devices:', e);
-      }
+    const opening = !showHandoffMenu;
+    setShowHandoffMenu(opening);
+    if (!opening) return;
+
+    // Fetched once, on the first open, and never again. A phone that wakes up,
+    // or a second device that pairs while the page is open, is invisible until
+    // a reload - so handoff targets whichever device happened to be there at
+    // first, which with two devices means the music often goes to the wrong
+    // one (BUG-008, IMP-04). The list is re-read every time the menu opens.
+    setLoadingDevices(true);
+    try {
+      const devices = await listHandoffDevices();
+      setHandoffDevices(devices);
+      if (devices.length === 0) setHandoffNote('No phone is reachable right now.');
+      else setHandoffNote('');
+    } catch (e) {
+      console.error('Failed to list handoff devices:', e);
+      setHandoffNote('Could not reach the phone. Check that KDE Connect is running.');
+    } finally {
+      setLoadingDevices(false);
     }
   };
 
@@ -506,13 +523,17 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             {showHandoffMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowHandoffMenu(false)} />
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 min-w-[180px] rounded-xl p-1.5 border border-deck-hairline/20 bg-[rgba(15,23,42,0.95)] shadow-2xl">
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 min-w-[220px] rounded-xl p-1.5 border border-deck-hairline/20 bg-deck-surface shadow-raised">
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-deck-dim px-2 py-1">
                     Send to
                   </div>
-                  {handoffDevices.length === 0 ? (
+                  {loadingDevices && handoffDevices.length === 0 ? (
+                    <div className="text-xs text-deck-dim px-2 py-1.5" role="status">
+                      Looking for phones…
+                    </div>
+                  ) : handoffDevices.length === 0 ? (
                     <div className="text-xs text-deck-dim px-2 py-1.5">
-                      No phones reachable
+                      {handoffNote || 'No phones reachable'}
                     </div>
                   ) : (
                     handoffDevices.map(d => (
