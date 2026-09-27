@@ -2,22 +2,28 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type ServiceInfo struct {
-	Name         string  `json:"name"`
-	PID          int     `json:"pid"`
-	CPUPercent   float64 `json:"cpu_percent"`
-	MemRSSKB     int64   `json:"mem_rss_kb"`
-	Status       string  `json:"status"`
-	UptimeSecs   int64   `json:"uptime_secs"`
+	Name       string  `json:"name"`
+	PID        int     `json:"pid"`
+	CPUPercent float64 `json:"cpu_percent"`
+	MemRSSKB   int64   `json:"mem_rss_kb"`
+	Status     string  `json:"status"`
+	UptimeSecs int64   `json:"uptime_secs"`
+
+	// CPUTicks is the raw utime+stime counter, kept internal so the sampler can
+	// derive a rate between ticks without re-reading /proc on the request path.
+	CPUTicks int64 `json:"-"`
 }
 
 var trackedServices = []string{
@@ -25,13 +31,79 @@ var trackedServices = []string{
 	"ffmpeg",
 }
 
+// Sampling CPU means reading /proc twice with a gap in between, so it cannot
+// happen inside an HTTP handler. handleServiceStats used to block for
+// 200ms per tracked service - roughly 600ms of pure sleep in the request path,
+// on a poller the browser hits every few seconds. The sampler runs in the
+// background and the handler is a pure read of the last snapshot.
+const cpuSampleInterval = 2 * time.Second
+const cpuSampleWindow = 200 * time.Millisecond
+
+var (
+	statsSnapshot atomic.Pointer[[]ServiceInfo]
+	prevCPUTicks  = map[string]int64{}
+	prevCPUSample time.Time
+	prevCPUMu     sync.Mutex
+)
+
+// collectServiceStats returns the most recent background sample, or takes a
+// fresh one if the sampler has not run yet.
 func collectServiceStats() []ServiceInfo {
-	now := time.Now()
+	if s := statsSnapshot.Load(); s != nil {
+		return *s
+	}
+	return sampleServiceStats(time.Now())
+}
+
+func sampleServiceStats(now time.Time) []ServiceInfo {
 	var results []ServiceInfo
 	for _, name := range trackedServices {
 		results = append(results, queryProcessByName(name, now))
 	}
+
+	// Derive CPU% from the delta against the previous tick.
+	prevCPUMu.Lock()
+	if prevCPUSample.IsZero() {
+		prevCPUSample = now
+	} else if elapsed := now.Sub(prevCPUSample); elapsed > 0 {
+		const clkTck = 100.0
+		for i := range results {
+			name := results[i].Name
+			if results[i].PID == 0 {
+				delete(prevCPUTicks, name)
+				continue
+			}
+			prev, seen := prevCPUTicks[name]
+			prevCPUTicks[name] = results[i].CPUTicks
+			if !seen {
+				continue
+			}
+			delta := results[i].CPUTicks - prev
+			if delta < 0 {
+				// The process was replaced, not wrapped.
+				continue
+			}
+			// Ticks per second across all CPUs.
+			pct := float64(delta) / clkTck / elapsed.Seconds() * 100
+			results[i].CPUPercent = math.Round(pct*10) / 10
+		}
+		prevCPUSample = now
+	}
+	prevCPUMu.Unlock()
+
+	snap := results
+	statsSnapshot.Store(&snap)
 	return results
+}
+
+// startServiceStatsSampler keeps the snapshot fresh off the request path.
+func startServiceStatsSampler() {
+	go func() {
+		for {
+			sampleServiceStats(time.Now())
+			time.Sleep(cpuSampleInterval)
+		}
+	}()
 }
 
 func queryProcessByName(name string, now time.Time) ServiceInfo {
@@ -64,22 +136,17 @@ func queryProcessByName(name string, now time.Time) ServiceInfo {
 		statRaw, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
 		if err == nil {
 			fields := parseProcStat(string(statRaw))
-			if len(fields) >= 22 {
-				// utime + stime (fields 13, 14) in clock ticks
-				utime, _ := strconv.ParseInt(fields[13], 10, 64)
-				stime, _ := strconv.ParseInt(fields[14], 10, 64)
-				totalTicks := utime + stime
-				// starttime (field 21) in clock ticks since boot
-				startTimeTicks, _ := strconv.ParseInt(fields[21], 10, 64)
-				clkTck := int64(100) // sysconf(_SC_CLK_TCK)
-				bootTime := now.Unix() - uptimeSecs()
-				startTimeUnix := bootTime + startTimeTicks/clkTck
-				si.UptimeSecs = now.Unix() - startTimeUnix
-				if si.UptimeSecs < 0 {
-					si.UptimeSecs = 0
-				}
-				_ = totalTicks // could compute CPU% over interval with sampling
+			utime, _ := strconv.ParseInt(procStatField(fields, procStatUTime), 10, 64)
+			stime, _ := strconv.ParseInt(procStatField(fields, procStatSTime), 10, 64)
+			startTimeTicks, _ := strconv.ParseInt(procStatField(fields, procStatStartTime), 10, 64)
+			clkTck := int64(100) // sysconf(_SC_CLK_TCK)
+			bootTime := now.Unix() - uptimeSecs()
+			startTimeUnix := bootTime + startTimeTicks/clkTck
+			si.UptimeSecs = now.Unix() - startTimeUnix
+			if si.UptimeSecs < 0 {
+				si.UptimeSecs = 0
 			}
+			si.CPUTicks = utime + stime
 		}
 
 		// Read status for RSS
@@ -95,59 +162,24 @@ func queryProcessByName(name string, now time.Time) ServiceInfo {
 			}
 		}
 
-		// Quick CPU% snapshot: sample over 100ms
-		cpuPct := sampleCPU(pid)
-		if cpuPct >= 0 {
-			si.CPUPercent = cpuPct
-		}
-
 		break
 	}
 	return si
 }
 
-func sampleCPU(pid int) float64 {
-	start, err := readProcStat(pid)
-	if err != nil {
-		return -1
-	}
-	time.Sleep(200 * time.Millisecond)
-	end, err := readProcStat(pid)
-	if err != nil {
-		return -1
-	}
-
-	totalDelta := end.totalCPU - start.totalCPU
-	timeDeltaMs := end.time.Sub(start.time).Milliseconds()
-	if timeDeltaMs <= 0 {
-		return -1
-	}
-	clkTck := float64(100)
-	pct := (float64(totalDelta) / clkTck) / (float64(timeDeltaMs) / 1000.0) * 100
-	if pct < 0 {
-		return 0
-	}
-	return pct
-}
-
-type procStatSample struct {
-	totalCPU int64
-	time     time.Time
-}
-
-func readProcStat(pid int) (procStatSample, error) {
-	raw, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
-	if err != nil {
-		return procStatSample{}, err
-	}
-	fields := parseProcStat(string(raw))
-	if len(fields) < 15 {
-		return procStatSample{}, fmt.Errorf("too few fields")
-	}
-	utime, _ := strconv.ParseInt(fields[13], 10, 64)
-	stime, _ := strconv.ParseInt(fields[14], 10, 64)
-	return procStatSample{totalCPU: utime + stime, time: time.Now()}, nil
-}
+// procStatFields are the /proc/<pid>/stat fields this package needs, expressed
+// as their 1-based index in the documented layout.
+//
+// parseProcStat returns the fields *after* "pid (comm)", so documented field N
+// lives at index N-3. The previous code used 13/14/21, which are cutime, cstime
+// and vsize - reaped-children CPU and a virtual address. That is why the top
+// bar reported 80% CPU against a real 16.7%, and an uptime that tracked RSS.
+const (
+	procStatUTime     = 14 // user CPU time, clock ticks
+	procStatSTime     = 15 // kernel CPU time, clock ticks
+	procStatStartTime = 22 // start time, clock ticks since boot
+	procStatFieldsOff = 3  // fields 1..3 are pid, comm and state
+)
 
 func parseProcStat(raw string) []string {
 	// Find last ')' to handle comm with spaces/parens
@@ -159,25 +191,38 @@ func parseProcStat(raw string) []string {
 	return strings.Fields(rest)
 }
 
-var bootTimeCache time.Time
-var bootTimeOnce bool
+// procStatField returns documented field n (1-based) from a parsed stat line.
+func procStatField(fields []string, n int) string {
+	i := n - procStatFieldsOff
+	if i < 0 || i >= len(fields) {
+		return ""
+	}
+	return fields[i]
+}
+
+// The boot time never changes, so it is computed once behind a sync.Once. Two
+// bare globals guarded only by a bool meant two concurrent HTTP handlers could
+// both read a half-written time.Time.
+var (
+	bootTimeOnce  sync.Once
+	bootTimeCache time.Time
+)
 
 func uptimeSecs() int64 {
-	if !bootTimeOnce {
-		bootTimeOnce = true
+	bootTimeOnce.Do(func() {
+		bootTimeCache = time.Now()
 		raw, err := os.ReadFile("/proc/stat")
-		if err == nil {
-			for _, line := range strings.Split(string(raw), "\n") {
-				if strings.HasPrefix(line, "btime ") {
-					secs, _ := strconv.ParseInt(strings.TrimSpace(line[6:]), 10, 64)
+		if err != nil {
+			return
+		}
+		for _, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(line, "btime ") {
+				if secs, err := strconv.ParseInt(strings.TrimSpace(line[6:]), 10, 64); err == nil {
 					bootTimeCache = time.Unix(secs, 0)
 				}
 			}
 		}
-		if bootTimeCache.IsZero() {
-			bootTimeCache = time.Now()
-		}
-	}
+	})
 	return int64(time.Since(bootTimeCache).Seconds())
 }
 

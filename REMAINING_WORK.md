@@ -23,7 +23,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 9 | BUG-043/051/052/053 service-stats sleep, nvidia-smi, bootTime race, SIGHUP | [ ] | |
 | 10 | BUG-049 lyrics stall on the broadcast goroutine | [ ] | |
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
-| 12 | BUG-026/025/021/027/020 fabricated values | [ ] | |
+| 12 | BUG-026/043/052 service stats: wrong fields, blocking sleep, data race | [x] | (this commit) |
 | 13 | BUG-041/022 feature-flag + command registration | [ ] | |
 | 14 | BUG-034/035/036/037/039/040/044/045/050/054/055 functional | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
@@ -77,13 +77,16 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 - [ ] **BUG-001** (Critical) `close(done)` from two goroutines in `terminal.go`, no `sync.Once`
       → `panic: close of closed channel` kills the entire dashboard.
-- [ ] **BUG-043** `/api/service-stats` sleeps 400 ms inside every handler invocation.
+- [x] **BUG-043** `/api/service-stats` slept 200 ms per tracked service inside every handler
+      invocation. CPU% is now derived from a background sampler publishing every 2 s, and the
+      handler is a pure read of the last snapshot.
 - [ ] **BUG-045** `wl-paste` and `xclip` share a single 2-second X selection context.
 - [ ] **BUG-048** `killMusicPipeline` contains `pkill -9 -x mpv` / `pkill -9 -x yt-dlp`.
 - [ ] **BUG-049** lyrics lookup stalls the whole state broadcast for up to 18 s per track.
 - [ ] **BUG-050** VLC detection hardcoded to the dashboard's own HTTP port.
 - [ ] **BUG-051** `nvidia-smi` / `intel_gpu_top` spawned every 500 ms with no timeout.
-- [ ] **BUG-052** `bootTimeCache` / `bootTimeOnce` are unsynchronised globals.
+- [x] **BUG-052** `bootTimeCache` / `bootTimeOnce` were unsynchronised globals; two concurrent
+      handlers could read a half-written `time.Time`. Now a `sync.Once`.
 - [ ] **BUG-053** SIGHUP reload does not re-register the broadcast hotkey.
 - [ ] **BUG-054** the advertised mDNS name is never set.
 - [ ] **BUG-055** the systemd unit the README tells you to install does not exist.
@@ -100,8 +103,11 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       tab yielded four phantom "Linux (you)" rows. The device id is the key now, with the
       port-stripped socket address as a fallback.
 - [ ] **BUG-025** the GPU bar can render the literal string `"GPU"` as a measurement.
-- [ ] **BUG-026** `/api/service-stats` reads `cutime`/`cstime` and `rss` instead of
-      `utime`/`stime` and `starttime` — reported 80% CPU vs real 16.7%.
+- [x] **BUG-026** `/api/service-stats` read `cutime`/`cstime` and `vsize` instead of
+      `utime`/`stime` and `starttime`. `parseProcStat` strips `pid (comm)`, so documented field
+      N lives at index N-3; the code used 13/14/21. Verified against the kernel: real age
+      3197s vs 3190s reported, real CPU 6.7% vs 8%, and the old indices read `cutime`=113890
+      against a real `utime` of 12104.
 - [ ] **BUG-027** weather day labels shift by one depending on the time of day.
 - [x] **BUG-041a** `crypto.randomUUID()` needed a secure context, so over plain-HTTP LAN
       `deviceId` was `''` for the whole session. Fixed in `lib/deviceId.ts`; the id also moved

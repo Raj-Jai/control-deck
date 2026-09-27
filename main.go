@@ -536,7 +536,14 @@ func main() {
 		for range sigs {
 			if err := reloadConfig(); err != nil {
 				log.Printf("config: reload failed, keeping previous config: %v", err)
+				continue
 			}
+			// The broadcast hotkey lives in gsettings, not in this process, so a
+			// reload that changes it has to re-register the binding. Without this
+			// the new value was read into the config and then ignored until a
+			// restart (BUG-053).
+			go ensureBroadcastHotkey()
+			go initVideoPlayerConfig()
 		}
 	}()
 
@@ -588,6 +595,7 @@ func main() {
 	http.HandleFunc("/api/music/handoff-devices", requireSession(handleHandoffDevices))
 
 	// Background tickers
+	go startServiceStatsSampler()
 	go startMediaBroadcaster()
 	go cleanupClients()
 	go startPingChecker()
