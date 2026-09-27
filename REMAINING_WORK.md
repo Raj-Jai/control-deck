@@ -77,7 +77,7 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **SEC-012** (Medium) `X-Forwarded-For` trusted unconditionally — ignored entirely now;
       the socket address is the only source used for both the client list and the PIN lockout.
       The stray `Access-Control-Allow-Origin: *` on `/media-stream` is also gone.
-- [ ] **SEC-013** (Info) command-injection review — **no exploitable shell injection found**.
+- [x] **SEC-013** (Info) command-injection review — **no exploitable shell injection found**.
 - [x] **SEC-014** (Medium) unbounded, publicly served log containing window titles — the
       window watcher no longer logs once per second, only on change, and the log is no longer
       served at all.
@@ -174,7 +174,9 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **BUG-006** a carousel gesture starting on the seek slider set the dragging flag and
       then returned early on touchend without clearing it, so the carousel stopped responding
       for the rest of the session. The flag is now always released, including on touchcancel.
-- [ ] **BUG-007** the fullscreen lyrics modal has no focus trap, Escape, or focus restore.
+- [x] **BUG-007** the fullscreen lyrics modal has no focus trap, Escape, or focus restore.
+      *(done in the seek/modal commit: a focus trap, Escape to close, and focus restored to
+      the control that opened it)*
 - [ ] **BUG-008** the handoff device list is fetched once and never refreshed.
 - [x] **BUG-009** one failed artwork load left the placeholder up for every subsequent track.
       The failure now resets when the artwork URL changes.
@@ -185,9 +187,14 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       bundle hash by a Vite plugin, so a rebuild invalidates the old cache.
 - [x] **BUG-024** clipboard copy reported success even when `document.execCommand('copy')`
       returned false, which is what it does without a secure context. The result is now checked.
-- [ ] **BUG-028** geo calibration is an O(n²) render and memory loop.
+- [x] **BUG-028** geo calibration is an O(n²) render and memory loop.
+      *(done: the calibration samples are accumulated into a running sum ref and published
+      to state once a second instead of copying an array, and the recording is capped at
+      5,000 points)*
 - [ ] **BUG-029** the BLE advertised name is never set; `stop()` never stops watching.
-- [ ] **BUG-030** music-search responses can arrive out of order and overwrite newer results.
+- [x] **BUG-030** music-search responses can arrive out of order and overwrite newer results.
+      *(done: the search now carries a request sequence and ignores a response that is not
+      the newest)*
 - [x] **BUG-031** "Toggle subtitles" sent `track_id: 0`, which is *off* in both players, and
       "Cycle audio" sent `track_id: 1`, which is *select the first track*. Neither cycled.
       The backend already parsed `subtitles[]` and `audio_tracks[]` and never used them; it now
@@ -215,7 +222,8 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       *(partially done: `triggerCommand` only)*
 - [x] **BUG-039** auto-focus snapped the deck to Home for any window we do not map — a file
       manager, a settings dialog, a browser tab. Unrecognised windows now leave the deck alone.
-- [ ] **BUG-040** a capability-fetch failure hides every capability-gated card, no retry.
+- [x] **BUG-040** a capability-fetch failure hides every capability-gated card, no retry.
+      *(done: capabilities fail open and the card offers a retry)*
 - [ ] **BUG-042** art theming silently fails for any art host without CORS, and sticks.
       *(partially done: accent contrast clamp only)*
 - [x] **BUG-044** `speed_*` injected `shift+.` / `shift+,` with no idea which player they
@@ -290,8 +298,9 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       wrapping the writer removed `http.Hijacker` and broke every terminal handshake with
       501, which `TestCompressHandlerPassesThroughWebSocketUpgrade` now guards.
 - [ ] **PERF-26** the SSE payload is not delta-encoded.
-- [ ] **PERF-30/31** audio accumulator unbounded while suspended; 512-frame queue.
-      *(done in the audio commit)*
+- [x] **PERF-30/31** audio accumulator unbounded while suspended; 512-frame queue.
+      *(done in the audio commit: the suspended-tab buffer is bounded and the queue is
+      512 frames)*
 - [x] **PERF-37** `resolveArtURL`'s single-entry cache re-base64s a file every 500 ms.
       Replaced with a bounded LRU in `artcache.go`: 4 MiB per entry, 16 MiB total, so
       alternating tracks both stay cached and one huge cover cannot be held for the life of
