@@ -60,40 +60,53 @@ export async function triggerCommand(cmd: string, player?: string): Promise<bool
   }
 }
 
-export async function seekTo(position: number, player?: string): Promise<void> {
+/**
+ * Post to a control endpoint and report what happened.
+ *
+ * These three previously awaited the fetch and threw the status away, so a 400
+ * from a missing player, a 403 from a locked page, or a 503 from a dead host
+ * looked exactly like success. The slider would sit at the new value and the
+ * media player would never move. The response is checked, and a failure is
+ * reported so the UI can put the control back.
+ */
+async function postControl(url: string, body: unknown, what: string): Promise<boolean> {
   try {
-    await fetch(api.seek, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position, ...(player ? { player } : {}) }),
+      body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      let detail = '';
+      try {
+        detail = (await res.text()).trim().slice(0, 120);
+      } catch {
+        // A body is not guaranteed.
+      }
+      console.error(`${what} rejected: HTTP ${res.status}${detail ? ` - ${detail}` : ''}`);
+      return false;
+    }
+    return true;
   } catch (err) {
-    console.error('Seek failed:', err);
+    console.error(`${what} failed:`, err);
+    return false;
   }
 }
 
-export async function setVolume(volume: number): Promise<void> {
-  try {
-    await fetch(api.volume, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ volume }),
-    });
-  } catch (err) {
-    console.error('Set volume failed:', err);
-  }
+export async function seekTo(position: number, player?: string): Promise<boolean> {
+  return postControl(
+    api.seek,
+    { position, ...(player ? { player } : {}) },
+    'Seek',
+  );
 }
 
-export async function setBrightness(brightness: number): Promise<void> {
-  try {
-    await fetch(api.brightness, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brightness }),
-    });
-  } catch (err) {
-    console.error('Set brightness failed:', err);
-  }
+export async function setVolume(volume: number): Promise<boolean> {
+  return postControl(api.volume, { volume }, 'Set volume');
+}
+
+export async function setBrightness(brightness: number): Promise<boolean> {
+  return postControl(api.brightness, { brightness }, 'Set brightness');
 }
 
 export async function pullHostClipboard(): Promise<string> {

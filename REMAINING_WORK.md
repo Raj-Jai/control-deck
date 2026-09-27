@@ -178,7 +178,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **BUG-007** the fullscreen lyrics modal has no focus trap, Escape, or focus restore.
       *(done in the seek/modal commit: a focus trap, Escape to close, and focus restored to
       the control that opened it)*
-- [ ] **BUG-008** the handoff device list is fetched once and never refreshed.
+- [x] **BUG-038a** the mixer's sliders cleared their dragging flag on
+      pointerup and touchend but not on keyup or blur, so a keyboard user who moved one left
+      it flagged as dragging for the rest of the session and the handle stopped tracking the
+      host. `onKeyUp` and `onBlur` now commit on every slider.
 - [x] **BUG-009** one failed artwork load left the placeholder up for every subsequent track.
       The failure now resets when the artwork URL changes.
 - [ ] **BUG-018** the service worker's scope excludes every request its fetch handler serves.
@@ -231,7 +234,15 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       so a repeated chorus lost every repeat. Both fixed, with `.5` now correctly 500ms.
       This is the first frontend test in the project: `npm test` runs Node's built-in runner
       against the pure functions, with no new dependency.
-- [ ] **BUG-038** `triggerCommand`/`seekTo`/`setVolume`/`setBrightness` never check the response.
+- [x] **BUG-038** `triggerCommand`/`seekTo`/`setVolume`/`setBrightness` never check the response.
+      `triggerCommand` already returned a boolean; these three awaited the fetch and threw
+      the status away, so a 400 from a missing player, a 403 from a locked page or a 503 from
+      a dead host looked exactly like success - the slider sat at the new value and the
+      player never moved. They now go through one `postControl` helper that checks the status,
+      logs the reason, and returns a boolean; the mixer's master volume and brightness revert
+      to whatever the host reports and say so once, with a dismiss button. Verified in a
+      browser against a stubbed 503: two requests, both reported, the alert rendered, and the
+      handle back at the host's 66%.
       *(partially done: `triggerCommand` only)*
 - [x] **BUG-039** auto-focus snapped the deck to Home for any window we do not map — a file
       manager, a settings dialog, a browser tab. Unrecognised windows now leave the deck alone.

@@ -29,13 +29,27 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   const latestVol = useRef(100);
   const latestBri = useRef(100);
 
-  const commitVol = () => {
+  // The response is now checked, so a rejected change is visible: the slider
+  // snaps back to whatever the host actually reports and the reason is said
+  // once. Before, the handle stayed where the user dragged it while the
+  // player never moved, with nothing to indicate the difference.
+  const [ctrlErr, setCtrlErr] = useState('');
+
+  const commitVol = async () => {
     draggingVol.current = false;
-    setVolume(sliderToValue(latestVol.current / 100, 1));
+    const ok = await setVolume(sliderToValue(latestVol.current / 100, 1));
+    if (!ok) {
+      setLocalVol(vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
+      setCtrlErr('The host rejected that volume change.');
+    }
   };
-  const commitBri = () => {
+  const commitBri = async () => {
     draggingBri.current = false;
-    setBrightness(sliderToValue(latestBri.current, 100));
+    const ok = await setBrightness(sliderToValue(latestBri.current, 100));
+    if (!ok) {
+      setLocalBri(bri >= 0 ? Math.round(valueToSlider(bri, 100)) : localBri);
+      setCtrlErr('The host rejected that brightness change.');
+    }
   };
 
   const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
@@ -109,6 +123,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                 onTouchEnd={commitVol}
                 onPointerUp={commitVol}
                 onKeyUp={commitVol}
+                onBlur={commitVol}
               className="flex-1"
             />
             <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showVol}%</span>
@@ -154,6 +169,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                 onTouchEnd={commitBri}
                 onPointerUp={commitBri}
                 onKeyUp={commitBri}
+                onBlur={commitBri}
                 className="flex-1"
               />
               <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showBri}%</span>
@@ -166,6 +182,19 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
           <AppStreamsList streams={state.app_streams} />
         )}
       </div>
+
+      {ctrlErr && (
+        <p role="alert" className="mt-2 text-[11px] text-deck-danger">
+          {ctrlErr}{' '}
+          <button
+            type="button"
+            onClick={() => setCtrlErr('')}
+            className="underline underline-offset-2"
+          >
+            Dismiss
+          </button>
+        </p>
+      )}
     </div>
   );
 }
