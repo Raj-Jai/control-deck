@@ -100,10 +100,21 @@ export default function App() {
     [features]
   );
 
+  // While a programmatic smooth scroll is running, handleScroll must not
+  // second-guess the target: Math.round on the live offset flips to the new
+  // page halfway through the animation and can flip back as the browser snaps,
+  // and each flip unmounts and remounts that deck's body. With lazy bodies that
+  // meant a terminal opened, closed and reopened within 200ms of being opened.
+  const settlingUntil = useRef(0);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const scrollTo = (i: number, smooth = false) => {
     const el = scrollRef.current;
     if (!el) return;
     const clamped = Math.max(0, Math.min(pages.length - 1, i));
+    settlingUntil.current = Date.now() + 1200;
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => { settlingUntil.current = 0; }, 1200);
     el.scrollTo({ left: clamped * el.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
     // Deck switch resets vertical scroll — otherwise a scrolled-down page
     // leaves the new deck showing blank space below its content.
@@ -140,11 +151,17 @@ export default function App() {
     if (page > pages.length - 1) scrollTo(pages.length - 1);
   }, [pages.length, page]);
 
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    if (scrollRAF.current) cancelAnimationFrame(scrollRAF.current);
+  }, []);
+
   const handleScroll = () => {
     if (scrollRAF.current) cancelAnimationFrame(scrollRAF.current);
     scrollRAF.current = requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (!el) return;
+      if (Date.now() < settlingUntil.current) return;
       const idx = Math.round(el.scrollLeft / el.clientWidth);
       setPage(Math.max(0, Math.min(pages.length - 1, idx)));
     });
@@ -347,6 +364,11 @@ export default function App() {
           >
             {/* Page 0: Home — primary controls first, the rest behind a toggle */}
             <div className={pageClass('home')}>
+              {/* Same gating as the other decks: the device and geo cards each
+                  carry a latency poll, and the stats cards subscribe to the
+                  state stream, so none of that should run while the user is on
+                  another page. */}
+              {currentPageId === 'home' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 {/* PRIMARY: what a person reaches for daily */}
                 <div className="flex flex-col gap-4 min-w-0">
@@ -359,6 +381,7 @@ export default function App() {
                   {features.connected_devices && <ConnectedDevicesCard />}
                 </div>
               </div>
+              )}
 
               <button
                 type="button"
@@ -373,7 +396,7 @@ export default function App() {
                 {showMore ? 'Fewer' : 'More controls'}
               </button>
 
-              {showMore && (
+              {currentPageId === 'home' && showMore && (
               <div id="home-secondary"
                 className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_340px] gap-4 md:gap-5 lg:gap-6">
                 <div className="flex flex-col gap-4 min-w-0">
@@ -391,31 +414,43 @@ export default function App() {
               )}
             </div>
 
+            {/* The page shells stay mounted so the carousel can scroll between
+                them, but each body renders only while its page is the one on
+                screen. Building all five at once meant the terminal's PTY, the
+                xterm canvases, the video deck's 1 Hz poll and the media
+                browser's scans all ran for a deck the user was not looking at
+                (PERF-23, and the root cause of PERF-04, PERF-16 and PERF-17).
+                The trade-off is that leaving a deck tears its state down: a
+                terminal's scrollback does not survive a swipe away, and the
+                shell for a departed video player is closed. Both are the
+                honest outcome - a deck that is not on screen should not be
+                holding a process open. */}
+
             {/* Page: Media Browser */}
             {features.media_browser && (
             <div className={pageClass('media')}>
-              <MediaBrowserDeck state={state} caps={caps} />
+              {currentPageId === 'media' && <MediaBrowserDeck state={state} caps={caps} />}
             </div>
             )}
 
             {/* Page: Video Player */}
             {features.video_player && (
             <div className={pageClass('video')}>
-              <VideoPlayerDeck state={state} caps={caps} />
+              {currentPageId === 'video' && <VideoPlayerDeck state={state} caps={caps} />}
             </div>
             )}
 
             {/* Page: IDE */}
             {features.ide && (
             <div className={pageClass('ide')}>
-              <IdeDeck caps={caps} />
+              {currentPageId === 'ide' && <IdeDeck caps={caps} />}
             </div>
             )}
 
             {/* Page: Terminal */}
             {features.terminal && (
             <div className={pageClass('terminal')}>
-              <TerminalDeck caps={caps} />
+              {currentPageId === 'terminal' && <TerminalDeck caps={caps} />}
             </div>
             )}
           </div>

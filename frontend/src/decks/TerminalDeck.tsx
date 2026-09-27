@@ -68,6 +68,14 @@ export default function TerminalDeck({ caps }: Props) {
     const wsUrl = `${proto}//${window.location.host}/ws/terminal`;
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let dataDispose: { dispose: () => void } | null = null;
+    // Set when the deck is torn down. The socket used to be tracked only in
+    // wsRef, which is assigned in onopen: leaving the deck while a connection
+    // was still handshaking left that socket with no owner, and when it later
+    // closed its onclose scheduled a reconnect that nothing could ever clear.
+    // The result was an orphaned PTY and a reconnect loop against a deck that
+    // was no longer on screen - one per visit.
+    let cancelled = false;
+    let current: WebSocket | null = null;
 
     // Register input handler once — not per reconnect — to avoid duplicate sends
     dataDispose = term.onData((data) => {
@@ -78,10 +86,13 @@ export default function TerminalDeck({ caps }: Props) {
     });
 
     const connect = () => {
+      if (cancelled) return;
       const ws = new WebSocket(wsUrl);
+      current = ws;
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
+        if (cancelled) { ws.close(); return; }
         wsRef.current = ws;
         setConnected(true);
         term.clear();
@@ -94,6 +105,7 @@ export default function TerminalDeck({ caps }: Props) {
       };
 
       ws.onmessage = (ev) => {
+        if (cancelled) return;
         if (ev.data instanceof ArrayBuffer) {
           term.write(new Uint8Array(ev.data));
         }
@@ -105,7 +117,8 @@ export default function TerminalDeck({ caps }: Props) {
       let saidOffline = false;
 
       ws.onclose = () => {
-        wsRef.current = null;
+        if (wsRef.current === ws) wsRef.current = null;
+        if (cancelled) return;
         setConnected(false);
         if (!saidOffline) {
           saidOffline = true;
@@ -122,9 +135,13 @@ export default function TerminalDeck({ caps }: Props) {
     connect();
 
     return () => {
+      cancelled = true;
       ro.disconnect();
       clearTimeout(reconnectTimer);
       dataDispose?.dispose();
+      // Close whichever socket this effect opened, including one still
+      // handshaking; wsRef alone misses that case.
+      if (current) { current.onopen = null; current.onclose = null; current.onmessage = null; current.close(); }
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       term.dispose();
       termInstance.current = null;

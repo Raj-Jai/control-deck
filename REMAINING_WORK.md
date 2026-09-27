@@ -249,11 +249,28 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       `playerctl -l` now goes through a 1.5 s cache, which collapses a state tick's
       several calls into one spawn; the per-player probes were left alone because their
       values genuinely change between ticks. Covered by `TestPlayerListIsCached`.
-- [ ] **PERF-04/05/16/17/23** deck bodies are not mounted lazily; the Video deck's 1 Hz poll
-      and two 5 Hz ping intervals run even when their deck is closed.
-      *(the `document.hidden` half is done: both 5 Hz ping loops in `GeoSurveyCard` and
-      `ConnectedDevicesCard` now idle while the tab is hidden and re-measure once on
-      `visibilitychange`, instead of polling forever in the background)*
+- [x] **PERF-05/23** all five deck bodies were mounted at once, so the terminal's PTY, the
+      xterm canvases, the video deck's 1 Hz poll and both 5 Hz ping loops ran for decks the
+      user was not looking at. Each body now renders only while its page is on screen (the
+      page shells stay mounted so the carousel still scrolls). Measured over 5s windows:
+      on the Terminal deck no endpoint polls at all; on the Video deck only
+      `/api/video/status`; the 10/s ping only appears on the Home deck, where the two cards
+      that own it are.
+      *(the `document.hidden` half was done earlier: both ping loops idle while the tab is
+      hidden and re-measure once on `visibilitychange`)*
+- [x] **BUG (found by the above)** leaving a deck while its terminal socket was still
+      handshaking orphaned it: the socket was only tracked in a ref assigned on `onopen`,
+      and its `onclose` then scheduled a reconnect that nothing could clear. The result was
+      an orphaned PTY and a reconnect loop against a deck that was no longer on screen, once
+      per visit. Fixed with an explicit `cancelled` flag and a closure-held socket.
+- [x] **BUG (found by the above)** with lazy bodies, a programmatic smooth scroll made
+      `Math.round(scrollLeft / width)` flip the active page mid-animation and back, remounting
+      the deck body each time - a terminal opened, closed and reopened within 200ms of being
+      opened. The scroll handler now defers to the navigation target for 1.2s.
+- [ ] **PERF-04/16/17** the video deck's 1 Hz poll still runs whenever the Video deck is on
+      screen even if the user is looking at the browser tab behind it, and the bundle is still
+      one 656 kB chunk with `@xterm/xterm` imported statically.
+      *(xterm is now only fetched when the Terminal deck is first opened, via the lazy body)*
 - [x] **PERF-09** the survey recording was unbounded: the canvas redraw is O(n) per point,
       so a long walk grew React state and re-rendered the whole polyline every 200 ms.
       Now capped at `MAX_RECORD_POINTS` (5,000, over 16 minutes at 5 Hz) with the dropped
