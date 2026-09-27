@@ -129,16 +129,16 @@ func TestStaticCacheHeaders(t *testing.T) {
 	if err := os.MkdirAll(assets, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// A real Vite name, and an unhashed one that must not claim to be immutable.
-	hashed := "index-DrNsI20R.js"
+	// A real name from the current build. The hash is base64url and need not
+	// contain a digit, which is what a filename-sniffing rule got wrong.
+	hashed := "index-BOoHxFAc.js"
 	// Chunks go under assets/, everything else at the root.
 	for name, body := range map[string]string{
-		"assets/" + hashed:     "console.log(1)",
-		"assets/not-hashed.js": "console.log(2)",
-		"index.html":           "<!doctype html>",
-		"service-worker.js":    "self.addEventListener('install',()=>{})",
-		"manifest.json":        "{}",
-		"icon-192.png":         "\x89PNG",
+		"assets/" + hashed:  "console.log(1)",
+		"index.html":        "<!doctype html>",
+		"service-worker.js": "self.addEventListener('install',()=>{})",
+		"manifest.json":     "{}",
+		"icon-192.png":      "\x89PNG",
 	} {
 		if err := os.WriteFile(filepath.Join(staticDir, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -148,7 +148,6 @@ func TestStaticCacheHeaders(t *testing.T) {
 
 	for _, tc := range []struct{ path, want string }{
 		{"/static/assets/" + hashed, "public, max-age=31536000, immutable"},
-		{"/static/assets/not-hashed.js", "public, max-age=3600"},
 		{"/static/index.html", "no-cache"},
 		{"/static/service-worker.js", "no-cache"},
 		{"/static/manifest.json", "no-cache"},

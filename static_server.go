@@ -44,53 +44,29 @@ var blockedNames = map[string]bool{
 //
 // The rule is the standard one for a content-hashed build:
 //
-//   - /assets/* filenames contain a hash of their contents, so a given URL can
-//     never mean two different files. Cache them for a year, immutable.
+//   - /assets/* is the bundler's content-hashed directory: everything in it is
+//     emitted as name-hash.ext, so a given URL can never mean two different
+//     files. Cache them for a year, immutable.
 //   - the shell, the worker and the manifest decide which hashed assets get
 //     loaded, so they must be revalidated every time. no-cache still allows a
 //     304, so this costs a round trip and saves a stale app.
 //   - everything else in static/ is unhashed, so give it a short window.
 func setStaticCacheHeaders(w http.ResponseWriter, rel string) {
 	base := path.Base(rel)
+	// A note on the assets rule: it trusts the bundler's directory convention
+	// rather than parsing the filename. An earlier version tried to recognise
+	// the hash, requiring a digit in it, and that quietly downgraded
+	// index-BOoHxFAc.js to a one-hour cache because the base64url hash happened
+	// to contain no digits. Vite only writes content-hashed names into
+	// assets/, so the directory is the reliable signal.
 	switch {
-	case strings.HasPrefix(rel, "assets/") && looksHashed(base):
+	case strings.HasPrefix(rel, "assets/"):
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	case base == "index.html" || base == "service-worker.js" || base == "manifest.json":
 		w.Header().Set("Cache-Control", "no-cache")
 	default:
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 	}
-}
-
-// looksHashed reports whether a filename ends in a build hash, which is what
-// Vite appends. A file under assets/ without one is not content-addressed, and
-// caching it for a year would be a lie the browser believes.
-func looksHashed(name string) bool {
-	// Strip the extension first: Vite names chunks index-DrNsI20R.js, and the
-	// hash is everything between the last dash and the dot.
-	stem := strings.TrimSuffix(name, path.Ext(name))
-	i := strings.LastIndex(stem, "-")
-	if i < 0 {
-		return false
-	}
-	hash := stem[i+1:]
-	if len(hash) < 8 {
-		return false
-	}
-	// Vite's hashes are base64url, not hex - index-BOoHxFAc.js has an x in it -
-	// so this cannot be a hex check. Require at least one digit, which is what
-	// separates a hash from an ordinary word.
-	var digit bool
-	for _, r := range hash {
-		switch {
-		case r >= '0' && r <= '9':
-			digit = true
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '-', r == '_':
-		default:
-			return false
-		}
-	}
-	return digit
 }
 
 // newStaticHandler serves the built frontend and nothing else.
