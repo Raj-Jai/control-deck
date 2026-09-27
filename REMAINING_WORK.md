@@ -32,7 +32,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 14a | BUG-034 IDE debugger keys | [x] | (this commit) |
 | 14b | BUG-031/033 video track cycling + honest failures | [x] | (this commit) |
 | 14c | BUG-035/036/039/040/024/008/019 terminal, refresh, auto-focus, capabilities, clipboard | [x] | (this commit) |
-| 14d | BUG-004/005/006/007/009/018/030/037/044/054/055 remaining | [ ] | |
+| 14d | BUG-004/005/007 + A11Y-02/03/05 seek + lyrics modal | [x] | (this commit) |
+| 14e | BUG-006/009/018/030/037/044/054/055 remaining | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -152,8 +153,11 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 5. Remaining functional bugs
 
-- [ ] **BUG-004** seek position can stick forever after a failed seek.
-- [ ] **BUG-005** the media seek slider is unusable from the keyboard.
+- [x] **BUG-004** a seek the player ignored left the optimistic position set forever, so the
+      displayed time stayed stuck at the dragged-to value. It now gives up after 3s and shows
+      the real position.
+- [x] **BUG-005** the seek slider committed only on mouseup/touchend, so arrow keys moved it
+      but never applied the value. Arrow/Home/End/PageUp/PageDown now commit on keyup.
 - [ ] **BUG-006** carousel `dragging` flag sticks when a gesture starts on a slider.
 - [ ] **BUG-007** the fullscreen lyrics modal has no focus trap, Escape, or focus restore.
 - [ ] **BUG-008** the handoff device list is fetched once and never refreshed.
@@ -201,10 +205,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 ## 6. Accessibility (21 findings)
 
 - [ ] **A11Y-01** bottom nav / FAB not keyboard reachable with a visible focus ring.
-- [ ] **A11Y-02/03** the seek slider has no `aria-label` / `aria-valuetext`; two nameless
-      range inputs coexist in the DOM.
+- [x] **A11Y-02/03** the seek slider has an `aria-label` and a spoken `aria-valuetext`
+      ("0:30 of 5:00") now.
 - [ ] **A11Y-04** the carousel arrows have no accessible name.
-- [ ] **A11Y-05** the lyrics modal has no focus trap, Escape, or focus restore.
+- [x] **A11Y-05** the lyrics modal has a focus trap, Escape, and focus restore.
 - [ ] **A11Y-06..21** `div role="button"` used instead of real buttons, missing labels on
       icon-only controls, no `aria-live` on the status banner, no `prefers-reduced-motion`,
       no global `:focus-visible` ring, contrast on dim text.

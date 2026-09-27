@@ -40,6 +40,9 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const { caps } = useCapabilities();
   const dragging = useRef(false);
   const seekRef = useRef(0);
+  // How long to wait for the host to confirm a seek before giving up and
+  // showing the real position again.
+  const seekGiveUpMs = 3000;
   const [localPos, setLocalPos] = useState<number | null>(null);
   const [artError, setArtError] = useState(false);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
@@ -108,14 +111,67 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     }
   }, [activeIdx, showFullLyrics]);
 
-  // Disable body scroll when modal is open
+  // The modal claimed aria-modal but had no focus trap, no Escape and no focus
+  // restore, so a keyboard user could tab straight out of it into the page
+  // behind and Escape did nothing (BUG-007, A11Y-05).
+  const lyricsOpenerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (showFullLyrics) {
-      document.body.style.overflow = 'hidden';
-    } else {
+    if (!showFullLyrics) {
       document.body.style.overflow = '';
+      // Put focus back where it came from, so closing the modal does not drop
+      // the user at the top of the document.
+      const opener = lyricsOpenerRef.current;
+      if (opener && document.body.contains(opener)) opener.focus();
+      lyricsOpenerRef.current = null;
+      return;
     }
-    return () => { document.body.style.overflow = ''; };
+
+    document.body.style.overflow = 'hidden';
+    const dialog = document.querySelector<HTMLElement>('[data-lyrics-dialog]');
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialog?.focus();
+
+    const focusable = () => {
+      if (!dialog) return [] as HTMLElement[];
+      return Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowFullLyrics(false);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const items = focusable();
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const activeEl = document.activeElement;
+      if (e.shiftKey && (activeEl === first || activeEl === dialog)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && activeEl === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.body.style.overflow = '';
+      if (previouslyFocused && document.body.contains(previouslyFocused)) {
+        previouslyFocused.focus();
+      }
+    };
   }, [showFullLyrics]);
 
   // Single rAF sync loop for lyrics (compact + fullscreen share state)
@@ -135,12 +191,22 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
     return () => cancelAnimationFrame(rafId);
   }, [effectiveHasSynced, lyricLines, player?.id, localPos, pos]);
 
-  // Clear optimistic seek position once the server catches up
+  // Clear the optimistic seek position once the server catches up - and give up
+  // waiting if it never does. A seek the player ignored (a stream that does not
+  // support seeking, a live radio station) left localPos set forever, so the
+  // displayed time was stuck at the value the user dragged to (BUG-004).
   useEffect(() => {
-    if (localPos !== null && seekRef.current !== 0 && Math.abs(pos - seekRef.current) < 2) {
+    if (localPos === null) return;
+    if (seekRef.current !== 0 && Math.abs(pos - seekRef.current) < 2) {
       seekRef.current = 0;
       setLocalPos(null);
+      return;
     }
+    const t = setTimeout(() => {
+      seekRef.current = 0;
+      setLocalPos(null);
+    }, seekGiveUpMs);
+    return () => clearTimeout(t);
   }, [pos, localPos]);
 
   const displayVal = localPos !== null ? localPos : Math.floor(pos);
@@ -208,6 +274,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   const showTicker = effectiveHasSynced && lyricLines.length > 0;
 
   // Shared seekbar
+  const seekLabel = `${displayTitle} — playback position`;
   const seekbar = (
     <div>
       <input
@@ -215,6 +282,8 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         min={0}
         max={len > 0 ? Math.floor(len) : 100}
         value={displayVal}
+        aria-label={seekLabel}
+        aria-valuetext={`${formatTime(displayVal)} of ${len > 0 ? formatTime(len) : 'unknown length'}`}
         onChange={(e) => {
           const v = Number(e.target.value);
           dragging.current = true;
@@ -222,6 +291,14 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         }}
         onMouseUp={() => commitSeek(localPos !== null ? localPos : Math.floor(pos))}
         onTouchEnd={() => commitSeek(localPos !== null ? localPos : Math.floor(pos))}
+        // Arrow keys and Home/End fire change but never mouseup or touchend,
+        // so the slider was unusable from the keyboard (BUG-005).
+        onKeyUp={(e) => {
+          if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
+            const v = Number((e.target as HTMLInputElement).value);
+            commitSeek(v);
+          }
+        }}
         className="w-full seek"
         disabled={isOffline || isIdle}
       />
@@ -337,7 +414,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
           </div>
 
           <button
-            onClick={() => setShowFullLyrics(true)}
+            onClick={(e) => { lyricsOpenerRef.current = e.currentTarget; setShowFullLyrics(true); }}
             className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center bg-transparent border-none text-deck-dim opacity-60 hover:opacity-100 hover:text-[var(--art-primary,#00f2fe)] cursor-pointer transition-all duration-200"
             title="Full lyrics"
           >
@@ -358,7 +435,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
             {effectiveLyrics.plain_lyrics.split('\n')[0]}
           </div>
           <button
-            onClick={() => setShowFullLyrics(true)}
+            onClick={(e) => { lyricsOpenerRef.current = e.currentTarget; setShowFullLyrics(true); }}
             className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center bg-transparent border-none text-deck-dim opacity-60 hover:opacity-100 hover:text-[var(--art-primary,#00f2fe)] cursor-pointer transition-all duration-200"
             title="Full lyrics"
           >
@@ -469,7 +546,9 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
       {/* Fullscreen lyrics modal — portal to body to escape deck-card stacking context */}
       {showFullLyrics && createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex flex-col md:flex-row"
+          data-lyrics-dialog
+          tabIndex={-1}
+          className="fixed inset-0 z-[9999] flex flex-col md:flex-row outline-none"
           role="dialog"
           aria-modal="true"
           aria-label="Fullscreen lyrics"
