@@ -79,7 +79,10 @@ export default function MediaStreamerPage({ deviceId, onExit }: Props) {
           </div>
         )}
 
-        <ConnectedDevicesCard />
+        {/* Listening only: this mode is unlocked with the media PIN, and the
+            broadcast and per-device stream controls are not something a guest
+            should be able to reach (SEC-010). */}
+        <ConnectedDevicesCard readOnly />
       </div>
     </div>
   );

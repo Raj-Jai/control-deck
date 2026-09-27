@@ -2,7 +2,7 @@
 // old entries. A fixed name meant cache-first HTML kept serving the previous
 // build to an already-installed PWA, which is how a deployed change silently
 // did not appear (BUG-019).
-const CACHE = 'control-deck-vDzNjvOIa';
+const CACHE = 'control-deck-vDq6c6FGQ';
 const PRECACHE = [
   '/static/',
   '/static/manifest.json',

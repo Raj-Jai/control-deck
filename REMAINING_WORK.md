@@ -71,7 +71,14 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **SEC-009** (High) the dashboard lock was a client-side gate protecting nothing — every
       endpoint now requires a server-minted token, the remembered mode is only honoured while a
       live token exists, and the four data hooks do not connect while locked.
-- [ ] **SEC-010** (Medium) "Media Streamer" mode is not actually restricted.
+- [x] **SEC-010** (Medium) "Media Streamer" mode is not actually restricted.
+      The mode is unlocked with a separate, weaker PIN and is described as "just listen to
+      what is playing", but it rendered `ConnectedDevicesCard` whole - including the broadcast
+      toggle, which mutes the workstation and pushes audio to every connected device, and
+      the per-device start and stop. The card takes a `readOnly` prop that removes both, and
+      the mode says so on screen. Verified in a browser with both PINs: the dashboard PIN
+      gets the broadcast button and two per-device stream buttons; the media PIN gets the
+      list, no controls, and the note.
 - [x] **SEC-011** (Medium) audio WebSocket had no Origin check — same helper, and the
       `InsecureSkipVerify: true` option that disabled the library's own check is gone.
 - [x] **SEC-012** (Medium) `X-Forwarded-For` trusted unconditionally — ignored entirely now;
@@ -92,7 +99,15 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **BUG-043** `/api/service-stats` slept 200 ms per tracked service inside every handler
       invocation. CPU% is now derived from a background sampler publishing every 2 s, and the
       handler is a pure read of the last snapshot.
-- [ ] **BUG-045** `wl-paste` and `xclip` share a single 2-second X selection context.
+- [x] **BUG-045** `wl-paste` and `xclip` share a single 2-second X selection context.
+      The shared context was already fixed - each helper gets its own deadline, so a
+      `wl-paste` that uses the whole budget no longer launches the X11 fallback already
+      expired. The second half was not: the error was whatever the last helper returned,
+      "context deadline exceeded" or "signal: killed", naming neither the binary nor the
+      cause. Both helpers now go through one `attempt` that distinguishes *not installed*,
+      *did not respond within the deadline*, *exited with status N* (with the command's own
+      stderr) and *could not be run*, and a both-failed error names both. `writeClipboard`
+      was aligned with the same helper. Six tests.
 - [x] **BUG-048** `killMusicPipeline` ran `pkill -9 -x mpv` and `pkill -9 -x yt-dlp`, so
       playing one song from the deck killed every media player and every download on the
       machine, including the user's own. The pipeline this service owns already runs in its

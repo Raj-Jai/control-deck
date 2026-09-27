@@ -39,7 +39,17 @@ function deviceIcon(c: ClientInfo): string {
   return '📡';
 }
 
-export default function ConnectedDevicesCard() {
+/**
+ * When readOnly, the card is a list and nothing more.
+ *
+ * The Media Streamer mode is unlocked with a separate, weaker PIN and is
+ * described as "just listen to what is playing", but it rendered this card
+ * whole - including the broadcast toggle, which mutes the workstation and
+ * pushes audio to every connected device, and the per-device start and stop. A
+ * guest could therefore do something materially different from listening
+ * (SEC-010). The mode now passes readOnly and sees only the list, and says so.
+ */
+export default function ConnectedDevicesCard({ readOnly = false }: { readOnly?: boolean } = {}) {
   const [data, setData] = useState<ClientsResponse | null>(null);
 
   useEffect(() => {
@@ -184,10 +194,11 @@ export default function ConnectedDevicesCard() {
           Connected Devices
         </span>
         <span className="text-[10px] text-deck-dim font-medium">{data.count}</span>
+        {!readOnly && (
         <button
           onClick={toggleBroadcast}
           aria-label={data.broadcasting ? 'Stop broadcast' : 'Broadcast to all devices'}
-          className={`icon-btn w-7 h-7 flex-shrink-0 ${
+          className={`icon-btn min-h-[44px] min-w-[44px] flex-shrink-0 ${
             data.broadcasting
               ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
               : ''
@@ -199,6 +210,7 @@ export default function ConnectedDevicesCard() {
             : <VolumeX size={12} />
           }
         </button>
+        )}
         <div className="flex-1 h-px bg-deck-surface-2" />
       </div>
       {needsTap && data.broadcasting && (
@@ -230,24 +242,32 @@ export default function ConnectedDevicesCard() {
                     </div>
                   )}
                 </div>
+              {!readOnly && (
               <button
-                className={`icon-btn w-7 h-7 flex-shrink-0 ${
+                className={`icon-btn min-h-[44px] min-w-[44px] flex-shrink-0 ${
                   c.streaming
                     ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
                     : ''
                 }`}
                 onClick={() => control(c.device_id, c.streaming ? 'stop' : 'start')}
                 title={c.streaming ? 'Stop stream' : 'Start stream'}
+                aria-label={`${c.streaming ? 'Stop stream to' : 'Start stream to'} ${deviceLabel(c)}`}
               >
                 {c.streaming
                   ? <RadioTower size={12} className="animate-pulse" />
                   : <Radio size={12} />
                 }
               </button>
+              )}
             </div>
           );
         })}
       </div>
+      {readOnly && data.count > 0 && (
+        <p className="text-[10px] text-deck-muted/60">
+          Listening only — stream controls need the dashboard PIN.
+        </p>
+      )}
       {ctrlErr && <p className="text-[10px] text-deck-danger mt-1">{ctrlErr}</p>}
     </div>
   );
