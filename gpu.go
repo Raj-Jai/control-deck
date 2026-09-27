@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type GPUStats struct {
@@ -27,16 +29,30 @@ const (
 var detectedGPU gpuBackend = gpuNone
 var gpuName string
 
+// runTimeout executes a helper command with a hard deadline and kills it if it
+// overruns. A wedged nvidia-smi - common while a driver resets - otherwise
+// blocks the caller forever.
+func runTimeout(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).Output()
+}
+
+const (
+	gpuProbeTimeout = 3 * time.Second
+	gpuQueryTimeout = 2 * time.Second
+)
+
 func detectGPU() gpuBackend {
-	if err := exec.Command("nvidia-smi", "--version").Run(); err == nil {
+	if _, err := runTimeout(gpuProbeTimeout, "nvidia-smi", "--version"); err == nil {
 		gpuName = "NVIDIA"
 		return gpuNvidia
 	}
-	if out, err := exec.Command("sh", "-c", "ls /sys/class/drm/card0/device/ | grep -q gpu_busy_percent 2>/dev/null && echo amd").Output(); err == nil && strings.TrimSpace(string(out)) == "amd" {
+	if out, err := runTimeout(gpuProbeTimeout, "sh", "-c", "ls /sys/class/drm/card0/device/ | grep -q gpu_busy_percent 2>/dev/null && echo amd"); err == nil && strings.TrimSpace(string(out)) == "amd" {
 		gpuName = "AMD"
 		return gpuAMD
 	}
-	if err := exec.Command("intel_gpu_top", "--version").Run(); err == nil {
+	if _, err := runTimeout(gpuProbeTimeout, "intel_gpu_top", "--version"); err == nil {
 		gpuName = "Intel"
 		return gpuIntel
 	}
@@ -63,8 +79,9 @@ func fetchGPUStats() *GPUStats {
 }
 
 func fetchNvidiaGPU() *GPUStats {
-	out, err := exec.Command("nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,name",
-		"--format=csv,noheader,nounits").Output()
+	out, err := runTimeout(gpuQueryTimeout, "nvidia-smi",
+		"--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,name",
+		"--format=csv,noheader,nounits")
 	if err != nil {
 		return nil
 	}
@@ -106,7 +123,7 @@ func fetchAMDGPU() *GPUStats {
 }
 
 func readAMDTemp() float64 {
-	out, err := exec.Command("sh", "-c", "cat /sys/class/drm/card0/device/hwmon/hwmon*/temp1_input 2>/dev/null").Output()
+	out, err := runTimeout(gpuQueryTimeout, "sh", "-c", "cat /sys/class/drm/card0/device/hwmon/hwmon*/temp1_input 2>/dev/null")
 	if err != nil {
 		return -1
 	}
@@ -115,7 +132,7 @@ func readAMDTemp() float64 {
 }
 
 func readFloat(path string) float64 {
-	out, err := exec.Command("cat", path).Output()
+	out, err := runTimeout(gpuQueryTimeout, "cat", path)
 	if err != nil {
 		return -1
 	}
@@ -124,7 +141,9 @@ func readFloat(path string) float64 {
 }
 
 func fetchIntelGPU() *GPUStats {
-	out, err := exec.Command("sh", "-c", "intel_gpu_top -J -s 500 -n 1 2>/dev/null").Output()
+	// intel_gpu_top samples for 500ms by design, so it gets a longer deadline
+	// than a query, but still a finite one.
+	out, err := runTimeout(4*time.Second, "sh", "-c", "intel_gpu_top -J -s 500 -n 1 2>/dev/null")
 	if err != nil {
 		return nil
 	}

@@ -20,7 +20,9 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 6 | SEC-012/014 proxy header + log growth | [x] | 327ade1, d3f301a |
 | 7 | BUG-001 terminal panic kills the server | [ ] | |
 | 8 | BUG-048 pkill -9 mpv/yt-dlp | [ ] | |
-| 9 | BUG-043/051/052/053 service-stats sleep, nvidia-smi, bootTime race, SIGHUP | [ ] | |
+| 9a | BUG-051 GPU helper timeouts | [x] | (this commit) |
+| 9b | BUG-053 SIGHUP re-registers the hotkey | [x] | (this commit) |
+| 9c | BUG-050 VLC port configurable | [x] | (this commit) |
 | 10 | BUG-049 lyrics stall on the broadcast goroutine | [ ] | |
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
 | 12 | BUG-026/043/052 service stats: wrong fields, blocking sleep, data race | [x] | (this commit) |
@@ -83,11 +85,16 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-045** `wl-paste` and `xclip` share a single 2-second X selection context.
 - [ ] **BUG-048** `killMusicPipeline` contains `pkill -9 -x mpv` / `pkill -9 -x yt-dlp`.
 - [ ] **BUG-049** lyrics lookup stalls the whole state broadcast for up to 18 s per track.
-- [ ] **BUG-050** VLC detection hardcoded to the dashboard's own HTTP port.
-- [ ] **BUG-051** `nvidia-smi` / `intel_gpu_top` spawned every 500 ms with no timeout.
+- [x] **BUG-050** VLC detection was hardcoded to `localhost:8080` - the dashboard's own port,
+      not VLC's. Now `vlc_base_url` in config, defaulting to VLC's 8081.
+- [x] **BUG-051** `nvidia-smi` / `intel_gpu_top` were spawned twice a second with no timeout,
+      so a wedged `nvidia-smi` (routine during a driver reset) blocked the state broadcaster
+      indefinitely. Every helper now runs under `exec.CommandContext` with a finite deadline.
 - [x] **BUG-052** `bootTimeCache` / `bootTimeOnce` were unsynchronised globals; two concurrent
       handlers could read a half-written `time.Time`. Now a `sync.Once`.
-- [ ] **BUG-053** SIGHUP reload does not re-register the broadcast hotkey.
+- [x] **BUG-053** SIGHUP reload did not re-register the broadcast hotkey; the new value was
+      read into the config and ignored until a restart. Reload now re-registers the binding
+      and re-reads the video player config.
 - [ ] **BUG-054** the advertised mDNS name is never set.
 - [ ] **BUG-055** the systemd unit the README tells you to install does not exist.
 - [ ] **SUS-002** `buildCommandMap` runs outside `configMu` at startup.
