@@ -8,6 +8,40 @@ const { api } = DECK_CONFIG;
  * indistinguishable from a successful one. Callers that do not care can keep
  * ignoring the result.
  */
+/** The result of a deck command that reports one. */
+export interface CommandResult {
+  ok: boolean;
+  output: string;
+}
+
+/**
+ * Run a command and return what it actually did.
+ *
+ * Only the IDE commands report a result - they are the ones the user cannot
+ * otherwise observe, since they run git and task runners rather than driving a
+ * media player. Other commands have no `ok` field, so the dispatch
+ * acknowledgement is reported as the result.
+ */
+export async function runCommand(cmd: string, player?: string): Promise<CommandResult> {
+  try {
+    const res = await fetch(api.command, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: cmd, ...(player ? { player } : {}) }),
+    });
+    if (!res.ok) {
+      return { ok: false, output: `The host refused the command (HTTP ${res.status}).` };
+    }
+    const body = await res.json().catch(() => null) as { ok?: boolean; output?: string } | null;
+    if (body && typeof body.ok === 'boolean') {
+      return { ok: body.ok, output: body.output ?? '' };
+    }
+    return { ok: true, output: 'Dispatched.' };
+  } catch (err) {
+    return { ok: false, output: `Could not reach the host: ${String(err)}` };
+  }
+}
+
 export async function triggerCommand(cmd: string, player?: string): Promise<boolean> {
   try {
     const res = await fetch(api.command, {

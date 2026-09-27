@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { triggerCommand } from '../services/apiService';
+import { runCommand, type CommandResult } from '../services/apiService';
 import type { Capabilities } from '../hooks/useCapabilities';
 
 interface Props { caps: Capabilities }
@@ -53,11 +53,12 @@ const taskBtns: Action[] = [
   { label: '▶ Dev', cmd: 'task_dev' },
 ];
 
-function Card({ title, actions, cols, onRun }: {
+function Card({ title, actions, cols, onRun, busy }: {
   title: string;
   actions: Action[];
   cols: string;
   onRun: (a: Action) => void;
+  busy?: string | null;
 }) {
   return (
     <div className="deck-card p-3">
@@ -72,8 +73,10 @@ function Card({ title, actions, cols, onRun }: {
             key={b.cmd}
             onClick={() => onRun(b)}
             aria-label={b.label}
+            disabled={busy === b.cmd}
+            aria-busy={busy === b.cmd}
             className={`min-h-[44px] px-2 py-2 text-[11px] rounded-md border text-center leading-tight
-              active:scale-90 ${
+              active:scale-90 disabled:opacity-50 ${
                 b.confirm
                   ? 'bg-amber-500/10 border-amber-500/25 text-amber-200 hover:bg-amber-500/20'
                   : 'bg-white/5 border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'
@@ -88,10 +91,13 @@ function Card({ title, actions, cols, onRun }: {
 }
 
 export default function IdeDeck({ caps }: Props) {
-  // Armed action awaiting a second tap, plus the last result. Output still goes
-  // to the host's stdout, so this is the only feedback the deck can give.
+  // Armed action awaiting a second tap, plus the last result. These commands
+  // now report what they actually did, so the deck can show it - before, the
+  // output went to the host's stdout and a failed `git push` looked exactly
+  // like a successful one.
   const [armed, setArmed] = useState<Action | null>(null);
-  const [last, setLast] = useState<{ cmd: string; ok: boolean; at: number } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [last, setLast] = useState<{ cmd: string; at: number; result: CommandResult } | null>(null);
 
   const run = async (a: Action) => {
     if (a.confirm && armed?.cmd !== a.cmd) {
@@ -99,14 +105,19 @@ export default function IdeDeck({ caps }: Props) {
       return;
     }
     setArmed(null);
-    const ok = await triggerCommand(a.cmd);
-    setLast({ cmd: a.cmd, ok, at: Date.now() });
+    setBusy(a.cmd);
+    try {
+      const result = await runCommand(a.cmd);
+      setLast({ cmd: a.cmd, at: Date.now(), result });
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
     <div className="flex flex-col gap-4">
-      <Card title="Debug" actions={debugBtns} cols="grid-cols-4" onRun={run} />
-      <Card title="Git" actions={gitBtns} cols="grid-cols-3" onRun={run} />
+      <Card title="Debug" actions={debugBtns} cols="grid-cols-4" onRun={run} busy={busy} />
+      <Card title="Git" actions={gitBtns} cols="grid-cols-3" onRun={run} busy={busy} />
 
       {armed && (
         <div role="alertdialog" aria-label={`Confirm ${armed.label}`}
@@ -134,14 +145,39 @@ export default function IdeDeck({ caps }: Props) {
       )}
 
       {last && (
-        <p role="status"
-          className={`text-[11px] ${last.ok ? 'text-deck-muted/60' : 'text-red-400'}`}>
-          {last.ok ? 'Dispatched' : 'Failed to dispatch'} <code>{last.cmd}</code> — output goes to the
-          host terminal, not here.
-        </p>
+        <div className="deck-card flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              role="status"
+              className={`text-[11px] font-semibold ${last.result.ok ? 'text-green-400' : 'text-red-400'}`}
+            >
+              {last.result.ok ? 'Succeeded' : 'Failed'}
+            </span>
+            <code className="text-[11px] text-deck-muted/70">{last.cmd}</code>
+            <div className="flex-1 h-px bg-white/[0.04]" />
+            <span className="text-[10px] text-deck-muted/40">
+              {new Date(last.at).toLocaleTimeString()}
+            </span>
+          </div>
+          {last.result.output && (
+            <pre
+              className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg
+                bg-black/30 p-2.5 text-[11px] leading-relaxed font-mono
+                text-deck-dim border border-white/[0.05]"
+            >
+              {last.result.output}
+            </pre>
+          )}
+        </div>
       )}
 
-      <Card title="Tasks" actions={taskBtns} cols="grid-cols-2" onRun={run} />
+      <Card title="Tasks" actions={taskBtns} cols="grid-cols-2" onRun={run} busy={busy} />
+
+      {busy && (
+        <p role="status" className="text-[11px] text-deck-muted/60">
+          Running <code>{busy}</code> — this can take a minute.
+        </p>
+      )}
     </div>
   );
 }

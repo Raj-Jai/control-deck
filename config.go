@@ -28,6 +28,11 @@ type Config struct {
 	// means enabled, so existing configs behave exactly as before.
 	// See KnownFeatures for the canonical key list.
 	Features map[string]bool `json:"features"`
+	// IDEWorkDir is the directory the IDE deck's git and task commands run in.
+	// They used to inherit the dashboard's own working directory, so `git
+	// stage` staged whatever the service happened to be started in, which is
+	// not necessarily the repository the user was looking at.
+	IDEWorkDir string `json:"ide_work_dir"`
 }
 
 // SceneConfig is a named one-tap macro of deck-command actions.
@@ -136,7 +141,14 @@ var configMu sync.RWMutex
 // atomically on SIGHUP reload, so per-request readers always see a
 // complete config without locking.
 func getConfig() *Config {
-	return appCfg.Load()
+	if cfg := appCfg.Load(); cfg != nil {
+		return cfg
+	}
+	// Before initConfig - in tests, or in the window before the first load -
+	// this used to hand back nil, so any caller that read a field panicked.
+	// A zero Config behaves like an empty config.json, which is what a missing
+	// file already means.
+	return &Config{}
 }
 
 func initConfig() {

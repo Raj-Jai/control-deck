@@ -812,6 +812,22 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 
 	sendkeyBin := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
 
+	// IDE commands are the only ones whose output the user has any way of
+	// seeing: they do not drive a media player, they run git and task runners.
+	// Dispatching them in the background and answering "ok" immediately meant
+	// the deck had no result surface at all - a failed `git push` looked
+	// identical to a successful one. These run inline, with a deadline and a
+	// bounded tail of their output, and the result goes back to the deck.
+	if isIdeCommand(req.Command) {
+		ok, output := runIdeCommand(req.Command, args)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"status": "ok", "executed": req.Command,
+			"ok": ok, "output": output,
+		})
+		return
+	}
+
 	go func(cmdArgs []string) {
 		p := req.Player
 		if p == "" {

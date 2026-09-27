@@ -372,8 +372,17 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       hints; current speed never shown; the "No media player detected" fallback never fires.
 - [~] **§8.4** the Video deck now renders `subtitles[]` / `audio_tracks[]` as chips. Still to do:
       aspect/speed pills are still small, and the pills still mix concepts without explanation.
-- [ ] **§8.5** the IDE deck has no result surface and runs in the dashboard's CWD, not the
-      focused project's.
+- [x] **§8.5** the IDE deck has no result surface and runs in the dashboard's CWD, not the
+      focused project's. IDE commands now run inline with a two-minute deadline and return
+      their combined output (tail, 32 KiB cap), which the deck shows in a scrollable panel
+      with a pass/fail line and a timestamp - a failed `git push` no longer looks like a
+      successful one. A new `ide_work_dir` config key chooses the directory, falling back to
+      the repository the binary was built from. Verified end to end: `Stage All` reports
+      "Succeeded" with the real `git status -s` output from the configured repo.
+      Two bugs found while testing it: cancelling the context killed the direct child but
+      `CombinedOutput` kept waiting on pipes its descendants still held, so the deadline was
+      not real (fixed with `Cmd.WaitDelay`); and `getConfig()` returned nil before the first
+      load, so any caller reading a field panicked (now a zero Config).
 - [x] **§8.6** the terminal's `rebuild` button overwrites the binary with no confirmation.
       It now confirms first, and says plainly that the running process is not replaced until
       the service is restarted - verified in a browser that dismissing the dialog sends no
