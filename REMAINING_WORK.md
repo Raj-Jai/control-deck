@@ -30,7 +30,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 12a | BUG-025/021/027 GPU label, volume curve, weather day labels | [x] | (this commit) |
 | 13 | BUG-041/022/SUS-001 feature-flag contract + command registration | [x] | (this commit) |
 | 14a | BUG-034 IDE debugger keys | [x] | (this commit) |
-| 14b | BUG-035/036/037/039/040/044/054/055 remaining functional | [ ] | |
+| 14b | BUG-031/033 video track cycling + honest failures | [x] | (this commit) |
+| 14c | BUG-035/036/037/039/040/044/054/055 remaining functional | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -162,8 +163,14 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-028** geo calibration is an O(n²) render and memory loop.
 - [ ] **BUG-029** the BLE advertised name is never set; `stop()` never stops watching.
 - [ ] **BUG-030** music-search responses can arrive out of order and overwrite newer results.
-- [ ] **BUG-031** "Toggle subtitles" disables them; "Cycle audio" selects track 1.
-- [ ] **BUG-033** `handleVideoCommand` returns HTTP 200 "ok" even when the command failed.
+- [x] **BUG-031** "Toggle subtitles" sent `track_id: 0`, which is *off* in both players, and
+      "Cycle audio" sent `track_id: 1`, which is *select the first track*. Neither cycled.
+      The backend already parsed `subtitles[]` and `audio_tracks[]` and never used them; it now
+      resolves a cycle against the reported list, and the deck renders the tracks as chips with
+      the active one marked.
+- [x] **BUG-033** `handleVideoCommand` logged a failure and still answered 200 "ok". It now
+      answers 502 with the reason, and the frontend checks the status — which is why the delay
+      nudges used to snap back with nothing reported.
 - [x] **BUG-034** IDE "Step Out", "Stop" and "Restart" all sent a bare F5 - i.e. Continue -
       and "Toggle Breakpoint" shelled out to `playerctl play-pause` and paused the user's
       music. The comments claimed keys the code never sent. The bindings are now VS Code's
@@ -226,8 +233,8 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 - [ ] **§8.3** the Media Browser deck never says where "Play/Pause" will be sent; 9 px key
       hints; current speed never shown; the "No media player detected" fallback never fires.
-- [ ] **§8.4** the Video deck never renders `subtitles[]` / `audio_tracks[]`; aspect/speed pills
-      at 27 px; ten pills mixing concepts without explanation.
+- [~] **§8.4** the Video deck now renders `subtitles[]` / `audio_tracks[]` as chips. Still to do:
+      aspect/speed pills are still small, and the pills still mix concepts without explanation.
 - [ ] **§8.5** the IDE deck has no result surface and runs in the dashboard's CWD, not the
       focused project's.
 - [ ] **§8.6** the terminal's `rebuild` button overwrites the binary with no confirmation.

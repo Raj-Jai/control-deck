@@ -148,6 +148,8 @@ export interface VideoStatus {
   length: number;
   subtitles: VideoTrack[];
   audio_tracks: VideoTrack[];
+  active_subtitle: number;
+  active_audio: number;
 }
 
 export async function fetchVideoStatus(): Promise<VideoStatus> {
@@ -155,12 +157,27 @@ export async function fetchVideoStatus(): Promise<VideoStatus> {
   return res.json();
 }
 
-export async function sendVideoCommand(action: string, payload?: Record<string, unknown>): Promise<void> {
-  await fetch('/api/video/command', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, ...payload }),
-  });
+/**
+ * Returns whether the host actually applied the command. The status was
+ * ignored, and the handler used to answer 200 "ok" even on failure, so a
+ * rejected command was indistinguishable from one that worked.
+ */
+export async function sendVideoCommand(action: string, payload?: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch('/api/video/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    if (!res.ok) {
+      console.error(`video command ${action} failed: HTTP ${res.status}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`video command ${action} failed:`, err);
+    return false;
+  }
 }
 
 export interface MusicSearchResult {

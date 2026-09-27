@@ -162,12 +162,31 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
           <div className="flex-1 h-px bg-white/[0.04]" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => sendVideoCommand('set_subtitle', { track_id: 0 })}
-            className="px-3 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5
+          <button onClick={() => sendVideoCommand('cycle_subtitle', { direction: 'next' })}
+            className="min-h-[44px] px-3 text-[11px] rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90">
-            Toggle
+            Next
           </button>
-          <span className="text-[10px] text-deck-dim/50">(v key)</span>
+          {vs?.subtitles?.length ? (
+            <div className="flex flex-wrap gap-1.5 w-full">
+              {vs.subtitles.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => sendVideoCommand('set_subtitle', { track_id: t.id })}
+                  aria-pressed={t.active}
+                  className={`min-h-[36px] px-2.5 rounded-md border text-[11px] ${
+                    t.active
+                      ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
+                      : 'bg-white/5 border-white/5 text-deck-dim hover:border-deck-accent/30'
+                  }`}
+                >
+                  {t.title || `Track ${t.id}`}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-deck-muted/50">No subtitle tracks reported by the player</p>
+          )}
           <div className="flex-1" />
           <button onClick={() => nudge('sub', -0.1)}
             className="w-8 h-8 rounded-md bg-white/5 border border-white/5
@@ -189,12 +208,31 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
           <div className="flex-1 h-px bg-white/[0.04]" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => sendVideoCommand('set_audio', { track_id: 1 })}
-            className="px-3 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5
+          <button onClick={() => sendVideoCommand('cycle_audio', { direction: 'next' })}
+            className="min-h-[44px] px-3 text-[11px] rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90">
-            Cycle
+            Next
           </button>
-          <span className="text-[10px] text-deck-dim/50">(b key)</span>
+          {vs?.audio_tracks?.length ? (
+            <div className="flex flex-wrap gap-1.5 w-full">
+              {vs.audio_tracks.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => sendVideoCommand('set_audio', { track_id: t.id })}
+                  aria-pressed={t.active}
+                  className={`min-h-[36px] px-2.5 rounded-md border text-[11px] ${
+                    t.active
+                      ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
+                      : 'bg-white/5 border-white/5 text-deck-dim hover:border-deck-accent/30'
+                  }`}
+                >
+                  {t.title || `Track ${t.id}`}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-deck-muted/50">No audio tracks reported by the player</p>
+          )}
           <div className="flex-1" />
           <button onClick={() => nudge('audio', -0.1)}
             className="w-8 h-8 rounded-md bg-white/5 border border-white/5

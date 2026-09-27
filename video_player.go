@@ -62,6 +62,10 @@ type VideoStatus struct {
 	Length       float64      `json:"length"`
 	Subtitles    []VideoTrack `json:"subtitles"`
 	AudioTracks  []VideoTrack `json:"audio_tracks"`
+	// The currently selected ids, so a cycle has somewhere to start and the UI
+	// can mark the active chip.
+	ActiveSubtitle int `json:"active_subtitle"`
+	ActiveAudio    int `json:"active_audio"`
 }
 
 type VideoCommand struct {
@@ -226,6 +230,14 @@ func fetchMPVStatus() *VideoStatus {
 					Active: selected,
 				}
 
+				if selected {
+					if typ == "sub" {
+						vs.ActiveSubtitle = int(id)
+					} else {
+						vs.ActiveAudio = int(id)
+					}
+				}
+
 				switch typ {
 				case "sub":
 					vs.Subtitles = append(vs.Subtitles, track)
@@ -367,6 +379,7 @@ func fetchVLCStatus() *VideoStatus {
 	if curSub, ok := vlcData["currentsubtitle"].(map[string]interface{}); ok {
 		if id, ok := curSub["id"].(string); ok {
 			parsed := parseVLCID(id)
+			vs.ActiveSubtitle = parsed
 			for i := range vs.Subtitles {
 				if vs.Subtitles[i].ID == parsed {
 					vs.Subtitles[i].Active = true
@@ -378,6 +391,7 @@ func fetchVLCStatus() *VideoStatus {
 	if curAudio, ok := vlcData["currentaudiotrack"].(map[string]interface{}); ok {
 		if id, ok := curAudio["id"].(string); ok {
 			parsed := parseVLCID(id)
+			vs.ActiveAudio = parsed
 			for i := range vs.AudioTracks {
 				if vs.AudioTracks[i].ID == parsed {
 					vs.AudioTracks[i].Active = true
@@ -605,9 +619,63 @@ func findMPRISPlayer(suffix string) string {
 	return suffix
 }
 
+// nextTrackID returns the id following current in tracks, wrapping. Track 0
+// means "off" in both mpv and VLC, so it is skipped in a cycle.
+func nextTrackID(tracks []VideoTrack, current int, dir int) int {
+	if len(tracks) == 0 {
+		return 0
+	}
+	usable := make([]int, 0, len(tracks))
+	for _, t := range tracks {
+		if t.ID > 0 {
+			usable = append(usable, t.ID)
+		}
+	}
+	if len(usable) == 0 {
+		return 0
+	}
+	pos := -1
+	for i, id := range usable {
+		if id == current {
+			pos = i
+			break
+		}
+	}
+	if pos < 0 {
+		// Nothing active, or an id we do not know: start at the beginning.
+		if dir < 0 {
+			return usable[len(usable)-1]
+		}
+		return usable[0]
+	}
+	next := (pos + dir) % len(usable)
+	if next < 0 {
+		next += len(usable)
+	}
+	return usable[next]
+}
+
 func sendVideoCommand(cmd VideoCommand) error {
 	player := detectVideoPlayer()
 	mprisPlayer := findMPRISPlayer(player)
+
+	// Resolve a cycle against the track list the host actually reports, so the
+	// button does what it says on both mpv and VLC.
+	if cmd.Action == "cycle_subtitle" || cmd.Action == "cycle_audio" {
+		vs := fetchVideoStatus()
+		if vs == nil {
+			return fmt.Errorf("no video player is responding")
+		}
+		dir := 1
+		if cmd.Direction == "prev" {
+			dir = -1
+		}
+		if cmd.Action == "cycle_subtitle" {
+			cmd = VideoCommand{Action: "set_subtitle", TrackID: nextTrackID(vs.Subtitles, vs.ActiveSubtitle, dir)}
+		} else {
+			cmd = VideoCommand{Action: "set_audio", TrackID: nextTrackID(vs.AudioTracks, vs.ActiveAudio, dir)}
+		}
+	}
 
 	switch player {
 	case "mpv":
@@ -662,6 +730,13 @@ func handleVideoCommand(w http.ResponseWriter, r *http.Request) {
 
 	if err := sendVideoCommand(cmd); err != nil {
 		log.Printf("video command error: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "error",
+			"error":  err.Error(),
+		})
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
