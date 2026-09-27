@@ -31,16 +31,84 @@ var blockedNames = map[string]bool{
 	".env":        true,
 }
 
+// setStaticCacheHeaders says how long each response may be reused.
+//
+// Nothing was being set at all, which left the browser to guess from
+// Last-Modified. For the app shell that guess goes the wrong way often enough
+// to matter: a phone that had the dashboard installed as a home-screen app
+// could keep rendering the previous build, so a UI change deployed to the
+// server was simply not visible on the device. That is the whole reason the
+// service worker's cache name carries the build hash (BUG-019) - and it was
+// still not enough, because the HTML the worker serves from its own cache
+// never revalidates.
+//
+// The rule is the standard one for a content-hashed build:
+//
+//   - /assets/* filenames contain a hash of their contents, so a given URL can
+//     never mean two different files. Cache them for a year, immutable.
+//   - the shell, the worker and the manifest decide which hashed assets get
+//     loaded, so they must be revalidated every time. no-cache still allows a
+//     304, so this costs a round trip and saves a stale app.
+//   - everything else in static/ is unhashed, so give it a short window.
+func setStaticCacheHeaders(w http.ResponseWriter, rel string) {
+	base := path.Base(rel)
+	switch {
+	case strings.HasPrefix(rel, "assets/") && looksHashed(base):
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	case base == "index.html" || base == "service-worker.js" || base == "manifest.json":
+		w.Header().Set("Cache-Control", "no-cache")
+	default:
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
+}
+
+// looksHashed reports whether a filename ends in a build hash, which is what
+// Vite appends. A file under assets/ without one is not content-addressed, and
+// caching it for a year would be a lie the browser believes.
+func looksHashed(name string) bool {
+	// Strip the extension first: Vite names chunks index-DrNsI20R.js, and the
+	// hash is everything between the last dash and the dot.
+	stem := strings.TrimSuffix(name, path.Ext(name))
+	i := strings.LastIndex(stem, "-")
+	if i < 0 {
+		return false
+	}
+	hash := stem[i+1:]
+	if len(hash) < 8 {
+		return false
+	}
+	// Vite's hashes are base64url, not hex - index-BOoHxFAc.js has an x in it -
+	// so this cannot be a hex check. Require at least one digit, which is what
+	// separates a hash from an ordinary word.
+	var digit bool
+	for _, r := range hash {
+		switch {
+		case r >= '0' && r <= '9':
+			digit = true
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return digit
+}
+
 // newStaticHandler serves the built frontend and nothing else.
 //
 //   - "/" redirects to the app entry point rather than listing a directory
 //   - every other path is resolved inside staticRoot and refused if it escapes
 //   - dotfiles and the known-sensitive names are refused outright
 func newStaticHandler() http.Handler {
-	absRoot, err := filepath.Abs(staticRoot)
+	return newStaticHandlerAt(staticRoot)
+}
+
+// newStaticHandlerAt is newStaticHandler with an explicit root, so a test can
+// serve a directory it built rather than the package's own static/.
+func newStaticHandlerAt(root string) http.Handler {
+	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		log.Printf("static: cannot resolve %q: %v", staticRoot, err)
-		absRoot = staticRoot
+		log.Printf("static: cannot resolve %q: %v", root, err)
+		absRoot = root
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" || r.URL.Path == "/index.html" {
@@ -104,6 +172,7 @@ func newStaticHandler() http.Handler {
 		if rel == "service-worker.js" {
 			w.Header().Set("Service-Worker-Allowed", "/")
 		}
+		setStaticCacheHeaders(w, rel)
 
 		f, err := os.Open(target)
 		if err != nil {

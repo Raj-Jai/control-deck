@@ -108,27 +108,29 @@ export default function QuickSettings({ state }: QuickSettingsProps) {
           // understand: two things, two buttons.
           if (cfg.id === 'bt') {
             return (
-              <div key={cfg.id} className="col-span-2 flex gap-2 min-w-0">
+              <div key={cfg.id} className="col-span-2 grid grid-cols-2 gap-2 min-w-0">
                 <QuickToggle
                   icon={Icon}
                   label={cfg.label}
                   active={active}
                   onClick={() => handleToggle(cfg)}
-                  customClass="flex-1"
                 />
+                {/* Styled as a peer of the tiles rather than a narrow strip: a
+                    fixed 46px column left it looking like a sliver next to a
+                    full-width toggle. */}
                 <button
                   type="button"
                   onClick={() => triggerCommand('btConnect')}
                   title="Connect headphone"
                   aria-label="Connect headphone"
-                  className="shrink-0 w-[46px] rounded-card flex flex-col items-center justify-center gap-1.5
-                    border border-deck-hairline/10 bg-deck-surface-2/60 text-deck-dim
-                    hover:border-deck-accent/30 hover:text-deck-accent
-                    transition-all duration-150 active:scale-95
-                    focus-visible:outline-2 focus-visible:outline-deck-accent"
+                  className="toggle-card focus-visible:outline-2 focus-visible:outline-deck-accent"
                 >
-                  <Headphones size={18} />
-                  <span className="text-[9px] font-semibold leading-none">Pair</span>
+                  <span className="text-[22px] leading-none">
+                    <Headphones size={22} />
+                  </span>
+                  <span className="toggle-label text-[10px] font-semibold text-center leading-snug">
+                    Pair
+                  </span>
                 </button>
               </div>
             );

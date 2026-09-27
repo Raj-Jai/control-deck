@@ -117,3 +117,52 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "..."
 }
+
+// Without an explicit Cache-Control the browser guesses from Last-Modified, and
+// for the shell it guesses "reuse this", so a phone with the dashboard
+// installed kept rendering the previous build and UI changes looked like they
+// had not deployed.
+func TestStaticCacheHeaders(t *testing.T) {
+	root := t.TempDir()
+	staticDir := filepath.Join(root, "static")
+	assets := filepath.Join(staticDir, "assets")
+	if err := os.MkdirAll(assets, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A real Vite name, and an unhashed one that must not claim to be immutable.
+	hashed := "index-DrNsI20R.js"
+	// Chunks go under assets/, everything else at the root.
+	for name, body := range map[string]string{
+		"assets/" + hashed:     "console.log(1)",
+		"assets/not-hashed.js": "console.log(2)",
+		"index.html":           "<!doctype html>",
+		"service-worker.js":    "self.addEventListener('install',()=>{})",
+		"manifest.json":        "{}",
+		"icon-192.png":         "\x89PNG",
+	} {
+		if err := os.WriteFile(filepath.Join(staticDir, filepath.FromSlash(name)), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := newStaticHandlerAt(staticDir)
+
+	for _, tc := range []struct{ path, want string }{
+		{"/static/assets/" + hashed, "public, max-age=31536000, immutable"},
+		{"/static/assets/not-hashed.js", "public, max-age=3600"},
+		{"/static/index.html", "no-cache"},
+		{"/static/service-worker.js", "no-cache"},
+		{"/static/manifest.json", "no-cache"},
+		{"/static/icon-192.png", "public, max-age=3600"},
+	} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", tc.path, rec.Code)
+			continue
+		}
+		if got := rec.Header().Get("Cache-Control"); got != tc.want {
+			t.Errorf("GET %s Cache-Control = %q, want %q", tc.path, got, tc.want)
+		}
+	}
+}

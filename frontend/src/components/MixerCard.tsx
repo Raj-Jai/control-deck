@@ -9,6 +9,15 @@ interface MixerCardProps {
   caps: Record<string, boolean>;
 }
 
+// One column template for every audio row in the card: leading cell, slider,
+// readout, trailing control. The master rows and the per-app rows used to have
+// different structures - the master rows led with a 36px icon and had an
+// optional trailing button, the app rows led with a flexible label and had a
+// mute button in the middle - so the sliders started at different x positions,
+// the readouts did not line up, and the volume row carried a button at the end
+// that the brightness row did not. Sharing the template lines all of it up.
+const ROW = 'grid grid-cols-[88px_minmax(0,1fr)_40px_40px] items-center gap-2.5 sm:grid-cols-[92px_minmax(0,1fr)_44px_40px]';
+
 export default function MixerCard({ state, caps }: MixerCardProps) {
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
@@ -66,9 +75,9 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className={ROW}>
             <button
-              className={`icon-btn w-9 h-9 flex-shrink-0 ${muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : ''}`}
+              className={`icon-btn w-9 h-9 ${muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : ''}`}
               onClick={() => triggerCommand('mute')}
               disabled={!hasAudio}
               aria-label={muted ? 'Unmute' : 'Mute'}
@@ -84,12 +93,11 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
               toValue={(pct) => sliderToValue(pct / 100, 1)}
               onSend={setVolume}
             />
-            {hasSinks && (
-              <button onClick={toggleSink} aria-label={activeIsBT ? 'Switch audio output to the built-in speakers' : 'Switch audio output to the paired headset'}
-                className="icon-btn w-9 h-9 flex-shrink-0">
-                {activeIsBT ? <Speaker size={16} /> : <Headphones size={16} />}
-              </button>
-            )}
+            <button onClick={toggleSink} aria-label={activeIsBT ? 'Switch audio output to the built-in speakers' : 'Switch audio output to the paired headset'}
+              className="icon-btn w-9 h-9" disabled={!hasSinks} hidden={!hasSinks}
+              title={hasSinks ? undefined : 'Only one audio output detected'}>
+              {activeIsBT ? <Speaker size={16} /> : <Headphones size={16} />}
+            </button>
           </div>
         </div>
 
@@ -99,9 +107,9 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
             <div className="text-[10px] font-semibold uppercase tracking-wider text-deck-dim mb-1.5">
               Brightness
             </div>
-            <div className="flex items-center gap-2.5">
+            <div className={ROW}>
               <button
-                className={`icon-btn w-9 h-9 flex-shrink-0 ${nightOn ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
+                className={`icon-btn w-9 h-9 ${nightOn ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent' : ''}`}
                 onClick={() => triggerCommand(nightOn ? 'nightOff' : 'nightOn')}
                 aria-label={nightOn ? 'Turn night light off' : 'Turn night light on'}
                 aria-pressed={nightOn}
@@ -115,6 +123,7 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
                 toValue={(pct) => sliderToValue(pct, 100)}
                 onSend={setBrightness}
               />
+              <span />
             </div>
           </div>
         )}
@@ -157,28 +166,28 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
         {streams.map((s) => {
           const vol = s.volume;
           return (
-            <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded-lg bg-deck-surface-2">
-              <div className="min-w-0 flex-1">
+            <div key={s.id} className={`${ROW} py-1.5 px-2 rounded-lg bg-deck-surface-2`}>
+              <div className="min-w-0">
                 <div className="text-[11px] font-medium truncate">{s.app || 'Unknown'}</div>
                 <div className="text-[10px] text-deck-dim truncate">
                   {s.media_name && s.media_name !== s.app ? s.media_name : `#${s.id}`}
                 </div>
               </div>
-              <button
-                className={`icon-btn w-8 h-8 flex-shrink-0 ${s.muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : ''}`}
-                onClick={() => setStream(s.id, { muted: !s.muted })}
-                aria-label={s.muted ? `Unmute ${s.media_name || `stream ${s.id}`}` : `Mute ${s.media_name || `stream ${s.id}`}`}
-              >
-                {s.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
-              </button>
               <ValueSlider
                 label={`${s.media_name || s.app || `Stream ${s.id}`} volume`}
                 value={vol}
                 hostValue={vol}
                 toValue={(pct) => pct}
                 onSend={(v) => setStream(s.id, { volume: v })}
-                className="flex-1 min-w-0"
               />
+              <span />
+              <button
+                className={`icon-btn w-8 h-8 ${s.muted ? 'bg-deck-danger/15 border-deck-danger/30 text-deck-danger' : ''}`}
+                onClick={() => setStream(s.id, { muted: !s.muted })}
+                aria-label={s.muted ? `Unmute ${s.media_name || `stream ${s.id}`}` : `Mute ${s.media_name || `stream ${s.id}`}`}
+              >
+                {s.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+              </button>
             </div>
           );
         })}
