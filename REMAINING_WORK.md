@@ -27,7 +27,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 9c | BUG-050 VLC port configurable | [x] | (this commit) |
 | 10 | BUG-049/006/010 lyrics stall, unbounded cache | [x] | (this commit) |
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
-| 12 | BUG-026/043/052 service stats: wrong fields, blocking sleep, data race | [x] | (this commit) |
+| 12a | BUG-025/021/027 GPU label, volume curve, weather day labels | [x] | (this commit) |
 | 13 | BUG-041/022 feature-flag + command registration | [ ] | |
 | 14 | BUG-034/035/036/037/039/040/044/045/050/054/055 functional | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
@@ -114,17 +114,23 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 ## 3. Fabricated or incorrect values
 
 - [ ] **BUG-020** the volume control looks fully functional when the audio stack is absent.
-- [ ] **BUG-021** the per-app volume slider applies a quadratic curve to a linear slider.
+- [x] **BUG-021** the volume and brightness sliders applied a quadratic curve, so dragging to
+      50% set the value to 25% while the label read 50%. Linear now, and clamped.
 - [x] **BUG-023** `trackClient` keyed on `RemoteAddr` including the ephemeral port, so one
       tab yielded four phantom "Linux (you)" rows. The device id is the key now, with the
       port-stripped socket address as a fallback.
-- [ ] **BUG-025** the GPU bar can render the literal string `"GPU"` as a measurement.
+- [x] **BUG-025** the GPU bar rendered the literal string `"GPU"` as its reading when the
+      counters were unreadable. It now says "no data" - a backend that cannot read a counter
+      is not a reading of zero.
 - [x] **BUG-026** `/api/service-stats` read `cutime`/`cstime` and `vsize` instead of
       `utime`/`stime` and `starttime`. `parseProcStat` strips `pid (comm)`, so documented field
       N lives at index N-3; the code used 13/14/21. Verified against the kernel: real age
       3197s vs 3190s reported, real CPU 6.7% vs 8%, and the old indices read `cutime`=113890
       against a real `utime` of 12104.
-- [ ] **BUG-027** weather day labels shift by one depending on the time of day.
+- [x] **BUG-027** weather day labels shifted by one. Open-Meteo returns a bare calendar date,
+      which `new Date()` parses as UTC midnight - the previous day anywhere west of Greenwich.
+      Verified at UTC-8: the old code labelled today "Fri" and tomorrow "Today", i.e. every
+      single day wrong. The calendar parts are now compared directly.
 - [x] **BUG-041a** `crypto.randomUUID()` needed a secure context, so over plain-HTTP LAN
       `deviceId` was `''` for the whole session. Fixed in `lib/deviceId.ts`; the id also moved
       from sessionStorage to localStorage so a reload no longer orphans the audio registration

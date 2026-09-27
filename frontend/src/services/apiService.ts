@@ -79,14 +79,27 @@ export async function pushHostClipboard(text: string): Promise<void> {
   if (data.error) throw new Error(data.error);
 }
 
-/** Logarithmic scale helpers for human-perceptual volume/brightness sliders */
+/**
+ * Slider <-> value mapping for volume and brightness.
+ *
+ * These controls are labelled with a percentage, so the mapping must be
+ * linear: the quadratic curve this used applied meant dragging to 50% set the
+ * value to 25%, and the number on screen was not the number in effect.
+ * PulseAudio's per-stream volume is linear as well, so the curve bought
+ * nothing except the discrepancy.
+ */
 export function sliderToValue(sliderPos: number, rangeMax: number): number {
-  const norm = sliderPos / rangeMax;
-  return norm * norm * rangeMax;
+  return clampToRange(sliderPos, rangeMax);
 }
+
 export function valueToSlider(apiVal: number, rangeMax: number): number {
-  const norm = apiVal / rangeMax;
-  return Math.sqrt(norm) * rangeMax;
+  return clampToRange(apiVal, rangeMax);
+}
+
+function clampToRange(v: number, rangeMax: number): number {
+  if (!Number.isFinite(v)) return 0;
+  if (v < 0) return 0;
+  return v > rangeMax ? rangeMax : v;
 }
 
 export interface SinkInfo {

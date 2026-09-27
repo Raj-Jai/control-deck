@@ -29,12 +29,26 @@ function weatherIcon(code: number, size = 20) {
   return <Cloud size={size} />;
 }
 
+// Open-Meteo returns a bare calendar date such as "2026-01-02" in the
+// forecast's own timezone. new Date() parses that as UTC midnight, which is the
+// previous day anywhere west of Greenwich, and Math.round then shifted the
+// label again. Comparing the calendar parts directly avoids both.
+function parseLocalDate(dateStr: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function startOfLocalDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
 function dayLabel(dateStr: string): string {
-  const d = new Date(dateStr);
-  const today = new Date();
-  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
+  const d = parseLocalDate(dateStr);
+  if (!d) return dateStr;
+  const days = Math.round((startOfLocalDay(d) - startOfLocalDay(new Date())) / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
   return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
 

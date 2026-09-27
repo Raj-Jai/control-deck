@@ -83,6 +83,10 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
     : '';
   const gpuTempDisplay = hasGPU && sys.gpu!.temp >= 0 ? `${Math.round(sys.gpu!.temp)}°C` : '';
   const gpuLabel = 'GPU';
+  // Name the gap instead of printing the label where a number belongs. A
+  // backend that cannot read this counter is not the same as a reading of zero.
+  const gpuDisplay = gpuMemDisplay || gpuTempDisplay ||
+    (gpuUtil >= 0 ? `${gpuUtil}%` : 'no data');
 
   const pingIcon = sys.ping_ok ? (
     <Wifi size={14} className="text-deck-accent" />
@@ -135,7 +139,7 @@ export default function SystemStatsCard({ state }: SystemStatsCardProps) {
             label={gpuLabel}
             icon={<Monitor size={14} className="text-pink-400" />}
             value={gpuUtil >= 0 ? gpuUtil : -1}
-            display={gpuMemDisplay || gpuTempDisplay || (gpuUtil >= 0 ? `${gpuUtil}%` : gpuLabel)}
+            display={gpuDisplay}
             color={gpuColor}
           />
         )}
