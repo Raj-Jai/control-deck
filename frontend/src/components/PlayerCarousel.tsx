@@ -82,9 +82,18 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
           {/* Inside the card and 44px: at left-0/-translate-x-2 they straddled
               the border, sat on the seek time labels, and were clipped by the
               viewport edge on a 360px phone. */}
+          {/* These were bg-deck-sunken, which in dark is darker than the card,
+              so they read as two near-black discs that competed with the
+              transport controls they sit beside. Navigation belongs in the same
+              visual family as the other secondary controls: a tile fill, a
+              hairline, a dim icon. */}
           <button
             className="absolute left-1 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center
-              justify-center rounded-full bg-deck-sunken text-deck-text hover:bg-deck-sunken hover:text-white"
+              justify-center rounded-full bg-deck-tile text-deck-dim
+              border border-deck-hairline/10
+              hover:bg-deck-tile-hover hover:text-deck-text
+              focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deck-accent
+              transition-colors"
             onClick={() => go(clampedIdx - 1)}
             aria-label="Previous player"
           >
@@ -92,7 +101,11 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
           </button>
           <button
             className="absolute right-1 top-1/2 -translate-y-1/2 z-10 w-11 h-11 flex items-center
-              justify-center rounded-full bg-deck-sunken text-deck-text hover:bg-deck-sunken hover:text-white"
+              justify-center rounded-full bg-deck-tile text-deck-dim
+              border border-deck-hairline/10
+              hover:bg-deck-tile-hover hover:text-deck-text
+              focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-deck-accent
+              transition-colors"
             onClick={() => go(clampedIdx + 1)}
             aria-label="Next player"
           >

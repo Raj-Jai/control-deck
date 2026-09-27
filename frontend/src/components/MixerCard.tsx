@@ -16,7 +16,10 @@ interface MixerCardProps {
 // mute button in the middle - so the sliders started at different x positions,
 // the readouts did not line up, and the volume row carried a button at the end
 // that the brightness row did not. Sharing the template lines all of it up.
-const ROW = 'grid grid-cols-[88px_minmax(0,1fr)_40px_40px] items-center gap-2.5 sm:grid-cols-[92px_minmax(0,1fr)_44px_40px]';
+// Three columns, not four: the readout now sits above the track inside the
+// slider cell, so the row no longer needs a column reserved for it. That column
+// was the difference between a 134px slider cell and a 184px one.
+const ROW = 'grid grid-cols-[76px_minmax(0,1fr)_40px] items-center gap-2.5 sm:grid-cols-[92px_minmax(0,1fr)_44px]';
 
 export default function MixerCard({ state, caps }: MixerCardProps) {
   const vol = state?.volume ?? -1;

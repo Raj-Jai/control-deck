@@ -197,41 +197,69 @@
       env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
-  /* Large touch-friendly range slider */
+  /* Large touch-friendly range slider.
+
+     The two heights are variables because the thumb has to be centred on the
+     track by a margin derived from them; a hardcoded -7px would silently break
+     the moment either height changed - and did, once, when a partial edit left
+     the moz rule pointing at a variable that was never declared.
+
+     With appearance:none, Blink lays the thumb's top edge against the track's
+     top edge rather than centring it, so a 24px thumb on a 10px track hung 7px
+     low. Measured from painted pixels: track rows 17..26 (centre 21.5), thumb
+     rows 18..39 (centre 28.5), so the thumb centre sat 7.0px below the track's.
+     The margin below is (track - thumb) / 2 and brings the two centres
+     together. */
   input[type='range'] {
     @apply w-full appearance-none cursor-pointer;
+    --cd-track-h: 10px;
+    --cd-thumb-h: 24px;
     height: 44px;
     background: transparent;
     outline: none;
+    /* Keeps a horizontal drag from being stolen as a page scroll, which would
+       cancel the pointer mid-gesture. */
     touch-action: none;
     transition: opacity 0.15s;
   }
 
   input[type='range']::-webkit-slider-runnable-track {
-    height: 10px;
+    height: var(--cd-track-h);
     background: rgb(var(--cd-track));
-    border-radius: 999px;
-  }
-
-  input[type='range']::-moz-range-track {
-    height: 10px;
-    background: rgb(var(--cd-track));
-    border-radius: 999px;
-  }
-
-  input[type='range']::-moz-range-progress {
-    height: 10px;
-    background: rgb(var(--cd-surface-2));
     border-radius: 999px;
   }
 
   input[type='range']::-webkit-slider-thumb {
     @apply appearance-none rounded-full cursor-pointer;
-    width: 24px;
-    height: 24px;
+    width: var(--cd-thumb-h);
+    height: var(--cd-thumb-h);
+    /* Blink only. Firefox centres its thumb over the track already, and adding
+       this there would push it 7px above the track. */
+    margin-top: calc((var(--cd-track-h) - var(--cd-thumb-h)) / 2);
     background: rgb(var(--cd-accent));
     box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
     transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  input[type='range']::-moz-range-track {
+    height: var(--cd-track-h);
+    background: rgb(var(--cd-track));
+    border-radius: 999px;
+  }
+
+  input[type='range']::-moz-range-progress {
+    height: var(--cd-track-h);
+    background: rgb(var(--cd-track));
+    border-radius: 999px;
+  }
+
+  input[type='range']::-moz-range-thumb {
+    @apply rounded-full border-0 cursor-pointer;
+    width: var(--cd-thumb-h);
+    height: var(--cd-thumb-h);
+    /* No margin-top here on purpose - see the webkit rule above. */
+    background: rgb(var(--cd-accent));
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
   }
 
   input[type='range']::-webkit-slider-thumb:hover {
@@ -241,12 +269,6 @@
 
   input[type='range']::-webkit-slider-thumb:active {
     transform: scale(0.95);
-  }
-
-  input[type='range']::-moz-range-thumb {
-    @apply w-6 h-6 rounded-full border-0 cursor-pointer;
-    background: rgb(var(--cd-accent));
-    box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
   }
 
   input[type='range']:disabled {
@@ -518,7 +540,12 @@
    default outline, which several of the utility classes here suppress - so a
    keyboard user had no way to tell where they were (A11Y-13). */
 :focus-visible {
-  outline: 2px solid var(--cd-accent) !important;
+  /* rgb() matters here. --cd-accent is a channel triple ("34 211 238"), not a
+     colour, so `solid var(--cd-accent)` is invalid, computes to outline: none,
+     and the ring silently never appeared. This rule is unlayered, so it outranks
+     anything in @layer components - it was winning the cascade while painting
+     nothing, which is why no amount of layered focus styling showed up either. */
+  outline: 2px solid rgb(var(--cd-accent)) !important;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -527,7 +554,7 @@
    browser would otherwise draw. Restated here so a keyboard user can see where
    they are on the seek bar and the volume sliders. */
 input[type='range']:focus-visible {
-  outline: 2px solid var(--cd-accent);
+  outline: 2px solid rgb(var(--cd-accent));
   outline-offset: 4px;
 }
 
@@ -556,8 +583,11 @@ input[type='range']:focus-visible {
     animation: none !important;
   }
 
-  /* Keep a static, visible signal where the animation was the only cue. */
+  /* Keep a static, visible signal where the animation was the only cue. This
+     needs rgb() for the same reason as the focus ring above: bare var() is a
+     channel triple, so the declaration was invalid and the dot - the *only*
+     remaining cue once the animation is off - rendered with no fill at all. */
   .status-dot.playing {
-    background: var(--cd-accent) !important;
+    background: rgb(var(--cd-accent)) !important;
   }
 }
