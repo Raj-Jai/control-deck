@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { fetchVideoStatus, sendVideoCommand, triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
+import ValueSlider from '../components/ValueSlider';
 import { Volume2, VolumeX, MonitorX } from 'lucide-react';
 
 interface Props { state: MediaState | null; caps: Capabilities }
@@ -61,22 +62,9 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
 
   const player = vs?.active_player ?? 'unknown';
 
-  const draggingVol = useRef(false);
-  const lastVolSend = useRef(0);
-  const [localVol, setLocalVol] = useState(100);
-  const latestVol = useRef(100);
-
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
-
-  const showVol = draggingVol.current
-    ? localVol
-    : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
-
-  const commitVol = () => {
-    draggingVol.current = false;
-    setVolume(sliderToValue(latestVol.current / 100, 1));
-  };
+  const showVol = vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : 0;
 
   // Every control on this deck injects keystrokes into whatever window has
   // focus. With no player detected that means a mis-tap types into the user's
@@ -127,32 +115,14 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
           >
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
-          <input
-            type="range"
-            min={0}
-            max={100}
+          <ValueSlider
+            label="Volume"
             value={showVol}
-            aria-label="Volume"
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              latestVol.current = v;
-              setLocalVol(v);
-              draggingVol.current = true;
-              const now = Date.now();
-              if (now - lastVolSend.current >= 80) {
-                lastVolSend.current = now;
-                setVolume(sliderToValue(v / 100, 1));
-              }
-            }}
-            onMouseUp={commitVol}
-            onTouchEnd={commitVol}
-            onPointerUp={commitVol}
-            onKeyUp={commitVol}
-            className="flex-1 accent-deck-accent"
+            hostValue={vol >= 0 ? showVol : null}
+            toValue={(pct) => sliderToValue(pct / 100, 1)}
+            onSend={setVolume}
+            className="flex-1"
           />
-          <span className="text-sm font-bold min-w-[36px] text-right text-deck-text">
-            {showVol}%
-          </span>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import ValueSlider from './ValueSlider';
 import { Volume2, VolumeX, Moon, Speaker, Headphones, Music } from 'lucide-react';
 import type { MediaState, AppStreamInfo } from '../hooks/useMediaStream';
 import { triggerCommand, setVolume, setBrightness, setDefaultSink, sliderToValue, valueToSlider } from '../services/apiService';
@@ -7,8 +8,6 @@ interface MixerCardProps {
   state: MediaState | null;
   caps: Record<string, boolean>;
 }
-
-const THROTTLE = 80;
 
 export default function MixerCard({ state, caps }: MixerCardProps) {
   const vol = state?.volume ?? -1;
@@ -20,40 +19,13 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   // this", not a reading of zero. Without a sink there is nothing to control.
   const hasAudio = vol >= 0 || sinks.length > 0;
 
-  const [localVol, setLocalVol] = useState(100);
-  const [localBri, setLocalBri] = useState(100);
-  const draggingVol = useRef(false);
-  const draggingBri = useRef(false);
-  const lastVolSend = useRef(0);
-  const lastBriSend = useRef(0);
-  const latestVol = useRef(100);
-  const latestBri = useRef(100);
-
-  // The response is now checked, so a rejected change is visible: the slider
-  // snaps back to whatever the host actually reports and the reason is said
-  // once. Before, the handle stayed where the user dragged it while the
-  // player never moved, with nothing to indicate the difference.
-  const [ctrlErr, setCtrlErr] = useState('');
-
-  const commitVol = async () => {
-    draggingVol.current = false;
-    const ok = await setVolume(sliderToValue(latestVol.current / 100, 1));
-    if (!ok) {
-      setLocalVol(vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
-      setCtrlErr('The host rejected that volume change.');
-    }
-  };
-  const commitBri = async () => {
-    draggingBri.current = false;
-    const ok = await setBrightness(sliderToValue(latestBri.current, 100));
-    if (!ok) {
-      setLocalBri(bri >= 0 ? Math.round(valueToSlider(bri, 100)) : localBri);
-      setCtrlErr('The host rejected that brightness change.');
-    }
-  };
-
-  const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
-  const showBri = draggingBri.current ? localBri : (bri >= 0 ? Math.round(valueToSlider(bri, 100)) : localBri);
+  // The master controls. Both were hand-rolled copies of the same
+  // drag-throttle-commit logic, and the copies had drifted - one of them
+  // cleared its dragging flag on pointerup but not on keyup, so a keyboard
+  // user's slider showed its own value instead of the host's for the rest of
+  // the session. One shared component now, with one behaviour.
+  const showVol = vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : 0;
+  const showBri = bri >= 0 ? Math.round(valueToSlider(bri, 100)) : 0;
 
   const isBT = (s: AppStreamInfo & { id: number; name?: string; description?: string; default?: boolean }) =>
     /bluez/i.test((s as any).name ?? '');
@@ -104,29 +76,14 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
             >
               {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
-            <input
-              type="range" min={0} max={100} value={showVol}
+            <ValueSlider
+              label="Volume"
+              value={showVol}
+              hostValue={vol >= 0 ? showVol : null}
               disabled={!hasAudio}
-              aria-label="Volume"
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                latestVol.current = v;
-                setLocalVol(v);
-                draggingVol.current = true;
-                const now = Date.now();
-                  if (now - lastVolSend.current >= THROTTLE) {
-                    lastVolSend.current = now;
-                    setVolume(sliderToValue(v / 100, 1));
-                  }
-                }}
-                onMouseUp={commitVol}
-                onTouchEnd={commitVol}
-                onPointerUp={commitVol}
-                onKeyUp={commitVol}
-                onBlur={commitVol}
-              className="flex-1"
+              toValue={(pct) => sliderToValue(pct / 100, 1)}
+              onSend={setVolume}
             />
-            <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showVol}%</span>
             {hasSinks && (
               <button onClick={toggleSink} aria-label={activeIsBT ? 'Switch audio output to the built-in speakers' : 'Switch audio output to the paired headset'}
                 className="icon-btn w-9 h-9 flex-shrink-0">
@@ -151,28 +108,13 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
               >
                 <Moon size={16} />
               </button>
-              <input
-                type="range" min={0} max={100} value={showBri}
-                aria-label="Brightness"
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  latestBri.current = v;
-                  setLocalBri(v);
-                  draggingBri.current = true;
-                  const now = Date.now();
-                  if (now - lastBriSend.current >= THROTTLE) {
-                    lastBriSend.current = now;
-                    setBrightness(sliderToValue(v, 100));
-                  }
-                }}
-                onMouseUp={commitBri}
-                onTouchEnd={commitBri}
-                onPointerUp={commitBri}
-                onKeyUp={commitBri}
-                onBlur={commitBri}
-                className="flex-1"
+              <ValueSlider
+                label="Brightness"
+                value={showBri}
+                hostValue={bri >= 0 ? showBri : null}
+                toValue={(pct) => sliderToValue(pct, 100)}
+                onSend={setBrightness}
               />
-              <span className="text-sm font-bold w-[36px] text-right text-deck-text">{showBri}%</span>
             </div>
           </div>
         )}
@@ -183,35 +125,24 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
         )}
       </div>
 
-      {ctrlErr && (
-        <p role="alert" className="mt-2 text-[11px] text-deck-danger">
-          {ctrlErr}{' '}
-          <button
-            type="button"
-            onClick={() => setCtrlErr('')}
-            className="underline underline-offset-2"
-          >
-            Dismiss
-          </button>
-        </p>
-      )}
     </div>
   );
 }
 
 export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
-  const [localVol, setLocalVol] = useState<Record<number, number>>({});
-  const dragging = useRef<Record<number, boolean>>({});
-  const lastSend = useRef<Record<number, number>>({});
-
   const setStream = async (id: number, body: Record<string, unknown>) => {
     try {
-      await fetch('/api/audio/set-app-stream', {
+      const res = await fetch('/api/audio/set-app-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...body }),
       });
-    } catch {}
+      // The shared slider reverts and explains when a send is refused, so the
+      // status has to be reported rather than swallowed.
+      return res.ok;
+    } catch {
+      return false;
+    }
   };
 
   return (
@@ -224,7 +155,7 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
       </div>
       <div className="flex flex-col gap-1.5">
         {streams.map((s) => {
-          const vol = dragging.current[s.id] ? (localVol[s.id] ?? s.volume) : s.volume;
+          const vol = s.volume;
           return (
             <div key={s.id} className="flex items-center gap-2 py-1 px-2 rounded-lg bg-deck-surface-2">
               <div className="min-w-0 flex-1">
@@ -240,23 +171,14 @@ export function AppStreamsList({ streams }: { streams: AppStreamInfo[] }) {
               >
                 {s.muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
               </button>
-              <input
-                type="range" min={0} max={100} value={vol}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setLocalVol(p => ({ ...p, [s.id]: v }));
-                  dragging.current[s.id] = true;
-                  const now = Date.now();
-                  if (now - (lastSend.current[s.id] ?? 0) >= THROTTLE) {
-                    lastSend.current[s.id] = now;
-                    setStream(s.id, { volume: v });
-                  }
-                }}
-                onMouseUp={() => { dragging.current[s.id] = false; setStream(s.id, { volume: localVol[s.id] ?? s.volume }); }}
-                onTouchEnd={() => { dragging.current[s.id] = false; setStream(s.id, { volume: localVol[s.id] ?? s.volume }); }}
+              <ValueSlider
+                label={`${s.media_name || s.app || `Stream ${s.id}`} volume`}
+                value={vol}
+                hostValue={vol}
+                toValue={(pct) => pct}
+                onSend={(v) => setStream(s.id, { volume: v })}
                 className="flex-1 min-w-0"
               />
-              <span className="text-[11px] font-bold w-[28px] text-right text-deck-text flex-shrink-0">{vol}%</span>
             </div>
           );
         })}

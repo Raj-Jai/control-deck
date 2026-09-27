@@ -3,6 +3,7 @@ import { Monitor, Captions, VolumeX, Volume2, Play, ChevronUp, ChevronDown, Tv }
 import { triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
 import type { Capabilities } from '../hooks/useCapabilities';
+import ValueSlider from '../components/ValueSlider';
 
 interface Props { state: MediaState | null; caps: Capabilities }
 
@@ -32,19 +33,9 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
   const playerId = chosenId ?? suggestedId;
   const activePlayer = players.find(p => p.id === playerId);
   const ambiguous = players.length > 1;
-  const draggingVol = useRef(false);
-  const lastVolSend = useRef(0);
-  const [localVol, setLocalVol] = useState(75);
-  const latestVol = useRef(75);
-
   const vol = state?.volume ?? -1;
   const muted = state?.muted ?? false;
-  const showVol = draggingVol.current ? localVol : (vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : localVol);
-
-  const commitVol = () => {
-    draggingVol.current = false;
-    setVolume(sliderToValue(latestVol.current / 100, 1));
-  };
+  const showVol = vol >= 0 ? Math.round(valueToSlider(vol, 1) * 100) : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -66,27 +57,14 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
           >
             {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </button>
-          <input
-            type="range" min={0} max={100} value={showVol}
-            aria-label="Volume"
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              latestVol.current = v;
-              setLocalVol(v);
-              draggingVol.current = true;
-              const now = Date.now();
-              if (now - lastVolSend.current >= 80) {
-                lastVolSend.current = now;
-                setVolume(sliderToValue(v / 100, 1));
-              }
-            }}
-            onMouseUp={commitVol}
-            onTouchEnd={commitVol}
-            onPointerUp={commitVol}
-            onKeyUp={commitVol}
-            className="w-full"
+          <ValueSlider
+            label="Volume"
+            value={showVol}
+            hostValue={vol >= 0 ? showVol : null}
+            toValue={(pct) => sliderToValue(pct / 100, 1)}
+            onSend={setVolume}
+            className="flex-1"
           />
-          <span className="text-[11px] text-deck-dim w-8 text-right tabular-nums">{showVol}%</span>
         </div>
       </div>
 

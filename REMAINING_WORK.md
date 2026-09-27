@@ -582,7 +582,18 @@ Complete visual redesign: new design tokens, theme, and layout across every comp
       `CaffeineCard`, `StepperControls`, `GuestView`, `LockScreen`, `SysStatsBar`,
       `authStore`, `BleRssiMonitor`. `AppMixerCard`/`CaffeineCard`/`StepperControls` only
       referenced each other, and `DefaultDeck` was the only thing importing them.
-- [ ] Extract shared `<VolumeSlider>` / `<BrightnessSlider>`.
+- [x] Extract shared `<VolumeSlider>` / `<BrightnessSlider>`.
+      Five hand-rolled copies of the same drag-throttle-commit-revert logic
+      (master volume, master brightness, per-app-stream volume, the Media Browser
+      volume, the Video deck volume) are now one `ValueSlider`. The copies had
+      drifted: three of them cleared their dragging flag on pointerup and
+      touchend but not on keyup or blur, so a keyboard user was left with a
+      slider stuck showing its own value instead of the host's, and the
+      per-app-stream copy discarded the response so it could not revert at all.
+      The shared component commits on every way a drag can end, throttles
+      while dragging, reverts to the host's value when a send is refused, and
+      says why. Verified in a browser against a stubbed 503: the alert renders
+      and the handle returns to the host's 66%.
 - [x] `gofmt -l` clean, `go vet` clean. `gofmt` flagged `audio.go`; `go vet` flagged a dead
       `sync.Once` in the new gzip handler and, in `cmd/sendkey`, three "possible misuse of
       unsafe.Pointer" plus two self-assignments. The ioctls there all take an *integer* value
