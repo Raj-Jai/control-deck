@@ -22,10 +22,10 @@ type LyricVersion struct {
 }
 
 type LyricData struct {
-	TrackID      string `json:"track_id"`
-	Instrumental bool   `json:"instrumental"`
-	PlainLyrics  string `json:"plain_lyrics"`
-	SyncedLyrics string `json:"synced_lyrics"`
+	TrackID      string         `json:"track_id"`
+	Instrumental bool           `json:"instrumental"`
+	PlainLyrics  string         `json:"plain_lyrics"`
+	SyncedLyrics string         `json:"synced_lyrics"`
 	Versions     []LyricVersion `json:"versions,omitempty"`
 }
 
@@ -204,9 +204,7 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 	if resp := doLRCLIBGet(params); resp != nil {
 		if data := responseToLyricData(resp, searchArtist, searchTitle); data != nil {
 			log.Printf("lyrics: found for %s - %s (synced=%v)", artist, track, data.SyncedLyrics != "")
-			lyricsCacheMu.Lock()
-			lyricsCache[key] = data
-			lyricsCacheMu.Unlock()
+			storeLyrics(key, data)
 			return data
 		}
 	}
@@ -238,17 +236,14 @@ func fetchLyrics(artist, track string, duration float64) *LyricData {
 			log.Printf("lyrics: found %d version(s) for %s - %s (synced=%v)",
 				len(data.Versions), artist, track, data.SyncedLyrics != "")
 			data.TrackID = lyricsCacheKey(artist, track)
-			lyricsCacheMu.Lock()
-			lyricsCache[key] = data
-			lyricsCacheMu.Unlock()
+			storeLyrics(key, data)
 			return data
 		}
 	}
 
 	log.Printf("lyrics: no results for %s - %s (cleaned: %s - %s)", artist, track, searchArtist, searchTitle)
-	lyricsCacheMu.Lock()
-	lyricsCache[key] = nil
-	lyricsCacheMu.Unlock()
+	// Cache the miss so a track with no lyrics is not re-queried every tick.
+	storeLyrics(key, nil)
 	return nil
 }
 
@@ -454,4 +449,88 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ─── Async lyrics ──────────────────────────────────────────────
+//
+// A lyrics lookup is four HTTP requests to a third-party API with retries, and
+// it used to run inline on the state broadcaster's goroutine. The audit
+// measured the whole broadcast stalling for up to 18 seconds on every track
+// change: no client received a position, a volume or a play/pause event for
+// the duration, because the ticker itself was blocked inside the fetch.
+//
+// The lookup now happens on its own goroutine, at most one in flight per
+// track, and the broadcaster only ever reads the cache. The first state for a
+// new track ships without lyrics and the next tick carries them, which is
+// imperceptible and no longer blocks anything.
+
+var (
+	lyricsInFlight   = map[string]bool{}
+	lyricsInFlightMu sync.Mutex
+)
+
+// requestLyrics returns whatever is cached, and schedules a lookup if this
+// track has not been seen. It never blocks.
+func requestLyrics(artist, title string, length float64) *LyricData {
+	artist = strings.TrimSpace(artist)
+	title = strings.TrimSpace(title)
+	key := lyricsCacheKey(artist, title)
+
+	lyricsCacheMu.RLock()
+	cached, seen := lyricsCache[key]
+	lyricsCacheMu.RUnlock()
+	if seen {
+		return cached // includes a cached nil, i.e. "we looked, there are none"
+	}
+	if artist == "" || title == "" {
+		return nil
+	}
+
+	lyricsInFlightMu.Lock()
+	if lyricsInFlight[key] {
+		lyricsInFlightMu.Unlock()
+		return nil
+	}
+	lyricsInFlight[key] = true
+	lyricsInFlightMu.Unlock()
+
+	go func() {
+		defer func() {
+			// A panic in a lookup must not take the process with it.
+			if r := recover(); r != nil {
+				log.Printf("lyrics: lookup for %q panicked: %v", key, r)
+				// Cache the failure so it is not retried every tick.
+				lyricsCacheMu.Lock()
+				lyricsCache[key] = nil
+				lyricsCacheMu.Unlock()
+			}
+			lyricsInFlightMu.Lock()
+			delete(lyricsInFlight, key)
+			lyricsInFlightMu.Unlock()
+		}()
+		fetchLyrics(artist, title, length)
+	}()
+
+	return nil
+}
+
+// capLyricsCache keeps the map from growing without bound. A long session
+// listening to a playlist inserts one entry per track, including the misses,
+// and the map was never pruned.
+const maxLyricsCacheEntries = 200
+
+func storeLyrics(key string, data *LyricData) {
+	lyricsCacheMu.Lock()
+	defer lyricsCacheMu.Unlock()
+	if len(lyricsCache) >= maxLyricsCacheEntries {
+		// Map iteration order is random, so evicting an arbitrary entry is
+		// both cheap and good enough for a cache of this size.
+		for k := range lyricsCache {
+			delete(lyricsCache, k)
+			if len(lyricsCache) < maxLyricsCacheEntries/2 {
+				break
+			}
+		}
+	}
+	lyricsCache[key] = data
 }

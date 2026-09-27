@@ -25,7 +25,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 9d | BUG-045 clipboard per-attempt deadlines | [x] | 5bfa718 |
 | 9e | BUG-048 pkill -9 mpv/yt-dlp | [x] | (this commit) |
 | 9c | BUG-050 VLC port configurable | [x] | (this commit) |
-| 10 | BUG-049 lyrics stall on the broadcast goroutine | [ ] | |
+| 10 | BUG-049/006/010 lyrics stall, unbounded cache | [x] | (this commit) |
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
 | 12 | BUG-026/043/052 service stats: wrong fields, blocking sleep, data race | [x] | (this commit) |
 | 13 | BUG-041/022 feature-flag + command registration | [ ] | |
@@ -90,7 +90,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       machine, including the user's own. The pipeline this service owns already runs in its
       own process group (`Setpgid`) and is killed as a group, so the blanket kill was both
       redundant and destructive.
-- [ ] **BUG-049** lyrics lookup stalls the whole state broadcast for up to 18 s per track.
+- [x] **BUG-049** a lyrics lookup (four third-party HTTP requests with retries) ran inline on
+      the broadcaster's goroutine, stalling every client for up to 18 s on each track change.
+      It now runs on its own goroutine, at most one in flight per track, and the broadcaster
+      only reads the cache. Measured on a live instance: 500 ms ticks, 532 ms worst stall.
 - [x] **BUG-050** VLC detection was hardcoded to `localhost:8080` - the dashboard's own port,
       not VLC's. Now `vlc_base_url` in config, defaulting to VLC's 8081.
 - [x] **BUG-051** `nvidia-smi` / `intel_gpu_top` were spawned twice a second with no timeout,
@@ -179,7 +182,9 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **PERF-04/05/16/17/23** deck bodies are not mounted lazily; the Video deck's 1 Hz poll
       and two 5 Hz ping intervals run even when their deck is closed; no `document.hidden`
       guard on the ping polls.
-- [ ] **PERF-06/10** `lyricsCache` unbounded; duplicated lyric lookups.
+- [x] **PERF-06/10** `lyricsCache` was never pruned, and a miss was re-queried every tick.
+      Now bounded at 200 entries with a miss cached as a value, plus an in-flight set so a
+      track is never looked up twice concurrently.
 - [ ] **PERF-25/26** no gzip/brotli on either listener; the SSE payload is not delta-encoded.
 - [ ] **PERF-30/31** audio accumulator unbounded while suspended; 512-frame queue.
       *(done in the audio commit)*

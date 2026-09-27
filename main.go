@@ -2181,11 +2181,7 @@ func fetchMPRISState() MediaState {
 	copy(logCopy, cmdLog)
 	cmdLogMu.Unlock()
 
-	lyricsTrackID := lyricsCacheKey(artist, title)
-	lyrics := fetchCachedLyrics(lyricsTrackID)
-	if lyrics == nil && title != "" && artist != "" {
-		lyrics = fetchLyrics(artist, title, length)
-	}
+	lyrics := requestLyrics(artist, title, length)
 
 	return MediaState{
 		Title:             title,
