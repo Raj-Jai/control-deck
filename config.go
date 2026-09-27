@@ -13,14 +13,17 @@ type Config struct {
 	PIN               string              `json:"pin"`
 	MediaPIN          string              `json:"media_pin"`
 	BTMAC             string              `json:"bt_mac"`
-	PingTarget       string              `json:"ping_target"`
-	HTTPPort         int                 `json:"http_port"`
-	HTTPSPort        int                 `json:"https_port"`
-	CaffeineSchemaDir string             `json:"caffeine_schema_dir"`
-	CustomCommands   map[string][]string `json:"custom_commands"`
-	KDConnectPhone   string              `json:"kdeconnect_phone"`
-	BroadcastHotkey  string              `json:"broadcast_hotkey"`
-	Scenes           []SceneConfig       `json:"scenes"`
+	PingTarget        string              `json:"ping_target"`
+	HTTPPort          int                 `json:"http_port"`
+	HTTPSPort         int                 `json:"https_port"`
+	CaffeineSchemaDir string              `json:"caffeine_schema_dir"`
+	CustomCommands    map[string][]string `json:"custom_commands"`
+	KDConnectPhone    string              `json:"kdeconnect_phone"`
+	BroadcastHotkey   string              `json:"broadcast_hotkey"`
+	// VLC's HTTP interface, which runs on its own port.
+	VLCBaseURL  string        `json:"vlc_base_url"`
+	VLCPassword string        `json:"vlc_password"`
+	Scenes      []SceneConfig `json:"scenes"`
 	// Features holds per-section feature flags. Absent map or absent key
 	// means enabled, so existing configs behave exactly as before.
 	// See KnownFeatures for the canonical key list.

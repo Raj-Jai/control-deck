@@ -22,9 +22,27 @@ var (
 	mpvSocketPath string
 )
 
+// VLC's HTTP interface runs on its own port, which is nothing to do with the
+// dashboard's. Hardcoding 8080 meant detection silently failed for anyone whose
+// VLC was on the default 8081, or who ran the dashboard on a different port.
+const (
+	defaultVLCBaseURL  = "http://localhost:8081"
+	defaultVLCPassword = ""
+)
+
 func initVideoPlayerConfig() {
-	vlcBaseURL = "http://localhost:8080"
-	vlcPassword = "password"
+	configMu.RLock()
+	defer configMu.RUnlock()
+	base := defaultVLCBaseURL
+	pass := defaultVLCPassword
+	if v := getConfig().VLCBaseURL; v != "" {
+		base = v
+	}
+	if p := getConfig().VLCPassword; p != "" {
+		pass = p
+	}
+	vlcBaseURL = base
+	vlcPassword = pass
 	mpvSocketPath = "/tmp/mpvsocket"
 }
 

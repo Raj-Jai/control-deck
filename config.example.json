@@ -30,8 +30,19 @@
     "filedrop": true
   },
   "custom_commands": {
-    "erpLogin": ["erp", "login"],
-    "warpOn": ["warp-cli", "connect"],
-    "warpOff": ["warp-cli", "disconnect"]
-  }
+    "erpLogin": [
+      "erp",
+      "login"
+    ],
+    "warpOn": [
+      "warp-cli",
+      "connect"
+    ],
+    "warpOff": [
+      "warp-cli",
+      "disconnect"
+    ]
+  },
+  "vlc_base_url": "http://localhost:8081",
+  "vlc_password": ""
 }
