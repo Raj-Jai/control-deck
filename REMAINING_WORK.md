@@ -191,7 +191,19 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       *(done: the calibration samples are accumulated into a running sum ref and published
       to state once a second instead of copying an array, and the recording is capped at
       5,000 points)*
-- [ ] **BUG-029** the BLE advertised name is never set; `stop()` never stops watching.
+- [x] **BUG-029** the BLE advertised name is never set; `stop()` never stops watching.
+      Four separate defects made the feature non-functional end to end:
+      the host advertised under whatever name the machine happened to have while the phone
+      filtered on `conquest`; `stop()` passed a fresh arrow to `removeEventListener`, which
+      matches nothing; it never called `unwatchAdvertisements`, so the radio kept scanning
+      (now every deck switch, with lazy bodies); and cancelling the chooser was reported as
+      an error. The adapter alias is now set via `busctl` with the name as a validated argv
+      entry (32-char cap, no control characters, never a shell) and the name is sent with the
+      start request.
+- [x] **§8.11** the BLE meter showed a full green bar and a distance before any packet
+      arrived, because `smoothed` starts at 0 and 0 dBm mapped to 100%. It now shows
+      "No reading", and the advertiser and scanner controls are real 44px buttons that
+      respond to click rather than pointerdown (they had no keyboard path at all).
 - [x] **BUG-030** music-search responses can arrive out of order and overwrite newer results.
       *(done: the search now carries a request sequence and ignores a response that is not
       the newest)*
