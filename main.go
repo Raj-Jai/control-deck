@@ -299,11 +299,18 @@ type ConnectedClient struct {
 const clientTTL = 3 * time.Second
 
 func trackClient(r *http.Request, deviceID string) {
-	ip := r.RemoteAddr
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		ip = strings.Split(fwd, ",")[0]
+	// Two bugs in three lines. RemoteAddr carries the ephemeral port, so every
+	// HTTP request from one browser was a new "device": a single tab produced
+	// four phantom "Linux (you)" rows in two seconds and the badge read 9 after
+	// three sessions (BUG-023). And X-Forwarded-For is attacker-controlled, so
+	// trusting it let anyone forge their identity in the list (SEC-012).
+	ip := clientIP(r)
+	// The device id is the stable identity when we have one; the IP and user
+	// agent are only a fallback for clients that never sent one.
+	key := deviceID
+	if key == "" {
+		key = ip + "|" + r.UserAgent()
 	}
-	key := ip + "|" + r.UserAgent()
 	now := time.Now()
 	deviceAudioWSMu.Lock()
 	_, streaming := deviceAudioWS[deviceID]
