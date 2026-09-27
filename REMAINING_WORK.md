@@ -66,6 +66,14 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       preflight, and no `Access-Control-*` header is ever returned), and bodies must be JSON.
 - [x] **SEC-006** (High) clipboard read/write unauthenticated — now behind the session.
 - [ ] **SEC-007a** (Critical) rotate `server.key`, `pin`, `media_pin` — readable on the LAN.
+      **This is the one item that is deliberately not done, because doing it silently locks
+      the owner out of their own dashboard.** `server.key` is the private key the running
+      service is using, and the two PINs are the only way back in; changing either without
+      the owner choosing the new values would be a self-inflicted outage. Everything around
+      it is fixed: the key is no longer served (`SEC-001`), the PINs are only compared under
+      a constant-time check with rate limiting (`SEC-008`), and the key file's permissions
+      are 0600. The exact procedure is in `ROTATE-CREDENTIALS.md` at the repository root (`docs/` is
+      gitignored, so it is not there).
 - [x] **SEC-008** (High) no brute-force protection on the PIN endpoints — now 5 attempts then
       a doubling lockout per client IP, cleared on success, `Retry-After` on 429.
 - [x] **SEC-009** (High) the dashboard lock was a client-side gate protecting nothing — every
