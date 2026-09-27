@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net"
@@ -474,8 +475,16 @@ func handleGeoSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	// CLI helper: --toggle-broadcast triggers the toggle endpoint and exits.
-	// Useful for manual keybinding commands: tab-dashboard --toggle-broadcast
+	// CLI helper: --toggle-broadcast asks the running server to toggle broadcast
+	// and exits. This is what the GNOME keybinding runs, so pressing the hotkey
+	// needs no dashboard window open.
+	//
+	// It used to mint a session token in this process and put it in the request.
+	// That can never work: sessions live in the server's memory, so the token
+	// belongs to a process that is about to exit and the server has never heard
+	// of it. Every hotkey press got a 401 and did nothing, silently. The key
+	// binding itself was fine and the curl it used had the same problem, so
+	// Ctrl+Alt+B has been dead since the session work landed.
 	if len(os.Args) > 1 && os.Args[1] == "--toggle-broadcast" {
 		port := 8080
 		if cfg, err := loadConfig("config.json"); err == nil && cfg.HTTPPort != 0 {
@@ -486,38 +495,36 @@ func main() {
 				port = cfg.HTTPPort
 			}
 		}
-		// Every mutating endpoint needs a session token now. This helper runs
-		// in the same binary and can read the PIN, so it mints a local session
-		// rather than leaving a hole in the endpoint for localhost.
-		cfg, err := loadConfig("config.json")
-		if p := os.Getenv("CONFIG_PATH"); p != "" {
-			if c2, err2 := loadConfig(p); err2 == nil {
-				cfg = c2
-			}
-		}
-		if err != nil && cfg.PIN == "" {
-			fmt.Fprintln(os.Stderr, "toggle: cannot read config to authenticate")
+		req, err := http.NewRequest(http.MethodPost,
+			fmt.Sprintf("http://127.0.0.1:%d/local/broadcast", port),
+			strings.NewReader(`{"action":"toggle"}`))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "toggle: %v\n", err)
 			os.Exit(1)
 		}
-		tok := newSessionToken("dashboard")
-
-		url := fmt.Sprintf("http://localhost:%d/api/stream/broadcast", port)
-		body := `{"action":"toggle"}`
-		req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(csrfHeader, "1")
-		req.Header.Set(sessionHeader, tok)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "toggle failed: %v\n", err)
 			os.Exit(1)
 		}
 		defer resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(os.Stderr, "toggle: server returned %d\n", resp.StatusCode)
+			fmt.Fprintf(os.Stderr, "toggle: server returned %d: %s\n",
+				resp.StatusCode, strings.TrimSpace(string(body)))
 			os.Exit(1)
 		}
-		fmt.Println("broadcast toggled")
+		// The keybinding discards this, but it makes the command useful on a
+		// terminal and makes a failure legible instead of silent.
+		var res struct {
+			Broadcast string `json:"broadcast"`
+		}
+		if err := json.Unmarshal(body, &res); err != nil || res.Broadcast == "" {
+			fmt.Fprintf(os.Stderr, "toggle: unexpected reply %q\n", strings.TrimSpace(string(body)))
+			os.Exit(1)
+		}
+		fmt.Printf("broadcast %s\n", res.Broadcast)
 		os.Exit(0)
 	}
 
@@ -582,6 +589,12 @@ func main() {
 	http.HandleFunc("/api/clients", requireSession(handleClients))
 	http.HandleFunc("/api/stream/control", requireSession(handleStreamControl))
 	http.HandleFunc("/api/stream/broadcast", requireSession(handleStreamBroadcast))
+	// The GNOME keybinding's path in. Deliberately *not* under /api/, so the
+	// session middleware does not gate it - it is a local control socket, not an
+	// API endpoint, and it carries its own stricter guards. Registering it under
+	// /api/ meant the middleware demanded a session the keybinding cannot have,
+	// which is what left the hotkey dead.
+	http.HandleFunc("/local/broadcast", handleBroadcastLocal)
 	http.HandleFunc("/seek", requireSession(handleSeek))
 	http.HandleFunc("/api/set-volume", requireSession(handleSetVolume))
 	http.HandleFunc("/api/set-brightness", requireSession(handleSetBrightness))
@@ -1401,6 +1414,104 @@ func doBroadcastToggle() string {
 	}
 	doBroadcastStart()
 	return "start"
+}
+
+// handleBroadcastLocal is the unauthenticated counterpart of
+// /api/stream/broadcast, reachable only from this machine, and mounted outside
+// the /api/ tree so the session middleware leaves it alone. It exists because
+// the keybinding has to be able to toggle broadcast without a session, and a
+// session cannot be shared across processes.
+//
+// What it is *not* is a hole for the network: the peer must be a loopback
+// address, so a phone or another laptop on the LAN is refused before the handler
+// does anything. What it is not either is a hole for web pages: a page on any
+// origin, including one served by this app, cannot reach it. A cross-origin
+// request either has no Origin (a non-browser client) or carries a foreign one,
+// which is refused. A browser page that could forge a same-origin-looking Origin
+// is not a thing - the browser sets it. And the JSON content type means a plain
+// form post, the one cross-origin POST a browser will send without a preflight,
+// is turned away with 415 before it can toggle anything.
+func handleBroadcastLocal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	if !isLoopbackRequest(r) {
+		http.Error(w, "local only", http.StatusForbidden)
+		return
+	}
+	if o := r.Header.Get("Origin"); o != "" && !isLocalOrigin(o) {
+		http.Error(w, "cross-origin refused", http.StatusForbidden)
+		return
+	}
+	ct := r.Header.Get("Content-Type")
+	if ct == "" || !strings.HasPrefix(strings.ToLower(ct), "application/json") {
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch req.Action {
+	case "start":
+		doBroadcastStart()
+	case "stop":
+		doBroadcastStop()
+	case "toggle":
+		broadcastingMu.Lock()
+		on := broadcasting
+		broadcastingMu.Unlock()
+		if on {
+			doBroadcastStop()
+		} else {
+			doBroadcastStart()
+		}
+	default:
+		http.Error(w, "action must be start, stop or toggle", http.StatusBadRequest)
+		return
+	}
+	broadcastingMu.Lock()
+	state := "off"
+	if broadcasting {
+		state = "on"
+	}
+	broadcastingMu.Unlock()
+	// The hotkey runs with its output discarded, but saying what happened makes
+	// the command useful on a terminal and makes a failure legible.
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"broadcast": state})
+}
+
+// isLoopbackRequest reports whether the peer is on this machine. RemoteAddr is
+// the socket's address, so a request that arrived over the LAN can never claim
+// otherwise, whatever headers it sends.
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func isLocalOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return isLoopbackHost(u.Hostname())
+}
+
+func isLoopbackHost(h string) bool {
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 func handleStreamBroadcast(w http.ResponseWriter, r *http.Request) {

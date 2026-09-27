@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -32,16 +33,11 @@ func ensureBroadcastHotkey() {
 		return
 	}
 
-	port := cfg.HTTPPort
-	if port == 0 {
-		port = 8080
+	command, err := broadcastHotkeyCommand()
+	if err != nil {
+		log.Printf("hotkey: cannot build the command: %v", err)
+		return
 	}
-	// Command executed by GNOME when the hotkey is pressed. Uses curl to
-	// hit the toggle endpoint so no dashboard UI is needed.
-	command := fmt.Sprintf(
-		`sh -c 'curl -s -X POST http://localhost:%d/api/stream/broadcast -H "Content-Type: application/json" -d "{\"action\":\"toggle\"}" > /dev/null'`,
-		port,
-	)
 
 	if err := ensureGnomeKeybinding(hotkeyName, command, hotkey); err != nil {
 		log.Printf("hotkey: failed to ensure GNOME keybinding: %v", err)
@@ -52,6 +48,29 @@ func ensureBroadcastHotkey() {
 
 // ensureGnomeKeybinding makes sure a custom keybinding with the given name
 // exists and points to command+binding. It creates or updates the entry.
+// broadcastHotkeyCommand is the command GNOME runs on press. It used to be a
+// curl to the session-gated broadcast endpoint, which no longer works: that
+// endpoint needs a session token, and a keybinding has nowhere to keep one, so
+// every press got a 401 and did nothing. It now calls the binary's own one-shot
+// mode, which needs no credential at all - so nothing secret is ever written
+// into gsettings, which is readable by anything running as this user.
+func broadcastHotkeyCommand() (string, error) {
+	self, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s --toggle-broadcast", quoteGSettingsArg(self)), nil
+}
+
+// quoteGSettingsArg wraps a path so gsettings stores it as one value even when
+// it contains spaces, which a path under a home directory can easily do.
+func quoteGSettingsArg(v string) string {
+	if v != "" && !strings.ContainsAny(v, " \t\"'\\") {
+		return v
+	}
+	return "'" + strings.ReplaceAll(v, "'", "'\\''") + "'"
+}
+
 func ensureGnomeKeybinding(name, command, binding string) error {
 	if _, err := exec.LookPath("gsettings"); err != nil {
 		return fmt.Errorf("gsettings not found (not GNOME?)")
