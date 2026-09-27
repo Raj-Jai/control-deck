@@ -16,6 +16,9 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
   const bri = state?.brightness ?? -1;
   const nightOn = state?.night_light ?? false;
   const sinks = state?.sinks ?? [];
+  // A negative volume or brightness is how the host reports "I could not read
+  // this", not a reading of zero. Without a sink there is nothing to control.
+  const hasAudio = vol >= 0 || sinks.length > 0;
 
   const [localVol, setLocalVol] = useState(100);
   const [localBri, setLocalBri] = useState(100);
@@ -63,20 +66,33 @@ export default function MixerCard({ state, caps }: MixerCardProps) {
       </div>
 
       <div className="flex flex-col gap-4">
-        {/* Volume row */}
+        {/* Volume row. With no audio stack the controls looked identical to a
+            working one, so a user dragged a slider that did nothing and had no
+            way to tell (BUG-020). */}
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-deck-muted/50 mb-1.5">
-            Volume
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-deck-muted/50">
+              Volume
+            </span>
+            {!hasAudio && (
+              <span className="text-[10px] text-amber-300/80">
+                no audio output detected
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2.5">
             <button
               className={`icon-btn w-9 h-9 flex-shrink-0 ${muted ? 'bg-red-500/15 border-red-500/20 text-red-400' : ''}`}
               onClick={() => triggerCommand('mute')}
+              disabled={!hasAudio}
+              aria-label={muted ? 'Unmute' : 'Mute'}
+              title={hasAudio ? (muted ? 'Unmute' : 'Mute') : 'No audio output detected'}
             >
               {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
             </button>
             <input
               type="range" min={0} max={100} value={showVol}
+              disabled={!hasAudio}
               aria-label="Volume"
               onChange={(e) => {
                 const v = Number(e.target.value);

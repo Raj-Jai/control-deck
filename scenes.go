@@ -90,7 +90,7 @@ func handleSceneRun(w http.ResponseWriter, r *http.Request) {
 				if strings.HasPrefix(action, "speed_") {
 					// Speed actions run through the async state machine.
 					addLog("▶ " + action)
-					go handleSpeedCommand(action)
+					go handleSpeedCommand(action, "")
 				} else {
 					// Config changed mid-scene; skip rather than misfire.
 					log.Printf("scene %q: action %q vanished, skipped", name, action)

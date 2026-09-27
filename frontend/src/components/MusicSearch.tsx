@@ -21,11 +21,16 @@ export default function MusicSearch({ available }: MusicSearchProps) {
   const [error, setError] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const debounceRef = useRef<number | null>(null);
+  // Monotonic request id: only the newest search may write to state.
+  const requestSeq = useRef(0);
 
   // Debounced search
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     const q = query.trim();
+    // Bump the sequence even for a short query, so an in-flight response for a
+    // longer one cannot land after the user cleared the box.
+    ++requestSeq.current;
     if (q.length < 2) {
       setResults([]);
       setLoading(false);
@@ -33,16 +38,21 @@ export default function MusicSearch({ available }: MusicSearchProps) {
       return;
     }
     setLoading(true);
+    const issued = ++requestSeq.current;
     debounceRef.current = window.setTimeout(async () => {
       try {
         const res = await searchMusic(q, 8);
+        // A slow response for an earlier query must not overwrite the results
+        // for the one the user is actually looking at (BUG-030).
+        if (requestSeq.current !== issued) return;
         setResults(res);
         setError(null);
       } catch (e) {
+        if (requestSeq.current !== issued) return;
         setError(e instanceof Error ? e.message : 'Search failed');
         setResults([]);
       } finally {
-        setLoading(false);
+        if (requestSeq.current === issued) setLoading(false);
       }
     }, 450);
     return () => {

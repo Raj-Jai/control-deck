@@ -790,7 +790,7 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 	// Intercept speed commands for the shift+. / shift+, state machine
 	if strings.HasPrefix(req.Command, "speed_") {
 		addLog("▶ " + req.Command)
-		go handleSpeedCommand(req.Command)
+		go handleSpeedCommand(req.Command, req.Player)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "executed": req.Command})
 		return
@@ -894,7 +894,7 @@ func runDeckCommand(cmdName, player string) (int, any) {
 	// Intercept speed commands for the shift+. / shift+, state machine
 	if strings.HasPrefix(cmdName, "speed_") {
 		addLog("▶ " + cmdName)
-		go handleSpeedCommand(cmdName)
+		go handleSpeedCommand(cmdName, player)
 		return http.StatusOK, map[string]string{"status": "ok", "executed": cmdName}
 	}
 	args, exists := lookupCommand(cmdName)
@@ -933,7 +933,12 @@ func isIdeCommand(cmd string) bool {
 //
 // It sends the required number of shift+. / shift+, keystrokes with 55ms spacing,
 // then broadcasts the updated speed via the window SSE.
-func handleSpeedCommand(cmd string) {
+// Speed changes used to inject shift+. / shift+, with no idea which player
+// they were going to, so pressing "Faster" while the focus was in an editor
+// typed into the editor (BUG-044). The player the request named is driven
+// directly through MPRIS, and only if that fails do we fall back to keys - and
+// only after raising the window we mean to type into.
+func handleSpeedCommand(cmd string, playerID string) {
 	suffix := strings.TrimPrefix(cmd, "speed_")
 
 	speedMu.RLock()
@@ -970,6 +975,30 @@ func handleSpeedCommand(cmd string) {
 		return
 	}
 
+	target := speedSteps[targetIdx]
+	if playerID == "" {
+		playerID = findBestPlayer()
+	}
+
+	if playerID != "" {
+		if err := exec.Command("playerctl", "--player", playerID,
+			"playback-rate", strconv.FormatFloat(target, 'f', 2, 64)).Run(); err == nil {
+			speedMu.Lock()
+			currentSpeedIdx = targetIdx
+			speedMu.Unlock()
+			return
+		}
+	}
+
+	// Fallback for a player MPRIS will not drive. Raise the named window first,
+	// so the keystrokes land where the user meant them.
+	if playerID != "" {
+		bus := "org.mpris.MediaPlayer2." + playerID
+		exec.Command("gdbus", "call", "--session", "--dest", bus,
+			"--object-path", "/org/mpris/MediaPlayer2",
+			"--method", "org.mpris.MediaPlayer2.Raise").Run()
+		time.Sleep(200 * time.Millisecond)
+	}
 	sk := os.Getenv("HOME") + "/.local/bin/tab-dashboard-sendkey"
 	delta := targetIdx - cur
 	key := "shift_."
@@ -977,7 +1006,6 @@ func handleSpeedCommand(cmd string) {
 		key = "shift_,"
 		delta = -delta
 	}
-
 	for i := 0; i < delta; i++ {
 		exec.Command(sk, key).Run()
 		time.Sleep(55 * time.Millisecond)

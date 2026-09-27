@@ -36,7 +36,7 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 14e | BUG-037 LRC parser + first frontend test runner | [x] | (this commit) |
 | 14f | BUG-018/019 service worker scope + stale HTML | [x] | (this commit) |
 | 14g | BUG-054/055 mDNS name + ship the systemd unit | [x] | (this commit) |
-| 14h | BUG-006/009/030/044 remaining | [ ] | |
+| 14h | BUG-006/009/020/030/044 remaining functional | [x] | (this commit) |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -128,7 +128,9 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 3. Fabricated or incorrect values
 
-- [ ] **BUG-020** the volume control looks fully functional when the audio stack is absent.
+- [x] **BUG-020** the volume row looked identical to a working one with no audio stack, so a
+      user dragged a slider that did nothing. A negative volume is a "could not read this",
+      not zero, so the row now says "no audio output detected" and disables itself.
 - [x] **BUG-021** the volume and brightness sliders applied a quadratic curve, so dragging to
       50% set the value to 25% while the label read 50%. Linear now, and clamped.
 - [x] **BUG-023** `trackClient` keyed on `RemoteAddr` including the ephemeral port, so one
@@ -169,10 +171,13 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       the real position.
 - [x] **BUG-005** the seek slider committed only on mouseup/touchend, so arrow keys moved it
       but never applied the value. Arrow/Home/End/PageUp/PageDown now commit on keyup.
-- [ ] **BUG-006** carousel `dragging` flag sticks when a gesture starts on a slider.
+- [x] **BUG-006** a carousel gesture starting on the seek slider set the dragging flag and
+      then returned early on touchend without clearing it, so the carousel stopped responding
+      for the rest of the session. The flag is now always released, including on touchcancel.
 - [ ] **BUG-007** the fullscreen lyrics modal has no focus trap, Escape, or focus restore.
 - [ ] **BUG-008** the handoff device list is fetched once and never refreshed.
-- [ ] **BUG-009** the mini player never recovers from a failed artwork load.
+- [x] **BUG-009** one failed artwork load left the placeholder up for every subsequent track.
+      The failure now resets when the artwork URL changes.
 - [ ] **BUG-018** the service worker's scope excludes every request its fetch handler serves.
 - [x] **BUG-019** the HTML shell was cache-first under a fixed cache name, so an installed PWA
       kept being served the previous `index.html` — which points at asset hashes the rebuild
@@ -213,7 +218,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-040** a capability-fetch failure hides every capability-gated card, no retry.
 - [ ] **BUG-042** art theming silently fails for any art host without CORS, and sticks.
       *(partially done: accent contrast clamp only)*
-- [ ] **BUG-044** `speed_*` commands ignore the player and always type into the focused window.
+- [x] **BUG-044** `speed_*` injected `shift+.` / `shift+,` with no idea which player they
+      would reach, so pressing "Faster" while the focus was in an editor typed into the
+      editor. The named player is now driven through MPRIS directly, and the keystroke fallback
+      raises that window first.
 - [x] **SUS-001** file-drop and Scenes were entirely unwired. The handlers existed in untracked
       `files.go` / `scenes.go` and the components in untracked `FileDropCard.tsx` /
       `ScenesCard.tsx`, but nothing imported or routed them. Both are now wired, behind their

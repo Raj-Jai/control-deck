@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Music, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
 import type { MediaState } from '../hooks/useMediaStream';
 import { triggerCommand } from '../services/apiService';
@@ -12,6 +12,9 @@ export default function MiniPlayer({ state }: MiniPlayerProps) {
   const title = state?.title || 'No Track';
   const artist = state?.artist || '';
   const artUrl = state?.art_url;
+  // Reset the failure when the artwork URL changes, otherwise one bad image
+  // leaves the placeholder up for every track that follows (BUG-009).
+  useEffect(() => { setArtError(false); }, [artUrl]);
   const isPlaying = state?.status === 'Playing';
   const hasTrack = !!state?.title;
 

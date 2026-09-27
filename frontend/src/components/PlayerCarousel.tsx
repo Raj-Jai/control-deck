@@ -40,19 +40,31 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
   const isSlider = (el: EventTarget | null) =>
     el instanceof HTMLElement && el.tagName === 'INPUT' && (el as HTMLInputElement).type === 'range';
 
+  // A gesture that starts on a slider is the slider's business, not ours. The
+  // old code returned early on touchend without clearing the dragging flag it
+  // had already set, so the carousel stopped responding for the rest of the
+  // session after one drag on the seek bar (BUG-006).
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isSlider(e.target)) return;
+    if (isSlider(e.target)) {
+      setDragging(false);
+      return;
+    }
     touchStart.current = e.touches[0].clientX;
     setDragging(true);
   }, []);
 
   const onTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!dragging || isSlider(e.target)) return;
+    // Always release the flag, whatever happens next.
+    const wasDragging = dragging;
     setDragging(false);
+    if (!wasDragging || isSlider(e.target)) return;
     const dx = e.changedTouches[0].clientX - touchStart.current;
     if (dx > SWIPE_THRESHOLD) go(clampedIdx - 1);
     else if (dx < -SWIPE_THRESHOLD) go(clampedIdx + 1);
   }, [dragging, clampedIdx, go]);
+
+  // A cancelled touch (a system gesture took over) must also release it.
+  const onTouchCancel = useCallback(() => { setDragging(false); }, []);
 
   if (players.length === 0) {
     return <NowPlayingCard player={null} state={state ?? null} />;
@@ -63,6 +75,7 @@ export default function PlayerCarousel({ players, state }: PlayerCarouselProps) 
       className="relative"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchCancel}
     >
       {players.length > 1 && (
         <>
