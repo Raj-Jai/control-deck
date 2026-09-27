@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Monitor, Captions, VolumeX, Volume2, Play, ChevronUp, ChevronDown, Tv } from 'lucide-react';
 import { triggerCommand, setVolume, sliderToValue, valueToSlider } from '../services/apiService';
 import type { MediaState } from '../hooks/useMediaStream';
@@ -15,8 +15,23 @@ function YouTubeIcon({ size = 14 }: { size?: number }) {
 }
 
 export default function MediaBrowserDeck({ state, caps }: Props) {
-  const activePlayer = state?.players?.find(p => p.status === 'Playing') || state?.players?.[0];
-  const playerId = activePlayer?.id;
+  const players = state?.players ?? [];
+  // Every macro in this deck is a keystroke sent to one specific player, and
+  // the deck used to pick that player silently: with a browser, VLC and a music
+  // player all running, "Play/Pause" went to whichever one happened to be
+  // playing and the user had no way to know. The choice is now visible and
+  // overridable.
+  const suggestedId = (players.find(p => p.status === 'Playing') || players[0])?.id;
+  const [chosenId, setChosenId] = useState<string | undefined>(undefined);
+  // Follow the suggestion while the user has not overridden it, and again once
+  // the override's player is gone from the list entirely.
+  useEffect(() => {
+    if (!chosenId || !players.some(p => p.id === chosenId)) setChosenId(undefined);
+  }, [players, chosenId]);
+
+  const playerId = chosenId ?? suggestedId;
+  const activePlayer = players.find(p => p.id === playerId);
+  const ambiguous = players.length > 1;
   const draggingVol = useRef(false);
   const lastVolSend = useRef(0);
   const [localVol, setLocalVol] = useState(75);
@@ -73,6 +88,64 @@ export default function MediaBrowserDeck({ state, caps }: Props) {
           />
           <span className="text-[11px] text-deck-dim w-8 text-right tabular-nums">{showVol}%</span>
         </div>
+      </div>
+
+      {/* Where the keystrokes go. Every macro below is a keypress sent to one
+          specific player, and the deck used to choose that player silently -
+          with a browser, VLC and a music player all running, "Play/Pause" went
+          to whichever happened to be playing and there was no way to know. */}
+      <div className="deck-card p-3 flex flex-col gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Monitor size={14} className="text-deck-muted/60 flex-shrink-0" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-deck-muted">
+            Keys go to
+          </span>
+          <div className="flex-1" />
+          {activePlayer?.title && (
+            <span className="text-[10px] text-deck-muted/50 truncate max-w-[40%]">
+              now: {activePlayer.title}
+            </span>
+          )}
+        </div>
+
+        {players.length === 0 ? (
+          <p className="text-[11px] text-deck-dim">
+            No media player found, so the macros below have nothing to send to.
+          </p>
+        ) : (
+          <>
+            <div
+              role="radiogroup"
+              aria-label="Choose which media player receives the keys"
+              className="flex flex-wrap gap-1.5"
+            >
+              {players.map(pl => {
+                const on = pl.id === playerId;
+                return (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setChosenId(pl.id)}
+                    className={`min-h-[44px] px-3 rounded-lg border text-[11px] text-left
+                      ${on
+                        ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
+                        : 'bg-white/5 border-white/5 text-deck-dim hover:border-deck-accent/30'}`}
+                  >
+                    <span className="block font-semibold">{pl.name}</span>
+                    <span className="block text-[10px] opacity-70">{pl.status ?? 'unknown'}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {players.length > 1 && (
+              <p className="text-[10px] text-deck-muted/50">
+                {players.length} players are running, so the keys go to the one selected here.
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* CARD 3: Macro Deck */}
@@ -144,7 +217,13 @@ function MacroButton({ label, icon, sub, cmd, playerId, highlight, className }: 
         }`}>
       {icon && <span>{icon}</span>}
       <span>{label}</span>
-      {sub && <span className="text-[9px] font-mono opacity-40">{sub}</span>}
+      {/* 9px was unreadable, and a bare letter gave no idea what it meant. */}
+      {sub && (
+        <span className="text-[11px] font-mono opacity-50">
+          <span aria-hidden="true">{sub}</span>
+          <span className="sr-only"> keyboard shortcut </span>
+        </span>
+      )}
     </button>
   );
 }

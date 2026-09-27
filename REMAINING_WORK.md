@@ -368,7 +368,13 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 8. UX / product leftovers
 
-- [ ] **§8.3** the Media Browser deck never says where "Play/Pause" will be sent; 9 px key
+- [x] **§8.3** the Media Browser deck never says where "Play/Pause" will be sent; 9 px key
+      hints. The deck now names the player it is sending to, shows what that player has
+      loaded, and offers every running player as a radio choice so the target can be
+      overridden - with an explicit note when more than one is running. The override follows
+      the automatic choice again if that player goes away. The hints are 11 px and carry a
+      screen-reader-only "keyboard shortcut", so the bare letter is at least announced as
+      what it is.
       hints; current speed never shown; the "No media player detected" fallback never fires.
 - [~] **§8.4** the Video deck now renders `subtitles[]` / `audio_tracks[]` as chips. Still to do:
       aspect/speed pills are still small, and the pills still mix concepts without explanation.
