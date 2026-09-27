@@ -77,6 +77,17 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       `BASE` is hardcoded to port 18085/18095 while the port is a separate variable, so
       pointing it at a different instance silently kept testing the original one. It now
       asserts its own precondition.
+- [ ] **OPS-01** a device on the LAN cannot complete the HTTPS handshake. The journal holds
+      1,165 `TLS handshake error from 10.42.0.150: remote error: tls: unknown
+      certificate`, the earliest on Sep 25 05:21 under PID 4242 — so it predates every
+      deploy in this pass and is not caused by it. The server is healthy: `server.crt` is
+      self-signed `CN=ControlDeck`, valid to 2036, the key pairs with it, and `server.key`
+      is 0600. "remote error" means the *client* sent the alert, so the handshake did begin
+      and the client then rejected the certificate — it is trusting a different one. The
+      current cert was generated Jul 23, so anything that trusted an earlier one has been
+      failing ever since. Fix is on the client: re-trust the certificate (on iOS that means
+      removing and re-adding the home-screen web app, which remembers it per host). Worth
+      noting the 1,165 lines are also burying anything real in the journal.
 - [ ] **SEC-007a** (Critical) rotate `server.key`, `pin`, `media_pin` — readable on the LAN.
       **This is the one item that is deliberately not done, because doing it silently locks
       the owner out of their own dashboard.** `server.key` is the private key the running
