@@ -17,12 +17,12 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 3 | SEC-004/006/008/009 session tokens + CSRF guard + rate limit | [x] | (this commit) |
 | 4 | SEC-005/SEC-011 WebSocket origin verification | [x] | (this commit) |
 | 5 | SEC-006/008/009 clipboard + PIN brute force + gate | [x] | unit 3 |
-| 6 | SEC-012/014/016 proxy header, log growth, file modes | [ ] | |
+| 6 | SEC-012/014 proxy header + log growth | [x] | 327ade1, d3f301a |
 | 7 | BUG-001 terminal panic kills the server | [ ] | |
 | 8 | BUG-048 pkill -9 mpv/yt-dlp | [ ] | |
 | 9 | BUG-043/051/052/053 service-stats sleep, nvidia-smi, bootTime race, SIGHUP | [ ] | |
 | 10 | BUG-049 lyrics stall on the broadcast goroutine | [ ] | |
-| 11 | BUG-023/041a/SEC-015 device tracking + id over plain HTTP | [ ] | |
+| 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
 | 12 | BUG-026/025/021/027/020 fabricated values | [ ] | |
 | 13 | BUG-041/022 feature-flag + command registration | [ ] | |
 | 14 | BUG-034/035/036/037/039/040/044/045/050/054/055 functional | [ ] | |
@@ -63,9 +63,13 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **SEC-010** (Medium) "Media Streamer" mode is not actually restricted.
 - [x] **SEC-011** (Medium) audio WebSocket had no Origin check — same helper, and the
       `InsecureSkipVerify: true` option that disabled the library's own check is gone.
-- [ ] **SEC-012** (Medium) `X-Forwarded-For` trusted unconditionally.
+- [x] **SEC-012** (Medium) `X-Forwarded-For` trusted unconditionally — ignored entirely now;
+      the socket address is the only source used for both the client list and the PIN lockout.
+      The stray `Access-Control-Allow-Origin: *` on `/media-stream` is also gone.
 - [ ] **SEC-013** (Info) command-injection review — **no exploitable shell injection found**.
-- [ ] **SEC-014** (Medium) unbounded, publicly served log containing window titles.
+- [x] **SEC-014** (Medium) unbounded, publicly served log containing window titles — the
+      window watcher no longer logs once per second, only on change, and the log is no longer
+      served at all.
 - [ ] **SEC-015** (High) `device_id` empty over plain-HTTP LAN → per-device controls dead.
 - [x] **SEC-016** (Low) `geo_sessions` was created 0755 with 0644 files. Now 0700/0600.
 
@@ -92,14 +96,17 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 - [ ] **BUG-020** the volume control looks fully functional when the audio stack is absent.
 - [ ] **BUG-021** the per-app volume slider applies a quadratic curve to a linear slider.
-- [ ] **BUG-023** `trackClient` keys on `RemoteAddr` *including the ephemeral port*, so one tab
-      yields four phantom "Linux (you)" rows.
+- [x] **BUG-023** `trackClient` keyed on `RemoteAddr` including the ephemeral port, so one
+      tab yielded four phantom "Linux (you)" rows. The device id is the key now, with the
+      port-stripped socket address as a fallback.
 - [ ] **BUG-025** the GPU bar can render the literal string `"GPU"` as a measurement.
 - [ ] **BUG-026** `/api/service-stats` reads `cutime`/`cstime` and `rss` instead of
       `utime`/`stime` and `starttime` — reported 80% CPU vs real 16.7%.
 - [ ] **BUG-027** weather day labels shift by one depending on the time of day.
-- [ ] **BUG-041a** `crypto.randomUUID()` needs a secure context, so over plain-HTTP LAN
-      `deviceId` is `''` for the whole session.
+- [x] **BUG-041a** `crypto.randomUUID()` needed a secure context, so over plain-HTTP LAN
+      `deviceId` was `''` for the whole session. Fixed in `lib/deviceId.ts`; the id also moved
+      from sessionStorage to localStorage so a reload no longer orphans the audio registration
+      (CF-07).
 
 ## 4. Feature flags
 

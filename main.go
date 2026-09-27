@@ -1074,7 +1074,10 @@ func handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// No Access-Control-Allow-Origin here. It used to be "*", which would let
+	// any page open this stream - harmless only because a session token is now
+	// required, and "harmless only because of another fix" is not a property
+	// worth keeping on an authenticated endpoint.
 
 	deviceID := r.URL.Query().Get("device_id")
 	trackClient(r, deviceID)

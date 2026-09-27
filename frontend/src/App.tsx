@@ -8,6 +8,7 @@ import type { FeatureKey } from './config/features';
 import { useArtTheming } from './hooks/useArtTheming';
 import { useActiveWindow, appToPageIndex } from './hooks/useActiveWindow';
 import { setDeviceId } from './lib/streamManager';
+import { getOrCreateDeviceId } from './lib/deviceId';
 import PlayerCarousel from './components/PlayerCarousel';
 import MiniPlayer from './components/MiniPlayer';
 import SystemStatsCard from './components/SystemStatsCard';
@@ -40,19 +41,7 @@ const ALL_PAGES: readonly DeckPage[] = [
 
 const CLIENT_POLL_MS = 5000;
 
-function getDeviceId(): string {
-  try {
-    let id = sessionStorage.getItem('dash_device_id');
-    if (!id) {
-      id = crypto.randomUUID();
-      sessionStorage.setItem('dash_device_id', id);
-    }
-    return id;
-  } catch {
-    return '';
-  }
-}
-const deviceId = getDeviceId();
+const deviceId = getOrCreateDeviceId();
 if (deviceId) setDeviceId(deviceId);
 
 export default function App() {
