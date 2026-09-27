@@ -65,36 +65,42 @@ func handleClipboardPush(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+// The two helpers shared one 2-second context, so if the first attempt used up
+// the whole budget - wl-paste blocking on a compositor that is not answering -
+// the fallback started against an already-expired context and could never
+// succeed. Each attempt gets its own deadline.
+const clipboardAttemptTimeout = 2 * time.Second
+
 func readClipboard() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "wl-paste")
-	out, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), clipboardAttemptTimeout)
+	out, err := exec.CommandContext(ctx, "wl-paste").Output()
+	cancel()
 	if err == nil {
 		return strings.TrimSpace(string(out)), nil
 	}
 
-	cmd = exec.CommandContext(ctx, "xclip", "-selection", "clipboard", "-o")
-	out, err = cmd.Output()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), clipboardAttemptTimeout)
+	defer cancel2()
+	out, err = exec.CommandContext(ctx2, "xclip", "-selection", "clipboard", "-o").Output()
 	if err == nil {
 		return strings.TrimSpace(string(out)), nil
 	}
-
 	return "", err
 }
 
 func writeClipboard(text string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
+	ctx, cancel := context.WithTimeout(context.Background(), clipboardAttemptTimeout)
 	cmd := exec.CommandContext(ctx, "wl-copy")
 	cmd.Stdin = strings.NewReader(text)
-	if err := cmd.Run(); err == nil {
+	err := cmd.Run()
+	cancel()
+	if err == nil {
 		return nil
 	}
 
-	cmd = exec.CommandContext(ctx, "xclip", "-selection", "clipboard")
+	ctx2, cancel2 := context.WithTimeout(context.Background(), clipboardAttemptTimeout)
+	defer cancel2()
+	cmd = exec.CommandContext(ctx2, "xclip", "-selection", "clipboard")
 	cmd.Stdin = strings.NewReader(text)
 	return cmd.Run()
 }
