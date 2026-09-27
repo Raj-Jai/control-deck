@@ -34,7 +34,9 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 14c | BUG-035/036/039/040/024/008/019 terminal, refresh, auto-focus, capabilities, clipboard | [x] | (this commit) |
 | 14d | BUG-004/005/007 + A11Y-02/03/05 seek + lyrics modal | [x] | (this commit) |
 | 14e | BUG-037 LRC parser + first frontend test runner | [x] | (this commit) |
-| 14f | BUG-006/009/018/030/044/054/055 remaining | [ ] | |
+| 14f | BUG-018/019 service worker scope + stale HTML | [x] | (this commit) |
+| 14g | BUG-054/055 mDNS name + ship the systemd unit | [x] | (this commit) |
+| 14h | BUG-006/009/030/044 remaining | [ ] | |
 | 15 | A11Y-01..21 accessibility | [ ] | |
 | 16 | PERF lazy mount, poll guards, caches, gzip, geo O(n^2) | [ ] | |
 | 17 | UX leftovers (Media Browser, Geo, BLE, Streamer, Clipboard) | [ ] | |
@@ -109,8 +111,16 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [x] **BUG-053** SIGHUP reload did not re-register the broadcast hotkey; the new value was
       read into the config and ignored until a restart. Reload now re-registers the binding
       and re-reads the video player config.
-- [ ] **BUG-054** the advertised mDNS name is never set.
-- [ ] **BUG-055** the systemd unit the README tells you to install does not exist.
+- [x] **BUG-054** the Avahi file published the services but set no host name, so the dashboard
+      was advertised under the machine's hostname rather than `control-deck.local` as the
+      README claimed. `host-name` is set, and the README documents the hosts entry Avahi
+      requires.
+- [x] **BUG-055** the README said to `cp tab-dashboard.service`, and no such file existed in
+      the repository — so installs got whatever the default was, including no restart. The
+      unit now ships, matches the real deployment exactly (same ExecStart and
+      WorkingDirectory), and uses `Restart=always` plus `KillMode=control-group`. The README
+      also said `enable --now tab-dashboard` when the unit is `tab-dashboard.service`, and
+      said nothing about rebuilding before restarting.
 - [ ] **SUS-002** `buildCommandMap` runs outside `configMu` at startup.
 - [ ] **SUS-003** `sort.SliceStable` comparator in `buildVersions` is not a strict weak ordering.
 - [ ] **SUS-004** `set_speed` accepts the wrong JSON type and silently pauses playback.
@@ -164,7 +174,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 - [ ] **BUG-008** the handoff device list is fetched once and never refreshed.
 - [ ] **BUG-009** the mini player never recovers from a failed artwork load.
 - [ ] **BUG-018** the service worker's scope excludes every request its fetch handler serves.
-- [ ] **BUG-019** cache-first HTML breaks installed PWAs after a rebuild.
+- [x] **BUG-019** the HTML shell was cache-first under a fixed cache name, so an installed PWA
+      kept being served the previous `index.html` — which points at asset hashes the rebuild
+      replaced. HTML is network-first now, and the cache name is stamped with the emitted
+      bundle hash by a Vite plugin, so a rebuild invalidates the old cache.
 - [x] **BUG-024** clipboard copy reported success even when `document.execCommand('copy')`
       returned false, which is what it does without a secure context. The result is now checked.
 - [ ] **BUG-028** geo calibration is an O(n²) render and memory loop.

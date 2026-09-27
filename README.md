@@ -140,20 +140,35 @@ openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt \
 
 ### Auto-start (systemd user service)
 
+The unit ships in the repository root and restarts the service on any exit.
+
 ```sh
 cp tab-dashboard.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now tab-dashboard
+systemctl --user enable --now tab-dashboard.service
 loginctl enable-linger
+```
+
+Edit `ExecStart` and `WorkingDirectory` in the copied unit if your install
+lives somewhere else. To update an existing install:
+
+```sh
+go build -o ~/.local/bin/tab-dashboard .
+npm --prefix frontend run build
+systemctl --user restart tab-dashboard.service
 ```
 
 ### Network Discovery (mDNS/Avahi)
 
 ```sh
 sudo cp avahi-service.conf /etc/avahi/services/tab-dashboard.service
+echo "127.0.0.1 control-deck.local" | sudo tee -a /etc/hosts
+sudo systemctl restart avahi-daemon
 ```
 
-The dashboard is then discoverable as `control-deck.local`.
+The dashboard is then discoverable as `control-deck.local`. The hosts entry is
+required: the advertised host name has to resolve, or Avahi refuses to publish
+it.
 
 ### Background Audio on Phone (no need to keep Chrome open)
 

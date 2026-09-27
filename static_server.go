@@ -97,6 +97,14 @@ func newStaticHandler() http.Handler {
 				return
 			}
 		}
+		// The worker is served from /static/, so its default scope is /static/ -
+		// which cannot see /api/ or /ws/ at all, making the pass-through rules
+		// in its fetch handler unreachable (BUG-018). This header is how a
+		// browser is told the worker may claim the whole origin.
+		if rel == "service-worker.js" {
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
+
 		f, err := os.Open(target)
 		if err != nil {
 			http.NotFound(w, r)

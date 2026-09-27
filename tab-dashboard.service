@@ -1,0 +1,31 @@
+[Unit]
+Description=Control Deck Dashboard
+Documentation=https://github.com/Raj-Jai/control-deck
+After=network.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/jai-raj/.local/bin/tab-dashboard
+WorkingDirectory=/home/jai-raj/Data/Code/Assited/tab-dashboard
+
+# Restart on any exit, not just on failure. The terminal WebSocket could panic
+# the whole process (BUG-001), and a remote control that stays dead after a
+# crash is worse than one that comes back.
+Restart=always
+RestartSec=3
+
+# A wedged ffmpeg or a stuck broadcast used to need a manual pkill. Cleaning up
+# the whole process group means systemd can reap them.
+KillMode=control-group
+TimeoutStopSec=10
+
+# Logs go to journald, which rotates them. The service used to be documented
+# but never shipped, so installs followed the README and ended up with whatever
+# the default was - including no restart at all (BUG-055).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tab-dashboard
+
+[Install]
+WantedBy=default.target

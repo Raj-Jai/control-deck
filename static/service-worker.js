@@ -1,5 +1,9 @@
-const CACHE = 'control-deck-v2';
-const STATIC_ASSETS = [
+// The cache name carries the build's asset hash, so a rebuild invalidates the
+// old entries. A fixed name meant cache-first HTML kept serving the previous
+// build to an already-installed PWA, which is how a deployed change silently
+// did not appear (BUG-019).
+const CACHE = 'control-deck-vODX4IZ6i';
+const PRECACHE = [
   '/static/',
   '/static/manifest.json',
   '/static/background.html',
@@ -7,9 +11,11 @@ const STATIC_ASSETS = [
   '/static/icon-512.png',
 ];
 
+
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(STATIC_ASSETS).catch(()=>{})).then(()=>self.skipWaiting())
+    caches.open(CACHE).then((c) => c.addAll(PRECACHE).catch(()=>{})).then(()=>self.skipWaiting())
   );
 });
 
@@ -19,24 +25,52 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Network-first for API/media-stream, cache-first for static
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/media-stream') || url.pathname.startsWith('/ws/')) {
-    // Don't cache API — just pass through, but keep service worker alive
+
+  // Never touch live data: the audio socket, the event stream, or anything
+  // under /api/. Caching any of those would replay a stale position or a stale
+  // session, and the deck would show numbers that are not true.
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/media-stream') ||
+    url.pathname.startsWith('/seek') ||
+    url.pathname.startsWith('/ws/') ||
+    e.request.method !== 'GET'
+  ) {
     return;
   }
+
+  // Network-first for the HTML shell: a cached index.html points at asset
+  // hashes that a rebuild has replaced, so serving it first breaks the page.
+  const isShell = url.pathname === '/' || url.pathname.endsWith('/') ||
+    url.pathname === '/static/' || url.pathname.endsWith('.html');
+  if (isShell) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request).then((c) => c || Response.error()))
+    );
+    return;
+  }
+
+  // Cache-first for hashed build assets, which are immutable by construction.
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) return cached;
       return fetch(e.request).then((res) => {
-        // Cache successful static responses
-        if (res.ok && e.request.method === 'GET' && url.pathname.startsWith('/static/')) {
+        if (res.ok && url.pathname.startsWith('/static/')) {
           const clone = res.clone();
           caches.open(CACHE).then((c) => c.put(e.request, clone));
         }
         return res;
-      }).catch(()=> cached || Response.error());
+      }).catch(() => cached || Response.error());
     })
   );
 });
