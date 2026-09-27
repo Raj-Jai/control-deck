@@ -162,27 +162,27 @@ export default function TerminalDeck({ caps }: Props) {
 
         <div className="flex flex-wrap items-center gap-1.5">
           <button onClick={() => sendToTerminal('tmux attach -t oc\r')}
-            className="px-2.5 py-1.5 text-[11px] rounded-md bg-deck-accent/15 border border-deck-accent/20 text-deck-accent hover:bg-deck-accent/25 active:scale-90 font-mono">
+            className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-deck-accent/15 border border-deck-accent/20 text-deck-accent hover:bg-deck-accent/25 active:scale-90 font-mono">
             tmux attach -t oc
           </button>
           <button onClick={() => sendToTerminal('clear\r')}
-            className="px-2.5 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
+            className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
             clear
           </button>
           <button onClick={() => sendToTerminal('ll\r')}
-            className="px-2.5 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
+            className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
             ll
           </button>
           <button onClick={() => sendToTerminal('cd "$(git rev-parse --show-toplevel 2>/dev/null || echo .)"\r')}
-            className="px-2.5 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
+            className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
             cd repo root
           </button>
           <button onClick={() => sendToTerminal('cd "$(git rev-parse --show-toplevel 2>/dev/null)" && go build -o tab-dashboard .\r')}
-            className="px-2.5 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
+            className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
             rebuild
           </button>
           <button onClick={() => sendToTerminal('\x03')}
-            className="px-2.5 py-1.5 text-[11px] rounded-md bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 active:scale-90 font-mono">
+            className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 active:scale-90 font-mono">
             Ctrl+C
           </button>
           {/* Modifiers */}
@@ -198,7 +198,7 @@ export default function TerminalDeck({ caps }: Props) {
             { label: 'Ctrl+U', cmd: '\x15' },
           ].map(b => (
             <button key={b.label} onClick={() => sendToTerminal(b.cmd)}
-              className="px-2 py-1.5 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
+              className="min-h-[44px] min-w-[48px] px-2.5 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
               {b.label}
             </button>
           ))}
@@ -206,14 +206,14 @@ export default function TerminalDeck({ caps }: Props) {
           <div className="inline-grid grid-cols-3 gap-px ml-1">
             <div />
             <button onClick={() => sendToTerminal('\x1b[A')}
-              className="px-2 py-1 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">↑</button>
+              className="min-h-[44px] min-w-[44px] px-2.5 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">↑</button>
             <div />
             <button onClick={() => sendToTerminal('\x1b[D')}
-              className="px-2 py-1 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">←</button>
+              className="min-h-[44px] min-w-[44px] px-2.5 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">←</button>
             <button onClick={() => sendToTerminal('\x1b[B')}
-              className="px-2 py-1 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">↓</button>
+              className="min-h-[44px] min-w-[44px] px-2.5 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">↓</button>
             <button onClick={() => sendToTerminal('\x1b[C')}
-              className="px-2 py-1 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">→</button>
+              className="min-h-[44px] min-w-[44px] px-2.5 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90">→</button>
           </div>
         </div>
       </div>

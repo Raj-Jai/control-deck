@@ -638,13 +638,16 @@ func main() {
 			httpsPort = ":8443"
 		}
 		log.Printf("HTTPS on https://localhost%s (accept self-signed cert once)", httpsPort)
-		if err := http.ListenAndServeTLS(httpsPort, "server.crt", "server.key", authMiddleware(http.DefaultServeMux)); err != nil {
+		if err := http.ListenAndServeTLS(httpsPort, "server.crt", "server.key",
+			compressHandler(authMiddleware(http.DefaultServeMux))); err != nil {
 			log.Printf("TLS server: %v", err)
 		}
 	}()
 
 	startSessionReaper()
-	if err := http.ListenAndServe(port, authMiddleware(http.DefaultServeMux)); err != nil {
+	// The frontend bundle is 640 kB and the SSE payload is large and repetitive.
+	// Neither listener compressed anything (PERF-25, PERF-26).
+	if err := http.ListenAndServe(port, compressHandler(authMiddleware(http.DefaultServeMux))); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
@@ -1828,12 +1831,41 @@ func runPlayerctl(args ...string) (string, error) {
 // findBestPlayer lists all MPRIS players, scores them, and returns the most
 // likely real-media-player (prefers Playing + non-trivial title + non-zero
 // length over browser tabs like the dashboard page itself).
-func findBestPlayer() string {
+// findBestPlayer is called several times per state tick, and the state
+// broadcaster runs twice a second. Every call spawned `playerctl -l` plus three
+// more per candidate, and the audit measured ~15 avoidable spawns per 500ms
+// (PERF-01). The player list changes rarely, so it is cached briefly - long
+// enough to collapse a burst of calls into one, short enough that starting a
+// new track is picked up promptly.
+var (
+	playerListMu    sync.Mutex
+	playerListCache []string
+	playerListAt    time.Time
+)
+
+const playerListTTL = 1500 * time.Millisecond
+
+func listPlayers() []string {
+	playerListMu.Lock()
+	defer playerListMu.Unlock()
+	if time.Since(playerListAt) < playerListTTL && playerListCache != nil {
+		return playerListCache
+	}
 	out, err := runCmd("playerctl", "-l")
-	if err != nil || out == "" {
+	var players []string
+	if err == nil && out != "" {
+		players = strings.Fields(out)
+	}
+	playerListCache = players
+	playerListAt = time.Now()
+	return players
+}
+
+func findBestPlayer() string {
+	players := listPlayers()
+	if len(players) == 0 {
 		return ""
 	}
-	players := strings.Fields(out)
 	if len(players) == 1 {
 		return players[0]
 	}
@@ -2125,11 +2157,11 @@ func fetchPlayerState(player string) PlayerState {
 }
 
 func fetchAllPlayers() []PlayerState {
-	out, err := runCmd("playerctl", "-l")
-	if err != nil || out == "" {
+	// Same cached list: this runs on every state tick, twice a second.
+	ids := listPlayers()
+	if len(ids) == 0 {
 		return nil
 	}
-	ids := strings.Fields(out)
 	players := make([]PlayerState, 0, len(ids))
 	seen := make(map[string]bool)
 	for _, id := range ids {

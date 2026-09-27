@@ -175,7 +175,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
                   key={t.id}
                   onClick={() => sendVideoCommand('set_subtitle', { track_id: t.id })}
                   aria-pressed={t.active}
-                  className={`min-h-[36px] px-2.5 rounded-md border text-[11px] ${
+                  className={`min-h-[44px] min-w-[44px] px-2.5 rounded-md border text-[11px] ${
                     t.active
                       ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
                       : 'bg-white/5 border-white/5 text-deck-dim hover:border-deck-accent/30'
@@ -186,18 +186,18 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
               ))}
             </div>
           ) : (
-            <p className="text-[10px] text-deck-muted/50">No subtitle tracks reported by the player</p>
+            <p className="text-[11px] text-deck-muted/50">No subtitle tracks reported by the player</p>
           )}
           <div className="flex-1" />
           <button onClick={() => nudge('sub', -0.1)}
-            className="w-8 h-8 rounded-md bg-white/5 border border-white/5
+            className="w-11 h-11 rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent active:scale-90 flex items-center justify-center text-sm">−</button>
           <span className="text-[11px] font-mono text-deck-accent min-w-[4ch] text-center tabular-nums">{fmt(subDelay)}</span>
           <button onClick={() => nudge('sub', 0.1)}
-            className="w-8 h-8 rounded-md bg-white/5 border border-white/5
+            className="w-11 h-11 rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent active:scale-90 flex items-center justify-center text-sm">+</button>
           <button onClick={() => resetDelay('sub')}
-            className="px-2 py-1 text-[10px] rounded bg-white/5 border border-white/5
+            className="min-h-[44px] px-3 py-1.5 text-[11px] rounded bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent active:scale-90">Reset</button>
         </div>
       </div>
@@ -221,7 +221,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
                   key={t.id}
                   onClick={() => sendVideoCommand('set_audio', { track_id: t.id })}
                   aria-pressed={t.active}
-                  className={`min-h-[36px] px-2.5 rounded-md border text-[11px] ${
+                  className={`min-h-[44px] min-w-[44px] px-2.5 rounded-md border text-[11px] ${
                     t.active
                       ? 'bg-deck-accent/15 border-deck-accent/30 text-deck-accent'
                       : 'bg-white/5 border-white/5 text-deck-dim hover:border-deck-accent/30'
@@ -236,14 +236,14 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
           )}
           <div className="flex-1" />
           <button onClick={() => nudge('audio', -0.1)}
-            className="w-8 h-8 rounded-md bg-white/5 border border-white/5
+            className="w-11 h-11 rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent active:scale-90 flex items-center justify-center text-sm">−</button>
           <span className="text-[11px] font-mono text-deck-accent min-w-[4ch] text-center tabular-nums">{fmt(audioDelay)}</span>
           <button onClick={() => nudge('audio', 0.1)}
-            className="w-8 h-8 rounded-md bg-white/5 border border-white/5
+            className="w-11 h-11 rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent active:scale-90 flex items-center justify-center text-sm">+</button>
           <button onClick={() => resetDelay('audio')}
-            className="px-2 py-1 text-[10px] rounded bg-white/5 border border-white/5
+            className="min-h-[44px] px-3 py-1.5 text-[11px] rounded bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent active:scale-90">Reset</button>
         </div>
       </div>
@@ -259,7 +259,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
             const active = vs?.aspect_ratio != null && a.toLowerCase() === vs.aspect_ratio.toLowerCase();
             return (
               <button key={a} onClick={() => sendVideoCommand('set_aspect', { value: a })}
-                className={`px-2.5 py-1 text-[11px] rounded-md border transition-all active:scale-90 ${
+                className={`min-h-[44px] min-w-[44px] px-3 py-1.5 text-[11px] rounded-md border transition-all active:scale-90 ${
                   active
                     ? 'bg-deck-accent/20 border-deck-accent/40 text-deck-accent'
                     : 'bg-white/5 border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'
@@ -280,13 +280,13 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
 
         <div className="flex items-center gap-2 mb-3">
           <button onClick={() => sendVideoCommand('frame_step', { direction: 'prev' })}
-            className="flex-1 px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5
+            className="flex-1 min-h-[44px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90
               flex items-center justify-center gap-1.5">
             ◀ Frame Prev
           </button>
           <button onClick={() => sendVideoCommand('frame_step', { direction: 'next' })}
-            className="flex-1 px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5
+            className="flex-1 min-h-[44px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5
               text-deck-dim hover:text-deck-accent hover:border-deck-accent/30 active:scale-90
               flex items-center justify-center gap-1.5">
             Frame Next ▶
@@ -300,7 +300,7 @@ export default function VideoPlayerDeck({ state, caps }: Props) {
               const active = vs?.speed != null && Math.abs(vs.speed - s) < 0.01;
               return (
                 <button key={s} onClick={() => sendVideoCommand('set_speed', { value: s })}
-                  className={`px-2.5 py-1 text-[11px] rounded-md border transition-all active:scale-90 ${
+                  className={`min-h-[44px] min-w-[44px] px-3 py-1.5 text-[11px] rounded-md border transition-all active:scale-90 ${
                     active
                       ? 'bg-deck-accent/20 border-deck-accent/40 text-deck-accent'
                       : 'bg-white/5 border-white/5 text-deck-dim hover:text-deck-accent hover:border-deck-accent/30'

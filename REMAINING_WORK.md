@@ -245,18 +245,47 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
 
 ## 7. Performance (42 findings)
 
-- [ ] **PERF-01/38** ~15 avoidable `playerctl` spawns per 500 ms tick.
+- [x] **PERF-01/38** ~15 avoidable `playerctl` spawns per 500 ms tick.
+      `playerctl -l` now goes through a 1.5 s cache, which collapses a state tick's
+      several calls into one spawn; the per-player probes were left alone because their
+      values genuinely change between ticks. Covered by `TestPlayerListIsCached`.
 - [ ] **PERF-04/05/16/17/23** deck bodies are not mounted lazily; the Video deck's 1 Hz poll
-      and two 5 Hz ping intervals run even when their deck is closed; no `document.hidden`
-      guard on the ping polls.
+      and two 5 Hz ping intervals run even when their deck is closed.
+      *(the `document.hidden` half is done: both 5 Hz ping loops in `GeoSurveyCard` and
+      `ConnectedDevicesCard` now idle while the tab is hidden and re-measure once on
+      `visibilitychange`, instead of polling forever in the background)*
+- [x] **PERF-09** the survey recording was unbounded: the canvas redraw is O(n) per point,
+      so a long walk grew React state and re-rendered the whole polyline every 200 ms.
+      Now capped at `MAX_RECORD_POINTS` (5,000, over 16 minutes at 5 Hz) with the dropped
+      count shown to the user, in `frontend/src/lib/geoRecording.ts` with four tests.
 - [x] **PERF-06/10** `lyricsCache` was never pruned, and a miss was re-queried every tick.
       Now bounded at 200 entries with a miss cached as a value, plus an in-flight set so a
       track is never looked up twice concurrently.
-- [ ] **PERF-25/26** no gzip/brotli on either listener; the SSE payload is not delta-encoded.
+- [x] **PERF-25** no gzip on either listener.
+      `compressHandler` wraps both `ListenAndServe` calls: the 656 kB bundle now transfers
+      as 183 kB (72% smaller) and a 1,196 B HTML page as 545 B. Text-ish types only, with a
+      `sync.Pool` of writers. Event streams and WebSocket upgrades pass through untouched -
+      wrapping the writer removed `http.Hijacker` and broke every terminal handshake with
+      501, which `TestCompressHandlerPassesThroughWebSocketUpgrade` now guards.
+- [ ] **PERF-26** the SSE payload is not delta-encoded.
 - [ ] **PERF-30/31** audio accumulator unbounded while suspended; 512-frame queue.
       *(done in the audio commit)*
 - [ ] **PERF-37** `resolveArtURL`'s single-entry cache re-base64s a file every 500 ms.
-- [ ] Single 625 kB bundle, no code splitting.
+
+## 6b. Fixes from the latest verification pass
+
+- [x] The geo canvas was drawn into a fixed 600x400 buffer and stretched to the card's
+      real width, so an 8px label rendered at about 4.7px. The backing store now tracks the
+      element's box times `devicePixelRatio` via a `ResizeObserver` (measured: 706x471 CSS
+      -> 706x471 at DPR 1, 1412x941 at DPR 2), and the draw code applies `setTransform` once
+      so every existing coordinate keeps its meaning.
+- [x] Two 5 Hz ping intervals kept measuring host latency with no `document.hidden` guard,
+      unlike every other poll in the app; a backgrounded tab kept the radio awake.
+- [x] Enabling the terminal and geo decks in the verification pass exposed controls under
+      40px on both: the terminal toolbar, key modifiers, cursor pad and quick chips, and the
+      video frame-step, track, aspect and speed controls. All are now at least 44x44, and the
+      full 59-check responsive suite is clean.
+- [ ] Single 656 kB bundle, no code splitting. *(gzip is done; the split is not)*
 
 ### Session model (added with unit 3)
 

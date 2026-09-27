@@ -86,9 +86,18 @@ export default function ConnectedDevicesCard() {
         setPing(Math.round(performance.now() - t0));
       } catch { setPing(null); }
     };
+    // Five measurements a second, forever, including while the tab is hidden -
+    // unlike every other poll in the app. A backgrounded dashboard kept
+    // measuring latency to the host and waking the radio for it.
+    if (document.hidden) return;
     measure();
-    const id = setInterval(measure, 200);
-    return () => clearInterval(id);
+    const id = setInterval(() => { if (!document.hidden) measure(); }, 200);
+    const onVisible = () => { if (!document.hidden) measure(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const [ctrlErr, setCtrlErr] = useState('');

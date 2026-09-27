@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { appendPoint } from '../lib/geoRecording';
 import { Play, Square, MapPin, Save, FolderOpen, Trash2, Crosshair, Target, Navigation } from 'lucide-react';
 
 const STORED_CENTER_KEY = 'geo_room_center';
@@ -54,17 +55,32 @@ export default function GeoSurveyCard() {
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [recording, setRecording] = useState(false);
   const [calibrating, setCalibrating] = useState(false);
-  const [calibSamples, setCalibSamples] = useState<{ lat: number; lng: number }[]>([]);
+  // A running sum, not a list. The old code appended to state with
+  // [...prev, currPos] and listed calibSamples in the effect's own dependency
+  // array, so every sample copied the whole array and re-triggered the effect
+  // that made it: O(n^2) copying, and the audit measured 80,381 "samples" in
+  // 30 seconds with the heap sawtoothing 9 -> 70 MB (BUG-028).
+  const calibSum = useRef({ lat: 0, lng: 0, n: 0 });
   const [calibResult, setCalibResult] = useState<{ lat: number; lng: number; n: number } | null>(null);
   const [calibProgress, setCalibProgress] = useState(0);
   const [points, setPoints] = useState<Point[]>([]);
+  // How many points the cap has discarded, so the user is not silently losing
+  // the start of a long recording.
+  const [trimmed, setTrimmed] = useState(0);
   const [currPos, setCurrPos] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsAcc, setGpsAcc] = useState(0);
   const [posErr, setPosErr] = useState('');
   const [currPing, setCurrPing] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Size the backing store to the element's real pixel size, so labels are
+  // legible and the canvas is not upscaled on a high-DPR screen. A fixed
+  // 600x400 buffer stretched to the card width made an 8px label about 4.7px.
+  const [canvasSize, setCanvasSize] = useState({ w: 600, h: 400 });
   const lastPing = useRef(0);
   const calibStart = useRef(0);
+  // Published at 1 Hz for the progress bar; the samples themselves never touch
+  // React state.
+  const [calibCount, setCalibCount] = useState(0);
   const watchId = useRef<number | null>(null);
 
   const startGps = useCallback(() => {
@@ -99,7 +115,7 @@ export default function GeoSurveyCard() {
 
   const addPoint = useCallback(() => {
     if (!currPos || !currPing) return;
-    setPoints(prev => [...prev, { ...currPos, ping: currPing, ts: Date.now() }]);
+    setPoints(prev => appendPoint(prev, { ...currPos, ping: currPing, ts: Date.now() }, () => setTrimmed(n => n + 1)));
   }, [currPos, currPing]);
 
   useEffect(() => {
@@ -111,32 +127,36 @@ export default function GeoSurveyCard() {
   // Disable GPS on unmount
   useEffect(() => () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); }, []);
 
-  // Calibration: collect GPS samples for CALIB_DURATION
+  // Calibration: accumulate GPS samples for CALIB_DURATION
   useEffect(() => {
     if (!calibrating) return;
     calibStart.current = Date.now();
-    setCalibSamples([]);
+    calibSum.current = { lat: 0, lng: 0, n: 0 };
+    setCalibCount(0);
     setCalibResult(null);
     const id = setInterval(() => {
       setCalibProgress(Date.now() - calibStart.current);
-    }, 100);
+      setCalibCount(calibSum.current.n);
+    }, 1000);
     return () => clearInterval(id);
   }, [calibrating]);
 
   useEffect(() => {
     if (!calibrating || !currPos) return;
     const elapsed = Date.now() - calibStart.current;
+    const sum = calibSum.current;
+    sum.lat += currPos.lat;
+    sum.lng += currPos.lng;
+    sum.n += 1;
+
     if (elapsed >= CALIB_DURATION) {
-      // compute average
-      const total = calibSamples.length + 1;
-      const sum = calibSamples.reduce((a, c) => ({ lat: a.lat + c.lat, lng: a.lng + c.lng }), { lat: currPos.lat, lng: currPos.lng });
-      setCalibResult({ lat: sum.lat / total, lng: sum.lng / total, n: total });
+      if (sum.n > 0) {
+        setCalibResult({ lat: sum.lat / sum.n, lng: sum.lng / sum.n, n: sum.n });
+      }
       setCalibrating(false);
       setCalibProgress(0);
-      return;
     }
-    setCalibSamples(prev => [...prev, currPos]);
-  }, [currPos, calibrating, calibSamples]);
+  }, [currPos, calibrating]);
 
   // Ping polling
   useEffect(() => {
@@ -148,9 +168,18 @@ export default function GeoSurveyCard() {
         setCurrPing(lastPing.current);
       } catch {}
     };
+    // Five measurements a second, forever, including while the tab is hidden -
+    // unlike every other poll in the app. A backgrounded dashboard kept
+    // measuring latency to the host and waking the radio for it.
+    if (document.hidden) return;
     measure();
-    const id = setInterval(measure, 200);
-    return () => clearInterval(id);
+    const id = setInterval(() => { if (!document.hidden) measure(); }, 200);
+    const onVisible = () => { if (!document.hidden) measure(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const [sessionList, setSessionList] = useState<string[]>([]);
@@ -195,6 +224,23 @@ export default function GeoSurveyCard() {
   };
 
   useEffect(() => { loadSessions(); }, []);
+  // Match the backing store to the laid-out size, times devicePixelRatio.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const resize = () => {
+      const rect = el.getBoundingClientRect();
+      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      const w = Math.max(1, Math.round((rect.width || 600) * dpr));
+      const h = Math.max(1, Math.round(((rect.width || 600) * 2) / 3 * dpr));
+      setCanvasSize(prev => (prev.w === w && prev.h === h ? prev : { w, h }));
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -203,8 +249,12 @@ export default function GeoSurveyCard() {
 
     const W = canvas.width;
     const H = canvas.height;
+    // Everything below is drawn in CSS pixels; scale once so the existing
+    // coordinates keep working at any backing-store size.
+    const scale = W / 600;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W / scale, H / scale);
 
     // Collect all coordinates to bound
     const coords: [number, number][] = [];
@@ -298,7 +348,7 @@ export default function GeoSurveyCard() {
       ctx.moveTo(sx, sy - 10); ctx.lineTo(sx, sy + 10);
       ctx.stroke();
       ctx.fillStyle = '#ef4444';
-      ctx.font = '8px sans-serif';
+      ctx.font = '9px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('CENTER', sx, sy + 18);
     }
@@ -316,7 +366,7 @@ export default function GeoSurveyCard() {
       ctx.arc(sx, sy, 12, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = '#3b82f6';
-      ctx.font = '8px sans-serif';
+      ctx.font = '9px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('YOU', sx, sy + 18);
     }
@@ -352,8 +402,8 @@ export default function GeoSurveyCard() {
 
       <canvas
         ref={canvasRef}
-        width={600}
-        height={400}
+        width={canvasSize.w}
+        height={canvasSize.h}
         className="w-full h-auto rounded-lg bg-black/20 border border-white/[0.04]"
         style={{ aspectRatio: '3/2' }}
       />
@@ -381,7 +431,7 @@ export default function GeoSurveyCard() {
       </div>
 
       <div className="text-[10px] text-deck-dim">
-        Points: {points.length}
+        Points: {points.length}{trimmed > 0 && ` (oldest ${trimmed} dropped at the 5,000-point cap)`}
         {currPing !== null && <> · Ping: {currPing}ms</>}
         {currPos && <> · Dist: {haversine(currPos.lat, currPos.lng, roomCenter.lat, roomCenter.lng).toFixed(0)}m</>}
         {gpsEnabled && gpsAcc > 0 && <span className="text-deck-muted/40"> ±{gpsAcc.toFixed(0)}m</span>}
@@ -466,7 +516,14 @@ export default function GeoSurveyCard() {
               <FolderOpen size={10} className="text-deck-muted/40 flex-shrink-0" />
               <span className="flex-1 truncate text-deck-text">{name.replace('.json','')}</span>
               <button
-                onPointerDown={e => { e.stopPropagation(); deleteSession(name); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Deleting a recorded session is not undoable.
+                  if (confirm(`Delete the saved session "${name}"? This cannot be undone.`)) {
+                    deleteSession(name);
+                  }
+                }}
+                aria-label={`Delete session ${name}`}
                 className="icon-btn w-5 h-5 text-deck-dim hover:text-red-400 flex-shrink-0"
                 title="Delete"
               >
