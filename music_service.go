@@ -56,10 +56,10 @@ func handleMusicSearch(w http.ResponseWriter, r *http.Request) {
 
 	var pl struct {
 		Entries []struct {
-			ID       string `json:"id"`
-			Title    string `json:"title"`
+			ID       string      `json:"id"`
+			Title    string      `json:"title"`
 			Duration interface{} `json:"duration"`
-			Thumb    string `json:"thumbnail"`
+			Thumb    string      `json:"thumbnail"`
 		} `json:"entries"`
 	}
 	if err := json.Unmarshal(out, &pl); err != nil {
@@ -147,7 +147,9 @@ func currentMusicURL() string {
 
 // killMusicPipeline terminates any running music pipeline and its whole
 // process group (both the yt-dlp producer and the mpv consumer). As a safety
-// net it also kills any stray mpv/yt-dlp processes.
+// net it also used to pkill every mpv and yt-dlp on the machine, so playing one
+// song from the deck killed the user's own music and any download in progress.
+// Only the process group this service started is touched now.
 func killMusicPipeline() {
 	musicPipelineMu.Lock()
 	if musicPipeline != nil && musicPipeline.Process != nil {
@@ -156,8 +158,6 @@ func killMusicPipeline() {
 		musicPipeline = nil
 	}
 	musicPipelineMu.Unlock()
-	exec.Command("pkill", "-9", "-x", "mpv").Run()
-	exec.Command("pkill", "-9", "-x", "yt-dlp").Run()
 	if _, err := os.Stat(mpvSocketPath); err == nil {
 		os.Remove(mpvSocketPath)
 	}
@@ -776,5 +776,3 @@ func fileExists(p string) bool {
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
-
-

@@ -21,7 +21,9 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done (with commit sha)
 | 7 | BUG-001 terminal panic kills the server | [ ] | |
 | 8 | BUG-048 pkill -9 mpv/yt-dlp | [ ] | |
 | 9a | BUG-051 GPU helper timeouts | [x] | (this commit) |
-| 9b | BUG-053 SIGHUP re-registers the hotkey | [x] | (this commit) |
+| 9b | BUG-053 SIGHUP re-registers the hotkey | [x] | 5bfa718 |
+| 9d | BUG-045 clipboard per-attempt deadlines | [x] | 5bfa718 |
+| 9e | BUG-048 pkill -9 mpv/yt-dlp | [x] | (this commit) |
 | 9c | BUG-050 VLC port configurable | [x] | (this commit) |
 | 10 | BUG-049 lyrics stall on the broadcast goroutine | [ ] | |
 | 11 | BUG-023/041a/SEC-015/CF-07 device tracking + id over plain HTTP | [x] | (this commit) |
@@ -83,7 +85,11 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       invocation. CPU% is now derived from a background sampler publishing every 2 s, and the
       handler is a pure read of the last snapshot.
 - [ ] **BUG-045** `wl-paste` and `xclip` share a single 2-second X selection context.
-- [ ] **BUG-048** `killMusicPipeline` contains `pkill -9 -x mpv` / `pkill -9 -x yt-dlp`.
+- [x] **BUG-048** `killMusicPipeline` ran `pkill -9 -x mpv` and `pkill -9 -x yt-dlp`, so
+      playing one song from the deck killed every media player and every download on the
+      machine, including the user's own. The pipeline this service owns already runs in its
+      own process group (`Setpgid`) and is killed as a group, so the blanket kill was both
+      redundant and destructive.
 - [ ] **BUG-049** lyrics lookup stalls the whole state broadcast for up to 18 s per track.
 - [x] **BUG-050** VLC detection was hardcoded to `localhost:8080` - the dashboard's own port,
       not VLC's. Now `vlc_base_url` in config, defaulting to VLC's 8081.
