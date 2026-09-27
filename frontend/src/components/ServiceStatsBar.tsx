@@ -60,18 +60,22 @@ export default function ServiceStatsBar() {
             className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-deck-surface-2
               border border-deck-hairline/10 whitespace-nowrap shrink-0">
             <span className={`w-2 h-2 rounded-full ${running ? 'bg-green-400 shadow-sm shadow-green-400/40' : 'bg-red-400'}`} />
-            <span className="font-bold text-deck-text truncate max-w-[9rem]" title={s.name}>{s.name}</span>
+            <span className="font-bold text-deck-text truncate max-w-[7rem] sm:max-w-[9rem]" title={s.name}>{s.name}</span>
             {running ? (
               <>
                 <span className="text-deck-dim flex items-center gap-0.5 whitespace-nowrap">
                   <Activity size={11} className="text-deck-accent" />
                   {s.cpu_percent.toFixed(1)}%
                 </span>
-                <span className="text-deck-dim flex items-center gap-0.5 whitespace-nowrap">
+                {/* Memory and uptime are the two least load-bearing readings on a
+                    phone, and the bar is a single nowrap row, so they were what
+                    got clipped off the right edge at 375px. The name and CPU stay
+                    at every width. */}
+                <span className="hidden sm:flex text-deck-dim items-center gap-0.5 whitespace-nowrap">
                   <HardDrive size={11} className="text-purple-400" />
                   {fmtMem(s.mem_rss_kb)}
                 </span>
-                <span className="text-deck-dim flex items-center gap-0.5 whitespace-nowrap">
+                <span className="hidden md:flex text-deck-dim items-center gap-0.5 whitespace-nowrap">
                   <Clock size={11} className="text-deck-dim" />
                   {fmtUptime(s.uptime_secs)}
                 </span>

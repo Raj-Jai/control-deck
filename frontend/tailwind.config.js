@@ -26,6 +26,9 @@ export default {
           surface: token('--cd-surface'),
           'surface-2': token('--cd-surface-2'),
           'surface-3': token('--cd-surface-3'),
+          // A control sitting on a card, so it reads as a layer of its own.
+          tile: token('--cd-tile'),
+          'tile-hover': token('--cd-tile-hover'),
           // Slider and meter tracks, which must read against the card they
           // sit on. Distinct from surface-2, which in the light theme is the
           // same value as the page background.

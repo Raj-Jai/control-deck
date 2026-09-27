@@ -487,19 +487,23 @@ export default function App() {
           visible behind the dots, and the strip read as a smudge rather than a
           bar. Opaque, with a defined top edge, it reads as a surface. */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-deck-bg border-t border-deck-hairline/10 shadow-[0_-1px_0_rgb(var(--cd-hairline)/0.04)] pb-[env(safe-area-inset-bottom)]">
-        <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-5 lg:px-6 py-1.5 relative flex items-center gap-1">
-          <FloatingNav
-            pages={pages}
-            currentPage={page}
-            scrollTo={scrollTo}
-            autoFocus={autoFocus}
-            onToggleAutoFocus={() => setAutoFocus(prev => !prev)}
-            broadcasting={broadcasting}
-          />
+        {/* 1fr auto 1fr, so the dots sit in the middle column and are centred on
+            the page rather than on the leftover space. With a plain flex row the
+            dots were centred between a 44px button on the left and a narrower
+            count on the right, so they sat visibly off-centre. */}
+        <div className="w-full max-w-6xl mx-auto px-2 sm:px-4 md:px-5 lg:px-6 py-1.5 relative grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+          <div className="flex items-center justify-start gap-1 text-[10px] text-deck-dim select-none pointer-events-none">
+            {clientCount > 0 && (
+              <>
+                <Monitor size={11} />
+                {clientCount}
+              </>
+            )}
+          </div>
           {/* Draggable page dots */}
           <div
             ref={dragStripRef}
-            className="flex-1 flex items-center justify-center gap-5 sm:gap-6 select-none touch-none transition-transform duration-100"
+            className="flex items-center justify-center gap-5 sm:gap-6 select-none touch-none transition-transform duration-100"
             data-dragging={dragging || undefined}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -527,12 +531,20 @@ export default function App() {
               </button>
             ))}
           </div>
-          {clientCount > 0 && (
-            <div className="shrink-0 flex items-center gap-1 text-[10px] text-deck-dim select-none pointer-events-none pl-1">
-              <Monitor size={11} />
-              {clientCount}
-            </div>
-          )}
+          {/* On the right, where a floating action button belongs. Anchored on the
+              left it opened its menu to the left as well - right-0 relative to a
+              button at the left edge, so a 180px menu hung off the side of the
+              screen on a phone. */}
+          <div className="flex items-center justify-end">
+            <FloatingNav
+              pages={pages}
+              currentPage={page}
+              scrollTo={scrollTo}
+              autoFocus={autoFocus}
+              onToggleAutoFocus={() => setAutoFocus(prev => !prev)}
+              broadcasting={broadcasting}
+            />
+          </div>
         </div>
       </div>
 

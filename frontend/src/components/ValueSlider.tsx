@@ -56,7 +56,14 @@ export default function ValueSlider({
     const last = pending.current;
     pending.current = null;
     if (last === null) return;
-    const ok = await onSend(last);
+    // pending holds the slider position, 0-100, which is not the value the host
+    // wants. The throttled sends below convert it; this one did not, so the
+    // final send on release passed 0-100 straight to the control. For volume
+    // that is a value of 83 where 0.83 was meant, so PulseAudio clamped it to
+    // 100% - the drag looked like it worked and then the release slammed the
+    // volume to the top and the handle snapped back. Brightness had the same
+    // defect, harmlessly, because its conversion is the identity.
+    const ok = await onSend(toValue(last));
     if (ok === false) {
       // Put the handle back where the host says it is, and say why.
       if (hostValue !== null) setLocalValue(hostValue);
@@ -64,7 +71,7 @@ export default function ValueSlider({
     } else {
       setError('');
     }
-  }, [hostValue, label, onSend]);
+  }, [hostValue, label, onSend, toValue]);
 
   const handleChange = (percent: number) => {
     setLocalValue(percent);

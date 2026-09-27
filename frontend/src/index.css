@@ -33,7 +33,12 @@
 
     --cd-text: 238 244 252;
     --cd-dim: 158 173 196;
-    --cd-muted: 122 137 160;
+    /* 138 152 175, not the 122 137 160 this was. Secondary text sits on
+       surface-2 in a lot of places - nested rows, chips, tile labels - and the
+       old value measured 3.96:1 there, under the 4.5:1 floor for body text.
+       This one is 4.81:1 on surface-2 and 6.14:1 on a card, and still clearly
+       below --cd-dim so the two stay distinguishable. */
+    --cd-muted: 138 152 175;
 
     --cd-accent: 34 211 238;        /* cyan-400, brighter than before */
     --cd-accent-dim: 14 148 168;
@@ -53,15 +58,25 @@
        wants glass - translucent fill, a faint edge, a backdrop blur. The light
        theme cannot: white at 60% over near-white is white at 60%, so the cards
        had no edge and no body, and the whole page read as a wash. */
-    --cd-card-alpha: 0.6;
-    --cd-card-border: 0.08;
-    --cd-card-border-hover: 0.16;
+    --cd-card-alpha: 0.88;
+    --cd-card-border: 0.10;
+    --cd-card-border-hover: 0.18;
+
+    /* A tile is a control sitting on a card, so it gets its own layer rather
+       than repeating the card's own fill. */
+    --cd-tile: 33 44 62;
+    --cd-tile-hover: 45 58 79;
 
     --cd-radius-card: 16px;
     --cd-radius-control: 10px;
 
-    --cd-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-    --cd-shadow-raised: 0 8px 24px rgb(0 0 0 / 0.45);
+    /* Two shadows: a contact shadow for the edge, a soft one for lift. One
+       shadow alone left the card reading as a flat wash. */
+    --cd-shadow-card: 0 1px 2px rgb(0 0 0 / 0.45), 0 8px 24px rgb(0 0 0 / 0.22);
+    --cd-shadow-raised: 0 8px 24px rgb(0 0 0 / 0.5);
+    /* Restrained. The accent glow was doing too much work - on translucent
+       cards it read as neon haze rather than emphasis. */
+    --cd-glow-accent: 0 4px 14px rgb(34 211 238 / 0.14);
     --cd-shadow-focus: 0 0 0 3px rgb(var(--cd-accent) / 0.35);
 
     --cd-scrim: 0 0 0;              /* used with an opacity modifier */
@@ -98,6 +113,10 @@
        cancels out and the card disappears. */
     --cd-surface-2: 233 240 248;
     --cd-surface-3: 214 225 238;
+    /* On a white card a tile needs to be distinguishable from it, but only just:
+       at surface-2's 233 240 248 it read as a grey block rather than a control. */
+    --cd-tile: 244 248 252;
+    --cd-tile-hover: 233 240 248;
     --cd-track: 191 205 224;
     --cd-card-alpha: 1;
     --cd-card-border: 0.14;
@@ -111,8 +130,9 @@
     --cd-warning: 146 64 14;
     --cd-danger: 190 24 93;
 
-    --cd-shadow-card: 0 1px 2px rgb(15 23 42 / 0.08);
-    --cd-shadow-raised: 0 8px 24px rgb(15 23 42 / 0.12);
+    --cd-shadow-card: 0 1px 2px rgb(15 23 42 / 0.07), 0 6px 18px rgb(15 23 42 / 0.07);
+    --cd-shadow-raised: 0 8px 24px rgb(15 23 42 / 0.14);
+    --cd-glow-accent: 0 4px 14px rgb(14 116 144 / 0.16);
     --cd-shadow-focus: 0 0 0 3px rgb(var(--cd-accent) / 0.35);
 
     --cd-scrim: 15 23 42;
@@ -139,6 +159,8 @@
       --cd-accent-contrast: 255 255 255;
       --cd-surface-2: 233 240 248;
       --cd-surface-3: 214 225 238;
+      --cd-tile: 244 248 252;
+      --cd-tile-hover: 233 240 248;
       --cd-track: 191 205 224;
       --cd-card-alpha: 1;
       --cd-card-border: 0.14;
@@ -146,8 +168,9 @@
       --cd-success: 21 128 61;
       --cd-warning: 146 64 14;
       --cd-danger: 190 24 93;
-      --cd-shadow-card: 0 1px 2px rgb(15 23 42 / 0.08);
-      --cd-shadow-raised: 0 8px 24px rgb(15 23 42 / 0.12);
+      --cd-shadow-card: 0 1px 2px rgb(15 23 42 / 0.07), 0 6px 18px rgb(15 23 42 / 0.07);
+      --cd-shadow-raised: 0 8px 24px rgb(15 23 42 / 0.14);
+      --cd-glow-accent: 0 4px 14px rgb(14 116 144 / 0.16);
       --cd-shadow-focus: 0 0 0 3px rgb(var(--cd-accent) / 0.35);
       --cd-scrim: 15 23 42;
     }
@@ -207,13 +230,13 @@
     width: 24px;
     height: 24px;
     background: rgb(var(--cd-accent));
-    box-shadow: 0 0 12px rgb(var(--cd-accent) / 0.5), var(--cd-shadow-card);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
     transition: transform 0.1s, box-shadow 0.1s;
   }
 
   input[type='range']::-webkit-slider-thumb:hover {
-    transform: scale(1.15);
-    box-shadow: 0 0 20px rgb(var(--cd-accent) / 0.7), var(--cd-shadow-card);
+    transform: scale(1.1);
+    box-shadow: var(--cd-glow-accent);
   }
 
   input[type='range']::-webkit-slider-thumb:active {
@@ -223,7 +246,7 @@
   input[type='range']::-moz-range-thumb {
     @apply w-6 h-6 rounded-full border-0 cursor-pointer;
     background: rgb(var(--cd-accent));
-    box-shadow: 0 0 12px rgb(var(--cd-accent) / 0.5), var(--cd-shadow-card);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
   }
 
   input[type='range']:disabled {
@@ -291,6 +314,13 @@
     border-color: rgb(var(--cd-hairline) / var(--cd-card-border-hover));
   }
 
+  /* The accent glow was doing too much work - on translucent cards a wide
+     diffuse glow read as neon haze rather than emphasis. One restrained value,
+     themed, used by the play button and the active tile. */
+  .glow-accent {
+    box-shadow: var(--cd-glow-accent);
+  }
+
   .deck-card-interactive {
     @apply deck-card cursor-pointer;
   }
@@ -306,8 +336,12 @@
       transition-all duration-150 overflow-hidden;
     overflow-wrap: break-word;
     word-break: break-word;
-    background: rgb(var(--cd-surface) / var(--cd-card-alpha));
+    background: rgb(var(--cd-tile));
     border: 1px solid rgb(var(--cd-hairline) / var(--cd-card-border));
+  }
+
+  .toggle-card:hover:not(.active) {
+    background: rgb(var(--cd-tile-hover));
   }
 
   .toggle-card:active {
@@ -319,9 +353,9 @@
   }
 
   .toggle-card.active {
-    border-color: rgb(var(--cd-accent) / 0.4);
-    box-shadow: 0 0 20px rgb(var(--cd-accent) / 0.15),
-      inset 0 0 40px rgb(var(--cd-accent) / 0.05);
+    background: rgb(var(--cd-accent) / 0.10);
+    border-color: rgb(var(--cd-accent) / 0.32);
+    box-shadow: var(--cd-glow-accent);
   }
 
   .toggle-card.active .toggle-label {
@@ -387,25 +421,34 @@
   --art-accent: rgb(var(--cd-accent));
 }
 
-/* Ambient background gradient from album art */
+/* Ambient background gradient from album art.
+
+   The base colour used to be a hardcoded #0b0d12, so the moment a track with
+   cover art started playing the page went near-black in *both* themes - the
+   light theme became white cards floating on a black page, with a light top
+   strip above them and a dark bottom strip below, which is worse than either
+   theme on its own. It sat on top of the light palette because nothing in the
+   token set could reach it. The base is now the theme's own page colour, so
+   the art only ever tints it. */
 .art-themed body,
 .art-themed #root {
   background:
     radial-gradient(ellipse 80% 60% at 20% 20%, color-mix(in srgb, var(--art-primary) 6%, transparent), transparent) no-repeat fixed,
     radial-gradient(ellipse 60% 70% at 80% 80%, color-mix(in srgb, var(--art-accent) 4%, transparent), transparent) no-repeat fixed,
-    #0b0d12;
+    rgb(var(--cd-bg));
 }
 
+/* The colour follows the art, but the shadow stays as restrained as the base
+   theme's. This used to be a 16px glow at 50% opacity, which undid the whole
+   point of toning the glow down. */
 .art-themed input[type='range']::-webkit-slider-thumb {
   background: var(--art-accent) !important;
-  box-shadow: 0 0 16px color-mix(in srgb, var(--art-accent) 50%, transparent),
-    0 1px 4px rgba(0,0,0,0.3) !important;
+  box-shadow: 0 2px 6px rgb(var(--cd-hairline) / 0.18) !important;
 }
 
 .art-themed input[type='range']::-moz-range-thumb {
   background: var(--art-accent) !important;
-  box-shadow: 0 0 16px color-mix(in srgb, var(--art-accent) 50%, transparent),
-    0 1px 4px rgba(0,0,0,0.3) !important;
+  box-shadow: 0 2px 6px rgb(var(--cd-hairline) / 0.18) !important;
 }
 
 .art-themed .text-deck-accent {
@@ -445,9 +488,9 @@
 }
 
 .art-themed .toggle-card.active {
-  border-color: color-mix(in srgb, var(--art-accent) 30%, transparent) !important;
-  box-shadow: 0 0 20px color-mix(in srgb, var(--art-accent) 15%, transparent),
-    inset 0 0 40px color-mix(in srgb, var(--art-accent) 5%, transparent) !important;
+  background: color-mix(in srgb, var(--art-accent) 10%, transparent) !important;
+  border-color: color-mix(in srgb, var(--art-accent) 32%, transparent) !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--art-accent) 14%, transparent) !important;
 }
 
 .art-themed .toggle-card.active .toggle-label {

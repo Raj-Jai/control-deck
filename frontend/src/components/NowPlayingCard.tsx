@@ -275,7 +275,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
 
   const isPlaying = !isOffline && !isIdle && status === 'Playing';
   const cardBorder = isPlaying
-    ? 'border-deck-accent/20 shadow-[0_0_24px_rgba(6,182,212,0.08)]'
+    ? 'border-deck-accent/20 shadow-[0_0_24px_rgb(var(--cd-accent)/0.10)]'
     : '';
 
   // 3-line ticker state
@@ -343,7 +343,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
         </button>
         <button
           className={`media-btn ${large ? 'w-14 h-14' : 'w-12 h-12'} !bg-deck-accent !text-white !border-deck-accent
-            shadow-[0_0_18px_rgba(6,182,212,0.35)] hover:!bg-deck-accent-dim`}
+            glow-accent hover:!bg-deck-accent-dim`}
           onClick={() => triggerCommand('playpause', playerId)}
           disabled={isOffline || isIdle}
           aria-label={status === 'Playing' ? 'Pause' : 'Play'}
@@ -363,7 +363,7 @@ export default function NowPlayingCard({ player, state }: NowPlayingCardProps) {
   };
 
   return (
-    <div className={`deck-card flex flex-col gap-3 transition-all duration-300
+    <div className={`deck-card flex flex-col gap-2.5 sm:gap-3 transition-all duration-300
       [@media(max-height:720px)]:gap-2 ${cardBorder}`}>
       {/* Header: art + metadata */}
       <div className="flex items-center gap-3">
