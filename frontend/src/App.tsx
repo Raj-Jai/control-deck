@@ -13,6 +13,7 @@ import PlayerCarousel from './components/PlayerCarousel';
 import MiniPlayer from './components/MiniPlayer';
 import SystemStatsCard from './components/SystemStatsCard';
 import ServiceStatsBar from './components/ServiceStatsBar';
+import FreshnessPill from './components/FreshnessPill';
 import ThemeToggle from './components/ThemeToggle';
 import MixerCard from './components/MixerCard';
 import QuickSettings from './components/QuickSettings';
@@ -59,7 +60,7 @@ export default function App() {
   // they would all be refused (and were, before the session existed), so a
   // locked page now consumes no server resources and receives no state.
   const unlocked = authMode !== null;
-  const { state, loading, error } = useMediaStream(deviceId, unlocked);
+  const { state, loading, error, lastUpdateAt } = useMediaStream(deviceId, unlocked);
   const { appType } = useActiveWindow(unlocked);
   const { caps, capabilitiesReady, retryCapabilities } = useCapabilities(unlocked);
   const [features, flagsReady] = useFeatureFlags(unlocked);
@@ -313,6 +314,9 @@ export default function App() {
             ) : (
               <div className="flex-1" />
             )}
+            {/* How current the numbers below are. Without this a value from
+                before a stall looked exactly as authoritative as a current one. */}
+            {unlocked && <FreshnessPill lastUpdateAt={lastUpdateAt} />}
             <ThemeToggle className="shrink-0 -my-0.5" />
             <button
               onClick={toggleFull}

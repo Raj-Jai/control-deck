@@ -479,8 +479,26 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       scroll position survive and nothing behind the lock screen is re-fetched. Verified on a
       390x844 touch viewport: 44x44 button, back at the lock screen, and zero page
       navigations caused by the exit.
-- [ ] **UX-29** no freshness indicator anywhere; a stale value looks current.
-- [ ] **UX-31** the two PWAs share icons; `background.html` lacks the iOS meta tags.
+- [x] **UX-29** no freshness indicator anywhere; a stale value looks current.
+      The stream can stall - a lyrics lookup alone blocked the broadcaster for up to 18 s -
+      so a value on screen and the truth diverge regularly with nothing to say so. A
+      `FreshnessPill` in the top strip now says `Live`, `Ns ago`, `Stale · Ns ago` or
+      `Not updating`, driven by when the last frame actually arrived, which the stream hook
+      now reports. It is quiet when live and loud when not, is a polite live region with an
+      icon as well as colour, and carries a full explanation for a screen reader. The
+      thresholds are in `lib/freshness.ts` with eight tests; the hook clears the timestamp
+      when it disconnects, so nothing on screen can look current when no frame has arrived.
+      Verified in a browser: absent while locked, `Live` with its explanation once unlocked,
+      and a polite `role="status"` with an icon.
+- [x] **UX-31** the two PWAs share icons; `background.html` lacks the iOS meta tags.
+      The background listener and the dashboard used byte-identical icons, so they were
+      indistinguishable in a launcher, in the manifest shortcut list, and on a home screen.
+      It now has its own maskable set (`icon-bg-*`, amber rather than cyan) referenced from
+      its manifest, its `apple-touch-icon` links and the dashboard's shortcut entry; the
+      main page also gained the `mobile-web-app-capable` and `apple-mobile-web-app-title`
+      tags it was missing, without which iOS labels the icon "Web App". Verified in a
+      browser: both manifests parse, every declared icon returns 200, and each manifest's
+      icons are byte-distinct from the other's.
 - [ ] **§16** the 15 product/UX improvement proposals.
 
 ## 9. UI overhaul

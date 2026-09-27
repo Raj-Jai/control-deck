@@ -2,11 +2,14 @@
   "id": "/static/",
   "name": "Control Deck",
   "short_name": "Deck",
-  "description": "Desktop media & system dashboard — background audio",
+  "description": "Desktop media & system dashboard \u2014 background audio",
   "start_url": "/static/",
   "scope": "/static/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "any",
@@ -28,16 +31,27 @@
     {
       "name": "Background Audio",
       "short_name": "BG Audio",
-      "description": "Ultra-lightweight background listener — auto-starts on hotkey, low power",
+      "description": "Ultra-lightweight background listener \u2014 auto-starts on hotkey, low power",
       "url": "/static/background.html",
-      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/static/icon-bg-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "Full control deck",
       "url": "/static/",
-      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/static/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "protocol_handlers": [
@@ -46,8 +60,15 @@
       "url": "/static/background.html?device=%s"
     }
   ],
-  "launch_handler": { "client_mode": "focus-existing" },
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "handle_links": "preferred",
-  "categories": ["music", "utilities"],
-  "edge_side_panel": { "preferred_width": 380 }
+  "categories": [
+    "music",
+    "utilities"
+  ],
+  "edge_side_panel": {
+    "preferred_width": 380
+  }
 }

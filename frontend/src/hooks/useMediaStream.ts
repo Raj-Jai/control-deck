@@ -98,12 +98,18 @@ interface UseMediaStreamResult {
   state: MediaState | null;
   loading: boolean;
   error: string | null;
+  /** When the last frame arrived, so the UI can say how current the values are. */
+  lastUpdateAt: number | null;
 }
+
+/** The broadcaster pushes twice a second; a few frames of slack is normal. */
+export const STREAM_INTERVAL_MS = 500;
 
 export function useMediaStream(deviceId?: string, enabled = true): UseMediaStreamResult {
   const [state, setState] = useState<MediaState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
 
   useEffect(() => {
     // Nothing connects while the page is locked.
@@ -111,6 +117,8 @@ export function useMediaStream(deviceId?: string, enabled = true): UseMediaStrea
       setLoading(true);
       return;
     }
+    // Nothing has arrived yet, so nothing on screen is current.
+    setLastUpdateAt(null);
     const streamUrl = DECK_CONFIG.api.stream + (deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : '');
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
@@ -139,6 +147,7 @@ export function useMediaStream(deviceId?: string, enabled = true): UseMediaStrea
         }
         failures = 0;
         setState(data as MediaState);
+        setLastUpdateAt(Date.now());
         setLoading(false);
         setError(null);
       } catch {
@@ -170,5 +179,5 @@ export function useMediaStream(deviceId?: string, enabled = true): UseMediaStrea
     };
   }, [deviceId, enabled]);
 
-  return { state, loading, error };
+  return { state, loading, error, lastUpdateAt };
 }
