@@ -9,9 +9,11 @@ import { clearAuth } from './AuthScreen';
 
 interface Props {
   deviceId: string;
+  /** Leave the streamer and go back to the lock screen. */
+  onExit: () => void;
 }
 
-export default function MediaStreamerPage({ deviceId }: Props) {
+export default function MediaStreamerPage({ deviceId, onExit }: Props) {
   const { state, loading, error } = useMediaStream(deviceId);
   const { caps } = useCapabilities();
   useArtTheming(state?.art_url);
@@ -25,12 +27,18 @@ export default function MediaStreamerPage({ deviceId }: Props) {
           Media Streamer
         </span>
         <div className="flex-1" />
+        {/* A state change, not a reload. location.reload() tore down the whole
+            page to move one step up the app, which lost the device id, the
+            capability cache and the scroll position, and re-fetched everything
+            behind the lock screen. */}
         <button
-          onClick={() => { clearAuth(); location.reload(); }}
-          className="icon-btn w-7 h-7 text-deck-dim hover:text-red-400"
+          type="button"
+          onClick={() => { clearAuth(); onExit(); }}
+          className="icon-btn min-h-[44px] min-w-[44px] text-deck-dim hover:text-red-400"
           title="Lock & exit"
+          aria-label="Lock and exit the media streamer"
         >
-          <LogOut size={13} />
+          <LogOut size={15} />
         </button>
       </div>
 

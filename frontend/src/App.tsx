@@ -293,7 +293,9 @@ export default function App() {
   };
 
   if (!authMode) return <AuthScreen onAuth={setAuthMode} />;
-  if (authMode === 'media') return <MediaStreamerPage deviceId={deviceId} />;
+  if (authMode === 'media') {
+    return <MediaStreamerPage deviceId={deviceId} onExit={() => setAuthMode(null)} />;
+  }
 
   return (
     <>

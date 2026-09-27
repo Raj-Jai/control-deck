@@ -194,7 +194,18 @@ export default function TerminalDeck({ caps }: Props) {
             className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
             cd repo root
           </button>
-          <button onClick={() => sendToTerminal('cd "$(git rev-parse --show-toplevel 2>/dev/null)" && go build -o tab-dashboard .\r')}
+          {/* This overwrites the running binary in place with no undo, so it
+              asks first - one tap should not be able to replace the build the
+              user is currently running. */}
+          <button onClick={() => {
+            if (window.confirm(
+              'Rebuild now?\n\nThis runs `go build -o tab-dashboard .` in the repo root and\n' +
+              'overwrites the binary in place. The running process is not replaced\n' +
+              'until the service is restarted.'
+            )) {
+              sendToTerminal('cd "$(git rev-parse --show-toplevel 2>/dev/null)" && go build -o tab-dashboard .\r');
+            }
+          }}
             className="min-h-[44px] min-w-[48px] px-3 py-2 text-[11px] rounded-md bg-white/5 border border-white/5 text-deck-dim hover:text-deck-accent active:scale-90 font-mono">
             rebuild
           </button>

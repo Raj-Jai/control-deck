@@ -374,7 +374,10 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       aspect/speed pills are still small, and the pills still mix concepts without explanation.
 - [ ] **§8.5** the IDE deck has no result surface and runs in the dashboard's CWD, not the
       focused project's.
-- [ ] **§8.6** the terminal's `rebuild` button overwrites the binary with no confirmation.
+- [x] **§8.6** the terminal's `rebuild` button overwrites the binary with no confirmation.
+      It now confirms first, and says plainly that the running process is not replaced until
+      the service is restarted - verified in a browser that dismissing the dialog sends no
+      `go build` at all.
 - [x] **§8.8** the clipboard card had a placeholder but no label, a toast with no live region,
       and no size cap. All three fixed, with a character count and a note that Push writes to
       the host clipboard.
@@ -382,7 +385,11 @@ together give unauthenticated RCE and arbitrary file access to anyone who can re
       delete fires on `pointerDown` with no confirm.
 - [ ] **§8.11** the BLE meter shows 62% green before any scan; unmounting stops advertising
       for every other client.
-- [ ] **§8.15** the Media Streamer page uses `location.reload()`; 28 px exit button.
+- [x] **§8.15** the Media Streamer page uses `location.reload()`; 28 px exit button.
+      Exiting is a state change in `App` now, so the device id, the capability cache and the
+      scroll position survive and nothing behind the lock screen is re-fetched. Verified on a
+      390x844 touch viewport: 44x44 button, back at the lock screen, and zero page
+      navigations caused by the exit.
 - [ ] **UX-29** no freshness indicator anywhere; a stale value looks current.
 - [ ] **UX-31** the two PWAs share icons; `background.html` lacks the iOS meta tags.
 - [ ] **§16** the 15 product/UX improvement proposals.
